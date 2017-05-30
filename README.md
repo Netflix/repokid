@@ -10,7 +10,8 @@ To use Repokid you will need:
  - A [DynamoDB](https://aws.amazon.com/dynamodb/) table called `repokid_roles` (specify account and endpoint in `dynamo_db` in config file)
  
  - An IAM role with the following permissions (specified in `connection_iam` in config file):
- ```{
+ ```json
+ {
   "Version": "2012-10-17",
   "Statement": [
     {
