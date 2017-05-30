@@ -78,7 +78,7 @@ def _generate_default_config(config_filename):
 
         "dynamo_db": {
             "assume_role": "Repokid",
-            "account": "<DYNAMO_TABLE_ACCOUNT_NUMBER>",
+            "account_number": "<DYNAMO_TABLE_ACCOUNT_NUMBER>",
             "endpoint": "<DYNAMO_TABLE_ENDPOINT>",
             "region": "<DYNAMO_TABLE_REGION>",
             "session_name": "repokid"
@@ -719,7 +719,6 @@ def main():
     _init_logging()
     global CUR_ACCOUNT_NUMBER
     CUR_ACCOUNT_NUMBER = account_number
-
     roledata.dynamo_get_or_create_table(**CONFIG['dynamo_db'])
 
     if args.get('gen_config'):
