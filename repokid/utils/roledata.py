@@ -1,64 +1,73 @@
 from botocore.exceptions import ClientError as BotoClientError
-from cloudaux.aws import sts
+import boto3
+from cloudaux.aws.sts import boto3_cached_conn
 from datetime import datetime
 import sys
 from tqdm import tqdm
 
-DYNAMO_TABLE = None
 
 # used as a placeholder for empty SID to work around this: https://github.com/aws/aws-sdk-js/issues/833
 DYNAMO_EMPTY_STRING = "---DYNAMO-EMPTY-STRING---"
+DYNAMO_TABLE = None
 
 
-@sts.sts_conn('dynamodb', service_type='resource')
-def dynamo_get_or_create_table(region=None, endpoint=None, resource=None):
+def dynamo_get_or_create_table(**dynamo_config):
     """Create a new table or get a reference to the existing table"""
     global DYNAMO_TABLE
+
+    if 'localhost' in dynamo_config['endpoint']:
+        resource = boto3.resource('dynamodb',
+            region_name='us-east-1',
+            endpoint_url=dynamo_config['endpoint'])
+    else:
+        resource = boto3_cached_conn(
+            'dynamodb',
+            service_type='resource',
+            account_number=dynamo_config['account_number'],
+            assume_role=dynamo_config['assume_role'],
+            session_name=dynamo_config['session_name'],
+            region=dynamo_config['region'])
+
     try:
-        table = resource.create_table(TableName='repokid_roles',
-                                      KeySchema=[
-                                          {
-                                                'AttributeName': 'RoleId',
-                                                'KeyType': 'HASH'  # Partition key
-                                          }],
-                                      AttributeDefinitions=[
-                                          {
-                                              'AttributeName': 'RoleId',
-                                              'AttributeType': 'S'
-                                          }],
-                                      ProvisionedThroughput={
-                                          'ReadCapacityUnits': 5,
-                                          'WriteCapacityUnits': 5
-                                      })
+        table = resource.create_table(
+            TableName='repokid_roles',
+            KeySchema=[{
+                'AttributeName': 'RoleId',
+                'KeyType': 'HASH'  # Partition key
+            }],
+            AttributeDefinitions=[{
+                'AttributeName': 'RoleId',
+                'AttributeType': 'S'
+            }],
+            ProvisionedThroughput={
+                'ReadCapacityUnits': 5,
+                'WriteCapacityUnits': 5
+            })
+
         table.meta.client.get_waiter('table_exists').wait(TableName='repokid_roles')
 
         # need a global secondary index to list all role IDs for a given account number
-        table.update(AttributeDefinitions=[
-                     {
-                         'AttributeName': 'Account',
-                         'AttributeType': 'S'
-                     }],
-                     GlobalSecondaryIndexUpdates=[{'Create':
-                                                  {
-                                                   'IndexName': 'Account',
-                                                   'KeySchema': [
-                                                       {
-                                                           'AttributeName': 'Account',
-                                                           'KeyType': 'HASH'
-                                                       }],
-                                                   'Projection':
-                                                       {
-                                                           'NonKeyAttributes': ['RoleId'],
-                                                           'ProjectionType': 'INCLUDE'
-                                                   },
-                                                   'ProvisionedThroughput':
-                                                       {
-                                                           'ReadCapacityUnits': 2,
-                                                           'WriteCapacityUnits': 2
-                                                   }
-                                                   }
-                                                   }
-                                                  ])
+        table.update(
+            AttributeDefinitions=[{
+                'AttributeName': 'Account',
+                'AttributeType': 'S'
+             }],
+             GlobalSecondaryIndexUpdates=[{
+                'Create': {
+                    'IndexName': 'Account',
+                    'KeySchema': [{
+                        'AttributeName': 'Account',
+                        'KeyType': 'HASH'
+                    }],
+                    'Projection': {
+                        'NonKeyAttributes': ['RoleId'],
+                        'ProjectionType': 'INCLUDE'
+                    },
+                    'ProvisionedThroughput': {
+                        'ReadCapacityUnits': 2,
+                        'WriteCapacityUnits': 2
+                    }
+                }}])
 
     except BotoClientError as e:
         if "ResourceInUseException" in e.message:

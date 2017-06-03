@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """
 Usage:
-    repokid gen_config <config_filename>
+    repokid config <config_filename>
     repokid update_role_cache <account_number>
     repokid display_role_cache <account_number> [--inactive]
     repokid find_roles_with_permission <permission>
@@ -39,7 +39,7 @@ from policyuniverse import expand_policy, get_actions_from_statement, all_permis
 import import_string
 
 
-IAM_ACCESS_ADVISOR_UNSUPPORTED_SERVICES = frozenset(['catalog-admin', 'catalog-user', 'ec2-reports', 'sts'])
+IAM_ACCESS_ADVISOR_UNSUPPORTED_SERVICES = frozenset([])
 IAM_ACCESS_ADVISOR_UNSUPPORTED_ACTIONS = frozenset(['iam:passrole'])
 
 # http://docs.aws.amazon.com/IAM/latest/UserGuide/reference_iam-limits.html
@@ -50,7 +50,7 @@ CONFIG = None
 LOGGER = None
 
 
-def _generate_default_config(config_filename):
+def _generate_default_config(filename=None):
     config_dict = {
         "filter_config": {
             "AgeFilter": {
@@ -120,13 +120,15 @@ def _generate_default_config(config_filename):
             "oldest_aa_data_days": 5
         }
     }
-    try:
-        with open(config_filename, 'w') as f:
-            json.dump(config_dict, f, indent=4)
-    except OSError as e:
-        LOGGER.error("Unable to open {} for writing: {}".format(config_filename, e.message))
-    else:
-        LOGGER.info("Successfully wrote sample config to {}".format(config_filename))
+    if filename:
+        try:
+            with open(filename, 'w') as f:
+                json.dump(config_dict, f, indent=4)
+        except OSError as e:
+            LOGGER.error("Unable to open {} for writing: {}".format(filename, e.message))
+        else:
+            LOGGER.info("Successfully wrote sample config to {}".format(filename))
+    return config_dict
 
 
 def _init_config():
@@ -712,18 +714,17 @@ def repo_stats(output_file, account_number=None):
 
 def main():
     args = docopt(__doc__, version='Repokid {version}'.format(version=__version__))
+    _init_logging()
+
+    if args.get('config'):
+        config_filename = args.get('<config_filename>')
+        return _generate_default_config(filename=config_filename)
 
     account_number = args.get('<account_number>')
-
     _init_config()
-    _init_logging()
     global CUR_ACCOUNT_NUMBER
     CUR_ACCOUNT_NUMBER = account_number
     roledata.dynamo_get_or_create_table(**CONFIG['dynamo_db'])
-
-    if args.get('gen_config'):
-        config_filename = args.get('<config_filename>')
-        return _generate_default_config(config_filename)
 
     if args.get('update_role_cache'):
         return update_role_cache(account_number)
