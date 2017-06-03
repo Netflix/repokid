@@ -34,6 +34,7 @@ import requests
 from utils import roledata
 import sys
 from tabulate import tabulate
+import tabview as t
 from tqdm import tqdm
 from policyuniverse import expand_policy, get_actions_from_statement, all_permissions
 import import_string
@@ -257,8 +258,9 @@ def display_roles(account_number, inactive=False):
                      role_data.get('RepoableServices')])
 
     rows = sorted(rows, key=lambda x: (x[4], x[0], x[3]))
-
-    print tabulate(rows, headers=headers)
+    rows.insert(0,headers)
+    # print tabulate(rows, headers=headers)
+    t.view(rows)
     with open('table.csv', 'wb') as csvfile:
         csv_writer = csv.writer(csvfile)
         csv_writer.writerow(headers)
