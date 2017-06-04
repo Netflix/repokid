@@ -22,7 +22,7 @@ You will need a [DynamoDB](https://aws.amazon.com/dynamodb/) table called `repok
 
 For development, you can run dynamo [locally](http://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.html).
 
-To run:
+To run locally:
   `java -Djava.library.path=./DynamoDBLocal_lib -jar DynamoDBLocal.jar -sharedDb -inMemory -port 8010`
  
  #### IAM Permissions:
@@ -65,6 +65,13 @@ RepokidRole:
 ```
 
 So if you are monitoring `n` accounts, you will always need `n+1` roles. (`n` RepokidRoles and `1` RepokidInstanceProfile).
+
+#### Editing config.json
+
+Running `repokid config config.json` creates a file that you will need to edit.  Find and update these fields:
+- `dynamodb`: If using dynamo locally, set the endpoint to `http://localhost:8010`.  If using AWS hosted dynamo, set the `region`, `assume_role`, and `account_number`.
+- `aardvark_api_location`: The location to your Aardvark REST API.  Something like `https://aardvark.yourcompany.net/api/1/advisors`
+- `connection_iam`: Set `assume_role` to `RepokidRole`, or whatever you have called it.
 
 ## Optional Config
 Repokid uses filters to decide which roles are candidates to be repoed.  Filters may be configured to suit your
