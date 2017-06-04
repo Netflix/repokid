@@ -91,6 +91,3 @@ You can run a DynamoDB development server locally by [downloading it](http://doc
 
 To run:
   `java -Djava.library.path=./DynamoDBLocal_lib -jar DynamoDBLocal.jar -sharedDb -inMemory -port 8010`
-  
-## TODO
-[TODO](TODO.md)
