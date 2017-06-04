@@ -59,7 +59,13 @@ use cases.  To make them active make sure they are in the Python path and add th
 the section `active_filters`.
 
 ## How to Use
-Once Repokid is configured use it as follows:
+
+### Configure repokid:
+```
+repokid config config.json
+```
+
+Once Repokid is configured, use it as follows:
 
 ### Standard flow
  - Update role cache: `repokid update_role_cache <ACCOUNT_NUMBER>`
