@@ -42,6 +42,7 @@ setup(
         'policyuniverse==1.0.6.2',
         'requests==2.13.0',
         'tabulate==0.7.7',
+        'tabview==1.4.2',
         'tqdm==4.11.2'
     ],
     entry_points={

@@ -15,7 +15,6 @@ To use Repokid you will need:
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "Stmt1495554068860",
       "Action": [
         "iam:DeleteInstanceProfile",
         "iam:DeleteRole",
