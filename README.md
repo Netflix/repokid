@@ -6,10 +6,39 @@ an AWS account.
 
 ## Getting Started
 
-To use Repokid you will need:
- - A [DynamoDB](https://aws.amazon.com/dynamodb/) table called `repokid_roles` (specify account and endpoint in `dynamo_db` in config file)
+### Install
+
+```bash
+mkvirtualenv repokid
+git clone git@github.com:Netflix/repokid.git
+cd repokid
+python setup.py develop
+repokid config config.json
+```
+
+#### DynamoDB
+
+You will need a [DynamoDB](https://aws.amazon.com/dynamodb/) table called `repokid_roles` (specify account and endpoint in `dynamo_db` in config file).
+
+For development, you can run dynamo [locally](http://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.html).
+
+To run:
+  `java -Djava.library.path=./DynamoDBLocal_lib -jar DynamoDBLocal.jar -sharedDb -inMemory -port 8010`
  
- - An IAM role with the following permissions (specified in `connection_iam` in config file):
+ #### IAM Permissions:
+
+Repokid needs an IAM Role in each account that will be queried.  Additionally, Repokid needs to be launched with a role or user which can `sts:AssumeRole` into the different account roles.
+
+RepokidInstanceProfile:
+- Only create one.
+- Needs the ability to call `sts:AssumeRole` into all of the RepokidRoles.
+- DyamoDB permissions for the `repokid_roles` table and all indexes (specified in `assume_role` subsection of `dynamo_db` in config)
+
+RepokidRole:
+- Must exist in every account to be managed by repokid.
+- Must have a trust policy allowing `RepokidInstanceProfile`.
+- Name must be specified in `connection_iam` in config file.
+- Has these permissions:
  ```json
  {
   "Version": "2012-10-17",
@@ -35,7 +64,7 @@ To use Repokid you will need:
 }
 ```
 
- - An IAM role with DyamoDB permissions for the `repokid_roles` table and all indexes (specified in `assume_role` subsection of `dynamo_db` in config)
+So if you are monitoring `n` accounts, you will always need `n+1` roles. (`n` RepokidRoles and `1` RepokidInstanceProfile).
 
 ## Optional Config
 Repokid uses filters to decide which roles are candidates to be repoed.  Filters may be configured to suit your
@@ -60,11 +89,6 @@ the section `active_filters`.
 
 ## How to Use
 
-### Configure repokid:
-```
-repokid config config.json
-```
-
 Once Repokid is configured, use it as follows:
 
 ### Standard flow
@@ -86,8 +110,4 @@ Restore a specific version: `repokid rollback_role <ACCOUNT_NUMBER> <ROLE_NAME> 
 Repokid keeps counts of the total permissions for each role.  Stats are added any time an `update_role_cache` or
 `repo_role` action occur.  To output all stats to a CSV file run: `repokid repo_stats <OUTPUT_FILENAME>`.  An optional account number can be specified to output stats for a specific account only.
 
-## Developing locally
-You can run a DynamoDB development server locally by [downloading it](http://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.html)
 
-To run:
-  `java -Djava.library.path=./DynamoDBLocal_lib -jar DynamoDBLocal.jar -sharedDb -inMemory -port 8010`
