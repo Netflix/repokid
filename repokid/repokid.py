@@ -72,13 +72,13 @@ def _generate_default_config(filename=None):
         "aardvark_api_location": "<AARDVARK_API_LOCATION>",
 
         "connection_iam": {
-            "assume_role": "<IAM_ROLE_NAME>",
+            "assume_role": "RepokidRole",
             "session_name": "repokid",
             "region": "us-east-1"
         },
 
         "dynamo_db": {
-            "assume_role": "Repokid",
+            "assume_role": "RepokidRole",
             "account_number": "<DYNAMO_TABLE_ACCOUNT_NUMBER>",
             "endpoint": "<DYNAMO_TABLE_ENDPOINT>",
             "region": "<DYNAMO_TABLE_REGION>",
@@ -124,7 +124,7 @@ def _generate_default_config(filename=None):
     if filename:
         try:
             with open(filename, 'w') as f:
-                json.dump(config_dict, f, indent=4)
+                json.dump(config_dict, f, indent=4, sort_keys=True)
         except OSError as e:
             LOGGER.error("Unable to open {} for writing: {}".format(filename, e.message))
         else:
