@@ -1,5 +1,4 @@
 from repokid.repokid import Filter
-from repokid.repokid import LOGGER
 
 
 class LambdaFilter(Filter):
