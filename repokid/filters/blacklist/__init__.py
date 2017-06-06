@@ -1,6 +1,5 @@
 from repokid.repokid import Filter
 from repokid.repokid import CUR_ACCOUNT_NUMBER
-from repokid.repokid import LOGGER
 
 
 class BlacklistFilter(Filter):
