@@ -220,6 +220,7 @@ def update_role_cache(account_number):
         filtered_list = plugin.apply(roles)
         class_name = plugin.__class__.__name__
         for role in filtered_list:
+            LOGGER.info('Role {} filtered by {}'.format(role['RoleName'], class_name))
             filtered_roles_list[role['RoleId']].append(class_name)
 
     roledata.update_filtered_roles(filtered_roles_list)

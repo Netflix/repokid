@@ -17,5 +17,4 @@ class BlacklistFilter(Filter):
         for role in input_list:
             if role['RoleName'].lower() in self.overridden_role_names:
                 blacklisted_roles.append(role)
-                LOGGER.info('{name} in the role blacklist'.format(name=role['RoleName']))
         return blacklisted_roles

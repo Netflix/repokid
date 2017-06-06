@@ -8,6 +8,5 @@ class LambdaFilter(Filter):
 
         for role in input_list:
             if 'lambda' in str(role['AssumeRolePolicyDocument']).lower():
-                LOGGER.info('{name} looks like a lambda role.'.format(name=role['RoleName']))
                 lambda_roles.append(role)
         return list(lambda_roles)
