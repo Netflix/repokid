@@ -567,7 +567,7 @@ def repo_role(account_number, role_name, commit=False):
 
     old_aa_data_services = []
     for aa_service in role_data['AAData']:
-        if(datetime.datetime.strptime(aa_service['lastUpdated'], '%a, %d %B %Y %H:%M:%S %Z') <
+        if(datetime.datetime.strptime(aa_service['lastUpdated'], '%a, %d %b %Y %H:%M:%S %Z') <
            datetime.datetime.now() - datetime.timedelta(days=CONFIG['repo_requirements']['oldest_aa_data_days'])):
             old_aa_data_services.append(aa_service['serviceName'])
     if old_aa_data_services:
