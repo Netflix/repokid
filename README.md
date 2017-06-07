@@ -1,4 +1,6 @@
-# Repokid #
+Repokid
+=======
+<img align="center" alt="Repokid Logo" src="docs/images/Repokid.png" width="25%" display="block">
 
 Repokid uses Access Advisor provided by [Aardvark](https://github.com/Netflix-Skunkworks/aardvark)
 to remove permissions granting access to unused services from the inline policies of IAM roles in
