@@ -24,7 +24,7 @@ def dynamo_get_or_create_table(**dynamo_config):
             'dynamodb',
             service_type='resource',
             account_number=dynamo_config['account_number'],
-            assume_role=dynamo_config['assume_role'],
+            assume_role=dynamo_config.get('assume_role', None),
             session_name=dynamo_config['session_name'],
             region=dynamo_config['region'])
 
