@@ -79,35 +79,35 @@ def dynamo_get_or_create_table(**dynamo_config):
     DYNAMO_TABLE = table
 
 
-def update_repoable_data(repoable_data):
+def update_repoable_data(roles):
     """Update total permissions, repoable permissions, and repoable services for an account"""
-    for roleID, data in repoable_data.items():
+    for role in roles:
         try:
-            DYNAMO_TABLE.update_item(Key={'RoleId': roleID},
+            DYNAMO_TABLE.update_item(Key={'RoleId': role.role_id},
                                      UpdateExpression=("SET TotalPermissions=:tp, RepoablePermissions=:rp, "
                                                        "RepoableServices=:rs"),
                                      ExpressionAttributeValues={
-                                     ":tp": data['TotalPermissions'],
-                                     ":rp": data['RepoablePermissions'],
-                                     ":rs": data['RepoableServices']
+                                     ":tp": role.total_permissions,
+                                     ":rp": role.repoable_permissions,
+                                     ":rs": role.repoable_services
                                      })
         except BotoClientError as e:
             from repokid.repokid import LOGGER
             LOGGER.error('Dynamo table error: {}'.format(e))
 
 
-def update_total_permissions(roleID, total_permissions):
+def update_total_permissions(role):
     """Update total permissions for roleID"""
     try:
-        DYNAMO_TABLE.update_item(Key={'RoleId': roleID},
+        DYNAMO_TABLE.update_item(Key={'RoleId': role.role_id},
                                  UpdateExpression="Set TotalPermissions=:tp",
-                                 ExpressionAttributeValues={":tp": total_permissions})
+                                 ExpressionAttributeValues={":tp": role.total_permissions})
     except BotoClientError as e:
         from repokid.repokid import LOGGER
         LOGGER.error('Dynamo table error: {}'.format(e))
 
 
-def update_aardvark_data(account, aardvark_data):
+def update_aardvark_data(account, aardvark_data, roles):
     """
     Given a blob of data from Aardvark, update the Aardvark data for all roles in the account
     """
@@ -119,17 +119,20 @@ def update_aardvark_data(account, aardvark_data):
 
     # so we'll start with getting active ARN -> role mapping by listing accounts and looking for active
     ARNtoRoleID = {}
-    for roleID in roles_for_account(account):
-        role_data = _get_role_data(roleID)
+    for roleID in roles_ids_for_account(account):
+        role_data = _get_role_data(roleID, fields=['Arn', 'RoleId', 'Active'])
         if role_data['Active']:
             ARNtoRoleID[role_data['Arn']] = role_data['RoleId']
 
     for arn, aa_data in aardvark_data.items():
         try:
+            role = roles.get_by_id(ARNtoRoleID[arn])
+            role.aa_data = aa_data
+
             DYNAMO_TABLE.update_item(Key={'RoleId': ARNtoRoleID[arn]},
                                      UpdateExpression="SET AAData=:aa_data",
                                      ExpressionAttributeValues={
-                                     ":aa_data": _empty_string_to_dynamo_replace(aa_data)
+                                     ":aa_data": _empty_string_to_dynamo_replace(role.aa_data)
                                      })
         except KeyError:
             # if we get here we have AA data for a role we don't know about or an inactive role, either way it's fine
@@ -139,39 +142,36 @@ def update_aardvark_data(account, aardvark_data):
             LOGGER.error('Dynamo table error: {}'.format(e))
 
 
-def update_role_data(role_dict):
+def update_role_data(role, current_policy):
     """Given role data either add it to the datastore, add a revision of the policies, or refresh updated time"""
     from repokid.repokid import LOGGER
-    # need to convert to (stupid) DynamoDB empty string form
-    if 'policies' in role_dict:
-        role_dict['policies'] = _empty_string_to_dynamo_replace(role_dict['policies'])
 
     # policy_entry: source, discovered, policy
-    stored_role = _get_role_data(role_dict['RoleId'])
+    stored_role = _get_role_data(role.role_id, fields=['Policies'])
+
     if stored_role:
         # is the policy list the same as the last we had?
-        if not role_dict['policies'] == stored_role['Policies'][-1]['Policy']:
-            add_new_policy_version(role_dict, 'Scan')
-            LOGGER.info('{} has different inline policies than last time, adding to role store'.format(
-                        role_dict['Arn']))
-        _refresh_updated_time(role_dict['RoleId'])
+        if current_policy != _empty_string_from_dynamo_replace(stored_role['Policies'][-1]['Policy']):
+            add_new_policy_version(role, current_policy, 'Scan')
+            LOGGER.info('{} has different inline policies than last time, adding to role store'.format(role.arn))
+
+        _refresh_updated_time(role.role_id)
     else:
-        _store_item(role_dict)
-        LOGGER.info('Added new role ({}): {}'.format(role_dict['RoleId'], role_dict['Arn']))
+        _store_item(role, current_policy)
+        LOGGER.info('Added new role ({}): {}'.format(role.role_id, role.arn))
+
+    role.policies = get_role_data(role.role_id, fields=['Policies'])['Policies']
 
 
-def update_stats(source='Scan', roleID=None):
-    from repokid.repokid import CUR_ACCOUNT_NUMBER
-
-    for roleID, role_data in ({roleID: _get_role_data(roleID)}.items() if roleID
-                              else get_data_for_active_roles_in_account(CUR_ACCOUNT_NUMBER).items()):
+def update_stats(roles, source='Scan'):
+    for role in roles:
         cur_stats = {'Date': datetime.utcnow().isoformat(),
-                     'DisqualifiedBy': role_data.get('DisqualifiedBy', []),
-                     'PermissionsCount': role_data['TotalPermissions'],
+                     'DisqualifiedBy': role.disqualified_by,
+                     'PermissionsCount': role.total_permissions,
                      'Source': source}
 
         try:
-            DYNAMO_TABLE.update_item(Key={'RoleId': roleID},
+            DYNAMO_TABLE.update_item(Key={'RoleId': role.role_id},
                                      UpdateExpression=("SET #statsarray = list_append(if_not_exists"
                                                        "(#statsarray, :empty_list), :stats)"),
                                      ExpressionAttributeNames={"#statsarray": "Stats"},
@@ -195,10 +195,9 @@ def _refresh_updated_time(roleID):
         LOGGER.error('Dynamo table error: {}'.format(e))
 
 
-def roles_for_account(account_number):
+def roles_ids_for_account(account_number):
     """Get a list of all active role IDs for a given account number"""
     role_ids = set()
-
     try:
         results = DYNAMO_TABLE.query(IndexName='Account',
                                      ProjectionExpression='RoleId',
@@ -238,10 +237,13 @@ def role_ids_for_all_accounts():
     return role_ids
 
 
-def _get_role_data(roleID):
+def _get_role_data(roleID, fields=None):
     """Get raw role data, not to be used externally because this data still has dynamo empty string placeholders"""
     try:
-        response = DYNAMO_TABLE.get_item(Key={'RoleId': roleID})
+        if fields:
+            response = DYNAMO_TABLE.get_item(Key={'RoleId': roleID}, AttributesToGet=fields)
+        else:
+            response = DYNAMO_TABLE.get_item(Key={'RoleId': roleID})
     except BotoClientError as e:
         from repokid.repokid import LOGGER
         LOGGER.error('Dynamo table error: {}'.format(e))
@@ -252,16 +254,15 @@ def _get_role_data(roleID):
             return None
 
 
-def find_and_mark_inactive(active_roles):
+def find_and_mark_inactive(account_number, active_roles):
     """Mark roles that used to be active but weren't in current role listing inactive"""
-    from repokid.repokid import CUR_ACCOUNT_NUMBER
     from repokid.repokid import LOGGER
     active_roles = set(active_roles)
-    known_roles = set(roles_for_account(CUR_ACCOUNT_NUMBER))
+    known_roles = set(roles_ids_for_account(account_number))
     inactive_roles = known_roles - active_roles
 
     for roleID in inactive_roles:
-        role_dict = _get_role_data(roleID)
+        role_dict = _get_role_data(roleID, fields=['Active', 'Arn'])
         if role_dict['Active']:
             try:
                 DYNAMO_TABLE.update_item(Key={'RoleId': roleID},
@@ -273,30 +274,33 @@ def find_and_mark_inactive(active_roles):
                 LOGGER.info('Marked role ({}): {} inactive'.format(roleID, role_dict['Arn']))
 
 
-def update_filtered_roles(roles_filtered_list):
+def update_filtered_roles(filtered_roles):
     """Update roles with information about which filter(s) disqualified them"""
-    for roleID, filteredlist in roles_filtered_list.items():
+    for role in filtered_roles:
         try:
-            DYNAMO_TABLE.update_item(Key={'RoleId': roleID},
+            DYNAMO_TABLE.update_item(Key={'RoleId': role.role_id},
                                      UpdateExpression="SET DisqualifiedBy = :dqby",
-                                     ExpressionAttributeValues={":dqby": filteredlist})
+                                     ExpressionAttributeValues={":dqby": role.disqualified_by})
         except BotoClientError as e:
             from repokid.repokid import LOGGER
             LOGGER.error('Dynamo table error: {}'.format(e))
 
 
-def add_new_policy_version(role_dict, update_source):
+def add_new_policy_version(role, current_policy, update_source):
     """Store a new version of the current policies in the historical policy data for a role.
     Update source should be either 'Scan', 'Repo', or 'Restore'
     """
-    role = _get_role_data(role_dict['RoleId'])
-    new_item_index = len(role['Policies'])
+    role_data = _get_role_data(role.role_id, fields=['Policies'])
+    new_item_index = len(role_data['Policies'])
+
     try:
-        policy = {'Source': update_source, 'Discovered': datetime.utcnow().isoformat(), 'Policy': role_dict['policies']}
-        DYNAMO_TABLE.update_item(Key={'RoleId': role_dict['RoleId']},
+        policy_entry = {'Source': update_source, 'Discovered': datetime.utcnow().isoformat(), 'Policy': current_policy}
+
+        DYNAMO_TABLE.update_item(Key={'RoleId': role.role_id},
                                  UpdateExpression="SET #polarray[{}] = :pol".format(new_item_index),
                                  ExpressionAttributeNames={"#polarray": "Policies"},
-                                 ExpressionAttributeValues={":pol": policy})
+                                 ExpressionAttributeValues={":pol": _empty_string_to_dynamo_replace(policy_entry)})
+
     except BotoClientError as e:
         from repokid.repokid import LOGGER
         LOGGER.error('Dynamo table error: {}'.format(e))
@@ -314,19 +318,25 @@ def set_repoed(roleID):
         LOGGER.error('Dynamo table error: {}'.format(e))
 
 
-def _store_item(role_dict):
+def _store_item(role, current_policy):
     """Store initial version of role information"""
-    policy = {'Source': 'Scan', 'Discovered': datetime.utcnow().isoformat(), 'Policy': role_dict['policies']}
+    policy_entry = {'Source': 'Scan', 'Discovered': datetime.utcnow().isoformat(), 'Policy': current_policy}
+
+    role.policies = [policy_entry]
+    role.refreshed = datetime.utcnow().isoformat()
+    role.active = True
+    role.repoed = 'Never'
+
     try:
-        DYNAMO_TABLE.put_item(Item={'Arn': role_dict['Arn'],
-                                    'CreateDate': role_dict['CreateDate'].isoformat(),
-                                    'RoleId': role_dict['RoleId'],
-                                    'RoleName': role_dict['RoleName'],
-                                    'Account': role_dict['Arn'].split(':')[4],
-                                    'Policies': [policy],
-                                    'Refreshed': datetime.utcnow().isoformat(),
-                                    'Active': True,
-                                    'Repoed': 'Never'})
+        DYNAMO_TABLE.put_item(Item={'Arn': role.arn,
+                                    'CreateDate': role.create_date.isoformat(),
+                                    'RoleId': role.role_id,
+                                    'RoleName': role.role_name,
+                                    'Account': role.account,
+                                    'Policies': [_empty_string_to_dynamo_replace(policy_entry)],
+                                    'Refreshed': role.refreshed,
+                                    'Active': role.active,
+                                    'Repoed': role.repoed})
     except BotoClientError as e:
         from repokid.repokid import LOGGER
         LOGGER.error('Dynamo table error: {}'.format(e))
@@ -356,9 +366,9 @@ def _empty_string_from_dynamo_replace(obj):
         return obj
 
 
-def get_role_data(roleID):
+def get_role_data(roleID, fields=None):
     """Return all data stored about a given role ID"""
-    role_data = _get_role_data(roleID)
+    role_data = _get_role_data(roleID, fields=fields)
 
     # have to swap out empty SID for public consumption
     if role_data and 'Policies' in role_data:
@@ -369,11 +379,11 @@ def get_role_data(roleID):
     return role_data
 
 
-def get_data_for_active_roles_in_account(account_number):
+def get_active_role_names_in_account(account_number):
     """Get a dictionary with role IDs as key of role data for all active roles in a given account"""
-    data = {}
-    for roleID in tqdm(roles_for_account(account_number)):
-        role_data = get_role_data(roleID)
+    role_names = []
+    for roleID in tqdm(roles_ids_for_account(account_number)):
+        role_data = get_role_data(roleID, fields=['Active', 'RoleName'])
         if role_data['Active']:
-            data[roleID] = role_data
-    return data
+            role_names.append(role_data['RoleName'])
+    return role_names
