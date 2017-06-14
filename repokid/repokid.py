@@ -40,7 +40,7 @@ from policyuniverse import expand_policy, get_actions_from_statement, all_permis
 import import_string
 
 
-IAM_ACCESS_ADVISOR_UNSUPPORTED_SERVICES = frozenset([])
+IAM_ACCESS_ADVISOR_UNSUPPORTED_SERVICES = frozenset(['lightsail'])
 IAM_ACCESS_ADVISOR_UNSUPPORTED_ACTIONS = frozenset(['iam:passrole'])
 
 # http://docs.aws.amazon.com/IAM/latest/UserGuide/reference_iam-limits.html
