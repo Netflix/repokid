@@ -40,7 +40,7 @@ setup(
         'docopt==0.6.2',
         'import_string==0.1.0',
         'policyuniverse==1.0.6.2',
-        'requests==2.13.0',
+        'requests==2.18.1',
         'tabulate==0.7.7',
         'tabview==1.4.2',
         'tqdm==4.11.2'
