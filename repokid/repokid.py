@@ -20,24 +20,27 @@ Options:
 
 __version__ = '0.5'
 
-from cloudaux.aws.iam import list_roles, get_role_inline_policies
 import csv
 import datetime
 from dateutil.tz import tzlocal
-from docopt import docopt
 import json
 import logging
 import os
 import pprint
 import requests
-from utils import roledata
 import sys
+
+import botocore
+from cloudaux.aws.iam import list_roles, get_role_inline_policies
+from docopt import docopt
+import import_string
+from policyuniverse import expand_policy, get_actions_from_statement, all_permissions
 from tabulate import tabulate
 import tabview as t
 from tqdm import tqdm
-from policyuniverse import expand_policy, get_actions_from_statement, all_permissions
-import import_string
+
 from role import Role, Roles
+from utils import roledata
 
 
 IAM_ACCESS_ADVISOR_UNSUPPORTED_SERVICES = frozenset([])
@@ -504,9 +507,13 @@ def _get_aardvark_data(account_number):
         try:
             r_aardvark = requests.post(aardvark_api_location, params=params, json=payload)
         except requests.exceptions.RequestException as e:
-            LOGGER.error('Request while getting Aardvark data exception: {}').format(e)
+            LOGGER.error('Unable to get Aardvark data: {}').format(e)
             sys.exit(1)
         else:
+            if(r_aardvark.status_code != 200):
+                LOGGER.error('Unable to get Aardvark data: {}').format(e)
+                sys.exit(1)
+
             response_data.update(r_aardvark.json())
             # don't want these in our Aardvark data
             response_data.pop('count')
@@ -520,9 +527,13 @@ def _get_aardvark_data(account_number):
 
 
 def repo_all_roles(account_number, commit=False):
+    errors = []
     for role_name in roledata.get_active_role_names_in_account(account_number):
-        repo_role(account_number, role_name, commit=commit)
-    LOGGER.info('Done')
+        errors.append(repo_role(account_number, role_name, commit=commit))
+    if errors:
+        LOGGER.error('Error(s) during repo: \n{}'.format(errors))
+    else:
+        LOGGER.info('Everything successful!')
 
 
 def _find_role_in_cache(account_number, role_name):
@@ -542,6 +553,8 @@ def _find_role_in_cache(account_number, role_name):
 
 
 def repo_role(account_number, role_name, commit=False):
+    errors = []
+
     role_data = _find_role_in_cache(account_number, role_name)
     if not role_data:
         LOGGER.warn('Could not find role with name {}'.format(role_name))
@@ -560,6 +573,7 @@ def repo_role(account_number, role_name, commit=False):
 
     if not role.repoable_permissions:
         LOGGER.info('No permissions to repo for role {}'.format(role_name))
+        return
 
     old_aa_data_services = []
     for aa_service in role.aa_data:
@@ -599,7 +613,12 @@ def repo_role(account_number, role_name, commit=False):
 
     for name in deleted_policy_names:
         LOGGER.info('Deleting policy with name {} from {}'.format(name, role.role_name))
-        ca.call('iam.client.delete_role_policy', RoleName=role.role_name, PolicyName=name)
+        try:
+            ca.call('iam.client.delete_role_policy', RoleName=role.role_name, PolicyName=name)
+        except botocore.exceptions.ClientError as e:
+            error = 'Error deleting policy: {} from role: {}.  Exception: {}'.format(name, role.role_name, e)
+            LOGGER.error(error)
+            errors.append(error)
 
     if repoed_policies:
         LOGGER.info('Replacing Policies With: \n{}'.format(json.dumps(repoed_policies, indent=2, sort_keys=True)))
@@ -608,10 +627,11 @@ def repo_role(account_number, role_name, commit=False):
                 ca.call('iam.client.put_role_policy', RoleName=role.role_name, PolicyName=policy_name,
                         PolicyDocument=json.dumps(policy, indent=2, sort_keys=True))
 
-            except Exception as e:
-                LOGGER.error('Exception calling PutRolePolicy on {role}/{policy}\n{e}\n'.format(
-                             role=role.role_name, policy=policy_name, e=str(e)))
-                return
+            except botocore.exceptions.ClientError as e:
+                error = 'Exception calling PutRolePolicy on {role}/{policy}\n{e}\n'.format(
+                             role=role.role_name, policy=policy_name, e=str(e))
+                LOGGER.error(error)
+                errors.append(error)
 
     current_policies = get_role_inline_policies(role.as_dict(), **conn) or {}
     roledata.add_new_policy_version(role, current_policies, 'Repo')
@@ -623,7 +643,9 @@ def repo_role(account_number, role_name, commit=False):
 
     roledata.update_stats([role], source='Repo')
 
-    LOGGER.info('Successfully repoed role: {}'.format(role.role_name))
+    if not errors:
+        LOGGER.info('Successfully repoed role: {}'.format(role.role_name))
+    return errors
 
 
 def rollback_role(account_number, role_name, selection=None, commit=None):
@@ -671,7 +693,7 @@ def rollback_role(account_number, role_name, selection=None, commit=None):
             ca.call('iam.client.put_role_policy', RoleName=role.role_name, PolicyName=policy_name,
                     PolicyDocument=json.dumps(policy, indent=2, sort_keys=True))
 
-        except Exception as e:
+        except botocore.excpetion.ClientError as e:
             LOGGER.error("Unable to push policy {}.  Error: {}".format(policy_name, e.message))
 
         else:
@@ -686,7 +708,7 @@ def rollback_role(account_number, role_name, selection=None, commit=None):
             try:
                 ca.call('iam.client.delete_role_policy', RoleName=role.role_name, PolicyName=policy_name)
 
-            except Exception as e:
+            except botocore.excpetion.ClientError as e:
                 LOGGER.error("Unable to delete policy {}.  Error: {}".format(policy_name, e.message))
 
     current_policies = get_role_inline_policies(role.as_dict(), **conn) or {}
