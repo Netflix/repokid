@@ -1,0 +1,67 @@
+class Role(object):
+    def __init__(self, role_dict):
+        self.aa_data = role_dict.get('AAData', {})
+        self.active = role_dict.get('Active', True)
+        self.arn = role_dict.get('Arn', None)
+        self.assume_role_policy_document = role_dict.get('AssumeRolePolicyDocument', None)
+        self.create_date = role_dict.get('CreateDate', None)
+        self.disqualified_by = role_dict.get('DisqualifiedBy', [])
+        self.policies = role_dict.get('Policies', [])
+        self.repoable_permissions = role_dict.get('RepoablePermissions', 0)
+        self.repoable_services = role_dict.get('RepoableServices', [])
+        self.repoed = role_dict.get('Repoed', '')
+        self.role_id = role_dict.get('RoleId', None)
+        self.role_name = role_dict.get('RoleName', None)
+        self.stats = role_dict.get('Stats', [])
+        self.total_permissions = role_dict.get('TotalPermissions', 0)
+
+        self.account = role_dict.get('Account', None) or self.arn.split(':')[4] if self.arn else None
+
+    def as_dict(self):
+        return {'AAData': self.aa_data,
+                'Account': self.account,
+                'Active': self.active,
+                'Arn': self.arn,
+                'AssumeRolePolicyDocument': self.assume_role_policy_document,
+                'CreateDate': self.create_date,
+                'DisqualifiedBy': self.disqualified_by,
+                'Policies': self.policies,
+                'RepoablePermissions': self.repoable_permissions,
+                'RepoableServices': self.repoable_services,
+                'Repoed': self.repoed,
+                'RoleId': self.role_id,
+                'RoleName': self.role_name,
+                'Stats': self.stats,
+                'TotalPermissions': self.total_permissions}
+
+    def __eq__(self, other):
+        return self.role_id == other.role_id
+
+    def __hash__(self):
+        return hash(self.role_id)
+
+
+class Roles(object):
+    def __init__(self, role_object_list):
+        self.roles = role_object_list
+
+    def __getitem__(self, index):
+        return self.roles[index]
+
+    def __len__(self):
+        return len(self.roles)
+
+    def role_id_list(self):
+        return [role.role_id for role in self.roles]
+
+    def get_by_id(self, id):
+        try:
+            return self.filter(role_id=id)[0]
+        except IndexError:
+            return None
+
+    def filter(self, **kwargs):
+        roles = self.roles
+        for arg, value in kwargs.items():
+            roles = [role for role in roles if getattr(role, arg, None) == value]
+        return roles

@@ -21,7 +21,6 @@ Options:
 __version__ = '0.5'
 
 from cloudaux.aws.iam import list_roles, get_role_inline_policies
-from collections import defaultdict
 import csv
 import datetime
 from dateutil.tz import tzlocal
@@ -38,6 +37,7 @@ import tabview as t
 from tqdm import tqdm
 from policyuniverse import expand_policy, get_actions_from_statement, all_permissions
 import import_string
+from role import Role, Roles
 
 
 IAM_ACCESS_ADVISOR_UNSUPPORTED_SERVICES = frozenset([])
@@ -46,7 +46,6 @@ IAM_ACCESS_ADVISOR_UNSUPPORTED_ACTIONS = frozenset(['iam:passrole'])
 # http://docs.aws.amazon.com/IAM/latest/UserGuide/reference_iam-limits.html
 MAX_AWS_POLICY_SIZE = 10240
 
-CUR_ACCOUNT_NUMBER = None
 CONFIG = None
 LOGGER = None
 
@@ -132,7 +131,7 @@ def _generate_default_config(filename=None):
     return config_dict
 
 
-def _init_config():
+def _init_config(account_number):
     global CONFIG
     load_config_paths = [os.path.join(os.getcwd(), 'config.json'),
                          '/etc/repokid/config.json',
@@ -142,6 +141,8 @@ def _init_config():
             with open(path, 'r') as f:
                 CONFIG = json.load(f)
                 print("Loaded config from {}".format(path))
+                # Blacklist needs to know the current account
+                CONFIG['filter_config']['BlacklistFilter']['current_account'] = account_number
         except IOError:
             print("Unable to load config from {}, trying next location".format(path))
         else:
@@ -152,8 +153,6 @@ def _init_config():
 
 def _init_logging():
     global LOGGER
-    if not CONFIG:
-        _init_config()
     logging.config.dictConfig(CONFIG['logging'])
     LOGGER = logging.getLogger(__name__)
 
@@ -194,48 +193,47 @@ def update_role_cache(account_number):
     conn = CONFIG['connection_iam']
     conn['account_number'] = account_number
 
-    roles = list_roles(**conn)
+    roles = Roles([Role(role_data) for role_data in list_roles(**conn)])
 
     active_roles = []
     LOGGER.info('Updating role data for account {}'.format(account_number))
     for role in tqdm(roles):
-        role['policies'] = get_role_inline_policies(role, **conn) or {}
-        active_roles.append(role['RoleId'])
-        roledata.update_role_data(role)
+        current_policies = get_role_inline_policies(role.as_dict(), **conn) or {}
+        active_roles.append(role.role_id)
+        roledata.update_role_data(role, current_policies)
 
     LOGGER.info('Finding inactive accounts')
-    roledata.find_and_mark_inactive(active_roles)
+    roledata.find_and_mark_inactive(account_number, active_roles)
 
     LOGGER.info('Filtering roles')
-    filtered_roles_list = {}
     plugins = FilterPlugins()
-
-    # need to have all roles in the dictionary, even if they aren't filtered
-    filtered_roles_list = {role['RoleId']: [] for role in roles}
 
     for plugin in CONFIG.get('active_filters'):
         plugins.load_plugin(plugin)
 
+    filtered_roles = set()
     for plugin in plugins.filter_plugins:
         filtered_list = plugin.apply(roles)
         class_name = plugin.__class__.__name__
         for role in filtered_list:
-            LOGGER.info('Role {} filtered by {}'.format(role['RoleName'], class_name))
-            filtered_roles_list[role['RoleId']].append(class_name)
+            filtered_roles.add(role)
+            LOGGER.info('Role {} filtered by {}'.format(role.role_name, class_name))
+            roles.get_by_id(role.role_id).disqualified_by.append(class_name)
 
-    roledata.update_filtered_roles(filtered_roles_list)
+    roledata.update_filtered_roles(filtered_roles)
 
     LOGGER.info('Getting data from Aardvark')
     aardvark_data = _get_aardvark_data(account_number)
 
     LOGGER.info('Updating with Aardvark data')
-    roledata.update_aardvark_data(account_number, aardvark_data)
+    roledata.update_aardvark_data(account_number, aardvark_data, roles)
 
     LOGGER.info('Calculating repoable permissions and services')
-    roledata.update_repoable_data(_calculate_repo_scores(account_number))
+    _calculate_repo_scores(account_number, roles)
+    roledata.update_repoable_data(roles)
 
     LOGGER.info('Updating stats')
-    roledata.update_stats(source='Scan')
+    roledata.update_stats(roles, source='Scan')
 
 
 def display_roles(account_number, inactive=False):
@@ -243,23 +241,23 @@ def display_roles(account_number, inactive=False):
 
     rows = list()
 
-    if inactive:
-        roles_data = {roleID: roledata.get_role_data(roleID)
-                      for roleID in tqdm(roledata.roles_for_account(account_number))}
-    else:
-        roles_data = roledata.get_data_for_active_roles_in_account(account_number)
+    roles = Roles([Role(roledata.get_role_data(roleID))
+                  for roleID in tqdm(roledata.roles_ids_for_account(account_number))])
 
-    for roleID, role_data in roles_data.items():
-        rows.append([role_data['RoleName'],
-                     role_data.get('DisqualifiedBy', []),
-                     len(role_data.get('DisqualifiedBy', [])) == 0,
-                     role_data['TotalPermissions'],
-                     role_data.get('RepoablePermissions', 0),
-                     role_data['Repoed'],
-                     role_data.get('RepoableServices')])
+    if not inactive:
+        roles = roles.filter(active=True)
+
+    for role in roles:
+        rows.append([role.role_name,
+                     role.disqualified_by,
+                     len(role.disqualified_by) == 0,
+                     role.total_permissions,
+                     role.repoable_permissions,
+                     role.repoed,
+                     role.repoable_services])
 
     rows = sorted(rows, key=lambda x: (x[4], x[0], x[3]))
-    rows.insert(0,headers)
+    rows.insert(0, headers)
     # print tabulate(rows, headers=headers)
     t.view(rows)
     with open('table.csv', 'wb') as csvfile:
@@ -271,7 +269,7 @@ def display_roles(account_number, inactive=False):
 
 def _get_role_permissions(role):
     permissions = set()
-    for policy_name, policy in _get_current_policies(role).items():
+    for policy_name, policy in role.policies[-1]['Policy'].items():
         policy = expand_policy(policy=policy, expand_deny=False)
         for statement in policy.get('Statement'):
             if statement['Effect'].lower() == 'allow':
@@ -279,7 +277,7 @@ def _get_role_permissions(role):
 
     for permission in permissions:
         if permission.startswith('tag:'):
-            LOGGER.info('Role {} has {}'.format(role['RoleName'], permission))
+            LOGGER.info('Role {} has {}'.format(role.role_name, permission))
 
     global WEIRD
     weird_permissions = permissions.difference(all_permissions)
@@ -289,12 +287,12 @@ def _get_role_permissions(role):
     return permissions
 
 
-def _get_repoable_permissions(permissions, role_data):
+def _get_repoable_permissions(permissions, role):
     ago = datetime.timedelta(CONFIG['filter_config']['AgeFilter']['minimum_age'])
     now = datetime.datetime.now(tzlocal())
 
     used_services = set()
-    for service in role_data.get('AAData', []):
+    for service in role.aa_data:
         accessed = service['lastAuthenticated']
         if not accessed:
             continue
@@ -320,41 +318,33 @@ def _get_repoable_permissions(permissions, role_data):
 
 def find_roles_with_permission(permission):
     for roleID in roledata.role_ids_for_all_accounts():
-        role_data = roledata.get_role_data(roleID)
-        permissions = _get_role_permissions(role_data)
-        if permission in permissions:
-            LOGGER.info('ARN {arn} has {permission}'.format(arn=role_data['Arn'], permission=permission))
+        role = Role(roledata.get_role_data(roleID, fields=['Policies', 'RoleName', 'Arn']))
+        permissions = _get_role_permissions(role)
+        if permission.lower() in permissions:
+            LOGGER.info('ARN {arn} has {permission}'.format(arn=role.arn, permission=permission))
 
 
-def _get_current_policies(role_dict):
-    return role_dict['Policies'][-1].get('Policy')
+def _calculate_repo_scores(account_number, roles):
+    for role in roles:
+        permissions = _get_role_permissions(role)
+        role.total_permissions = len(permissions)
 
-
-def _calculate_repo_scores(account_number):
-    roles_data = roledata.get_data_for_active_roles_in_account(account_number)
-
-    repoable_data = defaultdict(dict)
-
-    for roleID, role_data in roles_data.items():
-        permissions = _get_role_permissions(role_data)
-        repoable_data[roleID]['TotalPermissions'] = len(permissions)
-
-        if not role_data.get('AAData', {}):
-            LOGGER.info('No data found in access advisor for {}'.format(roleID))
-            repoable_data[roleID]['RepoablePermissions'] = 0
-            repoable_data[roleID]['RepoableServices'] = []
+        if not role.aa_data:
+            LOGGER.info('No data found in access advisor for {}'.format(role.role_id))
+            role.repoable_permissions = 0
+            role.repoable_services = []
             continue
 
         # Dynamo won't store empty lists, so if the list is empty it won't be stored
-        if len(role_data.get('DisqualifiedBy', [])) == 0:
-            repoable_permissions = _get_repoable_permissions(permissions, role_data)
+        if len(role.disqualified_by) == 0:
+            repoable_permissions = _get_repoable_permissions(permissions, role)
             repoable_services = set([permission.split(':')[0] for permission in repoable_permissions])
             repoable_services = sorted(repoable_services)
-            repoable_data[roleID]['RepoablePermissions'] = len(repoable_permissions)
-            repoable_data[roleID]['RepoableServices'] = repoable_services
+            role.repoable_permissions = len(repoable_permissions)
+            role.repoable_services = repoable_services
         else:
-            repoable_data[roleID]['RepoablePermissions'] = 0
-            repoable_data[roleID]['RepoableServices'] = []
+            role.repoable_permissions = 0
+            role.repoable_services = []
 
     if WEIRD:
         all_services = set([permission.split(':')[0] for permission in all_permissions])
@@ -363,8 +353,6 @@ def _calculate_repo_scores(account_number):
         weird_services = weird_services.difference(all_services)
         LOGGER.warn('Not sure about these services:\n{}'.format(json.dumps(list(weird_services), indent=2,
                     sort_keys=True)))
-
-    return repoable_data
 
 
 def _get_repoed_policy(role, repoable_permissions):
@@ -378,7 +366,7 @@ def _get_repoed_policy(role, repoable_permissions):
     return
     """
     # work with our own copy; don't mess with the CACHE copy.
-    role_policies = dict(role['Policies'][-1]['Policy'])
+    role_policies = role.policies[-1]['Policy']
 
     empty_policies = []
     for policy_name, policy in role_policies.items():
@@ -424,35 +412,39 @@ def display_role(account_number, role_name):
     Repoable permissions (from Access Advisor)
     Permissions stats
     """
-    role_data = _find_role_in_cache(role_name)
+    role_data = _find_role_in_cache(account_number, role_name)
     if not role_data:
         LOGGER.warn('Could not find role with name {}'.format(role_name))
         return
+    else:
+        role = Role(role_data)
 
     print "\n\nRole repo data:"
     headers = ['Name', 'Disqualified By', 'Can be repoed', 'Permissions', 'Repoable', 'Repoed', 'Services']
-    rows = [[role_data['RoleName'],
-             role_data.get('DisqualifiedBy', []),
-             len(role_data.get('DisqualifiedBy', [])) == 0,
-             role_data['TotalPermissions'],
-             role_data.get('RepoablePermissions', 0),
-             role_data['Repoed'],
-             role_data.get('RepoableServices')]]
+    rows = [[role.role_name,
+             role.disqualified_by,
+             len(role.disqualified_by) == 0,
+             role.total_permissions,
+             role.repoable_permissions,
+             role.repoed,
+             role.repoable_services]]
     print tabulate(rows, headers=headers) + '\n\n'
 
     print "Policy history:"
     headers = ['Number', 'Source', 'Discovered', 'Policy Length', 'Policy Contents']
     rows = []
-    for index, policies_version in enumerate(role_data['Policies']):
-        rows.append([index, policies_version['Source'], policies_version['Discovered'],
-                    len(str(policies_version['Policy'])),
-                    str(policies_version['Policy'])[:50]])
+    for index, policies_version in enumerate(role.policies):
+        rows.append([index,
+                     policies_version['Source'],
+                     policies_version['Discovered'],
+                     len(str(policies_version['Policy'])),
+                     str(policies_version['Policy'])[:50]])
     print tabulate(rows, headers=headers) + '\n\n'
 
     print "Stats:"
     headers = ['Date', 'Event Type', 'Permissions Count', 'Disqualified By']
     rows = []
-    for stats_entry in role_data.get('Stats', []):
+    for stats_entry in role.stats:
         rows.append([stats_entry['Date'],
                      stats_entry['Source'],
                      stats_entry['PermissionsCount'],
@@ -460,15 +452,14 @@ def display_role(account_number, role_name):
     print tabulate(rows, headers=headers) + '\n\n'
 
     # can't do anymore if we don't have AA data
-    aa_data = role_data.get('AAData', '')
-    if not aa_data:
-        LOGGER.warn('ARN not found in Access Advisor: {}'.format(role_data['Arn']))
+    if not role.aa_data:
+        LOGGER.warn('ARN not found in Access Advisor: {}'.format(role.arn))
         return
 
     repoable_permissions = set([])
-    permissions = _get_role_permissions(role_data)
-    if len(role_data.get('DisqualifiedBy', [])) == 0:
-        repoable_permissions = _get_repoable_permissions(permissions, role_data)
+    permissions = _get_role_permissions(role)
+    if len(role.disqualified_by) == 0:
+        repoable_permissions = _get_repoable_permissions(permissions, role)
 
     print "Repoable services:"
     headers = ['Service', 'Action', 'Repoable']
@@ -482,7 +473,7 @@ def display_role(account_number, role_name):
     rows = sorted(rows, key=lambda x: (x[2], x[0], x[1]))
     print tabulate(rows, headers=headers) + '\n\n'
 
-    repoed_policies, _ = _get_repoed_policy(role_data, repoable_permissions)
+    repoed_policies, _ = _get_repoed_policy(role, repoable_permissions)
 
     if repoed_policies:
         print('Repo\'d Policies: \n{}'.format(json.dumps(repoed_policies, indent=2, sort_keys=True)))
@@ -529,54 +520,60 @@ def _get_aardvark_data(account_number):
 
 
 def repo_all_roles(account_number, commit=False):
-    for _, role in roledata.get_data_for_active_roles_in_account(account_number).items():
-        repo_role(account_number, role['RoleName'], commit=commit)
+    for role_name in roledata.get_active_role_names_in_account(account_number):
+        repo_role(account_number, role_name, commit=commit)
     LOGGER.info('Done')
 
 
-def _find_role_in_cache(role_name):
-    """Return a tuple with arn and role from cache matching supplied rolename or None, None"""
+def _find_role_in_cache(account_number, role_name):
+    """Return role dictionary for active role with name in account"""
     found = False
 
-    for roleID in roledata.roles_for_account(CUR_ACCOUNT_NUMBER):
-        role_data = roledata.get_role_data(roleID)
-        if role_data['RoleName'].lower() == role_name.lower():
+    for roleID in roledata.roles_ids_for_account(account_number):
+        role_data = roledata.get_role_data(roleID, fields=['RoleName', 'Active'])
+        if role_data['RoleName'].lower() == role_name.lower() and role_data['Active']:
             found = True
             break
 
     if found:
-        return role_data
+        return roledata.get_role_data(roleID)
     else:
         return None
 
 
 def repo_role(account_number, role_name, commit=False):
-    role_data = _find_role_in_cache(role_name)
+    role_data = _find_role_in_cache(account_number, role_name)
     if not role_data:
-        LOGGER.error('Could not find role with name {}'.format(role_name))
+        LOGGER.warn('Could not find role with name {}'.format(role_name))
+        return
+    else:
+        role = Role(role_data)
+
+    if len(role.disqualified_by) > 0:
+        LOGGER.info('Cannot repo role {} because it is being disqualified by: {}'.format(role_name,
+                                                                                         role.disqualified_by))
         return
 
-    disqualified_by = role_data.get('DisqualifiedBy', [])
-    if len(disqualified_by) > 0:
-        LOGGER.info('Cannot repo role {} because it is being disqualified by: {}'.format(role_name, disqualified_by))
+    if not role.aa_data:
+        LOGGER.warn('ARN not found in Access Advisor: {}'.format(role.arn))
         return
 
-    if 'AAData' not in role_data:
-        LOGGER.warn('ARN not found in Access Advisor: {}'.format(role_data['Arn']))
-        return
+    if not role.repoable_permissions:
+        LOGGER.info('No permissions to repo for role {}'.format(role_name))
 
     old_aa_data_services = []
-    for aa_service in role_data['AAData']:
+    for aa_service in role.aa_data:
         if(datetime.datetime.strptime(aa_service['lastUpdated'], '%a, %d %b %Y %H:%M:%S %Z') <
            datetime.datetime.now() - datetime.timedelta(days=CONFIG['repo_requirements']['oldest_aa_data_days'])):
             old_aa_data_services.append(aa_service['serviceName'])
+
     if old_aa_data_services:
         LOGGER.error('AAData older than threshold for these services: {}'.format(old_aa_data_services))
         return
 
-    permissions = _get_role_permissions(role_data)
-    repoable_permissions = _get_repoable_permissions(permissions, role_data)
-    repoed_policies, deleted_policy_names = _get_repoed_policy(role_data, repoable_permissions)
+    permissions = _get_role_permissions(role)
+    repoable_permissions = _get_repoable_permissions(permissions, role)
+    repoed_policies, deleted_policy_names = _get_repoed_policy(role, repoable_permissions)
 
     policies_length = len(json.dumps(repoed_policies))
     if not commit:
@@ -601,44 +598,47 @@ def repo_role(account_number, role_name, commit=False):
         return
 
     for name in deleted_policy_names:
-        LOGGER.info('Deleting policy with name {} from {}'.format(name, role_data['RoleName']))
-        ca.call('iam.client.delete_role_policy', RoleName=role_data['RoleName'], PolicyName=name)
+        LOGGER.info('Deleting policy with name {} from {}'.format(name, role.role_name))
+        ca.call('iam.client.delete_role_policy', RoleName=role.role_name, PolicyName=name)
 
     if repoed_policies:
         LOGGER.info('Replacing Policies With: \n{}'.format(json.dumps(repoed_policies, indent=2, sort_keys=True)))
         for policy_name, policy in repoed_policies.items():
             try:
-                ca.call('iam.client.put_role_policy', RoleName=role_data['RoleName'], PolicyName=policy_name,
+                ca.call('iam.client.put_role_policy', RoleName=role.role_name, PolicyName=policy_name,
                         PolicyDocument=json.dumps(policy, indent=2, sort_keys=True))
+
             except Exception as e:
                 LOGGER.error('Exception calling PutRolePolicy on {role}/{policy}\n{e}\n'.format(
-                             role=role_data['RoleName'], policy=policy_name, e=str(e)))
+                             role=role.role_name, policy=policy_name, e=str(e)))
                 return
 
-    role_data['policies'] = get_role_inline_policies(role_data, **conn) or {}
-    roledata.add_new_policy_version(role_data, 'Repo')
-    roledata.set_repoed(role_data['RoleId'])
+    current_policies = get_role_inline_policies(role.as_dict(), **conn) or {}
+    roledata.add_new_policy_version(role, current_policies, 'Repo')
+    roledata.set_repoed(role.role_id)
 
     # update total permissions count for stats
-    permissions_count = len(_get_role_permissions(role_data))
-    roledata.update_total_permissions(role_data['RoleId'], permissions_count)
+    role.total_permissions = len(_get_role_permissions(role))
+    roledata.update_total_permissions(role)
 
-    roledata.update_stats(source='Repo', roleID=role_data['RoleId'])
+    roledata.update_stats([role], source='Repo')
 
-    LOGGER.info('Successfully repoed role: {}'.format(role_data['RoleName']))
+    LOGGER.info('Successfully repoed role: {}'.format(role.role_name))
 
 
 def rollback_role(account_number, role_name, selection=None, commit=None):
-    role_data = _find_role_in_cache(role_name)
+    role_data = _find_role_in_cache(account_number, role_name)
     if not role_data:
-        LOGGER.error("Couldn't find role ({}) in cache".format(role_name))
+        LOGGER.warn('Could not find role with name {}'.format(role_name))
         return
+    else:
+        role = Role(role_data)
 
     # no option selected, display a table of options
     if not selection:
         headers = ['Number', 'Source', 'Discovered', 'Policy Length', 'Policy Contents']
         rows = []
-        for index, policies_version in enumerate(role_data['Policies']):
+        for index, policies_version in enumerate(role.policies):
             rows.append([index, policies_version['Source'], policies_version['Discovered'],
                         len(str(policies_version['Policy'])),
                         str(policies_version['Policy'])[:50]])
@@ -650,12 +650,12 @@ def rollback_role(account_number, role_name, selection=None, commit=None):
     conn['account_number'] = account_number
     ca = CloudAux(**conn)
 
-    current_policies = get_role_inline_policies(role_data, **conn)
+    current_policies = get_role_inline_policies(role.as_dict(), **conn)
 
     if selection and not commit:
         pp = pprint.PrettyPrinter()
         print "Will restore the following policies:"
-        pp.pprint(role_data['Policies'][int(selection)]['Policy'])
+        pp.pprint(role.policies[int(selection)]['Policy'])
         print "Current policies:"
         pp.pprint(current_policies)
         return
@@ -665,13 +665,15 @@ def rollback_role(account_number, role_name, selection=None, commit=None):
     # from the list as we update.  Any policy names left need to be manually removed
     policies_to_remove = current_policies.keys()
 
-    for policy_name, policy in role_data['Policies'][int(selection)]['Policy'].items():
+    for policy_name, policy in role.policies[int(selection)]['Policy'].items():
         try:
             LOGGER.info("Pushing cached policy: {}".format(policy_name))
-            ca.call('iam.client.put_role_policy', RoleName=role_data['RoleName'], PolicyName=policy_name,
+            ca.call('iam.client.put_role_policy', RoleName=role.role_name, PolicyName=policy_name,
                     PolicyDocument=json.dumps(policy, indent=2, sort_keys=True))
+
         except Exception as e:
             LOGGER.error("Unable to push policy {}.  Error: {}".format(policy_name, e.message))
+
         else:
             # remove the policy name if it's in the list
             try:
@@ -682,22 +684,23 @@ def rollback_role(account_number, role_name, selection=None, commit=None):
     if policies_to_remove:
         for policy_name in policies_to_remove:
             try:
-                ca.call('iam.client.delete_role_policy', RoleName=role_data['RoleName'], PolicyName=policy_name)
+                ca.call('iam.client.delete_role_policy', RoleName=role.role_name, PolicyName=policy_name)
+
             except Exception as e:
                 LOGGER.error("Unable to delete policy {}.  Error: {}".format(policy_name, e.message))
 
-    role_data['policies'] = get_role_inline_policies(role_data, **conn) or {}
-    roledata.add_new_policy_version(role_data, 'Restore')
+    current_policies = get_role_inline_policies(role.as_dict(), **conn) or {}
+    roledata.add_new_policy_version(role, current_policies, 'Restore')
     LOGGER.info('Successfully restored selected version of role policies')
 
 
 def repo_stats(output_file, account_number=None):
-    roleIDs = roledata.roles_for_account(account_number) if account_number else roledata.role_ids_for_all_accounts()
+    roleIDs = roledata.roles_ids_for_account(account_number) if account_number else roledata.role_ids_for_all_accounts()
     headers = ['RoleId', 'Role Name', 'Account', 'Date', 'Source', 'Permissions Count', 'Disqualified By']
     rows = []
 
     for roleID in roleIDs:
-        role_data = roledata.get_role_data(roleID)
+        role_data = roledata.get_role_data(roleID, fields=['RoleId', 'RoleName', 'Account', 'Stats'])
         for stats_entry in role_data.get('Stats', []):
             rows.append([role_data['RoleId'], role_data['RoleName'], role_data['Account'], stats_entry['Date'],
                          stats_entry['Source'], stats_entry['PermissionsCount'],
@@ -717,16 +720,15 @@ def repo_stats(output_file, account_number=None):
 
 def main():
     args = docopt(__doc__, version='Repokid {version}'.format(version=__version__))
-    _init_logging()
 
     if args.get('config'):
         config_filename = args.get('<config_filename>')
         return _generate_default_config(filename=config_filename)
 
     account_number = args.get('<account_number>')
-    _init_config()
-    global CUR_ACCOUNT_NUMBER
-    CUR_ACCOUNT_NUMBER = account_number
+    _init_config(account_number)
+    _init_logging()
+
     roledata.dynamo_get_or_create_table(**CONFIG['dynamo_db'])
 
     if args.get('update_role_cache'):
