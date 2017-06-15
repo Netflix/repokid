@@ -1,10 +1,10 @@
-from botocore.exceptions import ClientError as BotoClientError
-import boto3
-from cloudaux.aws.sts import boto3_cached_conn
 from datetime import datetime
 import sys
-from tqdm import tqdm
 
+import boto3
+from botocore.exceptions import ClientError as BotoClientError
+from cloudaux.aws.sts import boto3_cached_conn
+from tqdm import tqdm
 
 # used as a placeholder for empty SID to work around this: https://github.com/aws/aws-sdk-js/issues/833
 DYNAMO_EMPTY_STRING = "---DYNAMO-EMPTY-STRING---"
