@@ -43,7 +43,7 @@ setup(
         'requests==2.18.1',
         'tabulate==0.7.7',
         'tabview==1.4.2',
-        'tqdm==4.11.2'
+        'tqdm==4.14.0'
     ],
     entry_points={
         'console_scripts': [
