@@ -43,7 +43,7 @@ from role import Role, Roles
 from utils import roledata
 
 
-IAM_ACCESS_ADVISOR_UNSUPPORTED_SERVICES = frozenset([])
+IAM_ACCESS_ADVISOR_UNSUPPORTED_SERVICES = frozenset(['lightsail'])
 IAM_ACCESS_ADVISOR_UNSUPPORTED_ACTIONS = frozenset(['iam:passrole'])
 
 # http://docs.aws.amazon.com/IAM/latest/UserGuide/reference_iam-limits.html
