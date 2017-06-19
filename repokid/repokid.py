@@ -507,11 +507,11 @@ def _get_aardvark_data(account_number):
         try:
             r_aardvark = requests.post(aardvark_api_location, params=params, json=payload)
         except requests.exceptions.RequestException as e:
-            LOGGER.error('Unable to get Aardvark data: {}').format(e)
+            LOGGER.error('Unable to get Aardvark data: {}'.format(e))
             sys.exit(1)
         else:
             if(r_aardvark.status_code != 200):
-                LOGGER.error('Unable to get Aardvark data: {}').format(e)
+                LOGGER.error('Unable to get Aardvark data: {}'.format(e))
                 sys.exit(1)
 
             response_data.update(r_aardvark.json())
