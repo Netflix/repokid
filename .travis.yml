@@ -7,7 +7,7 @@ matrix:
 install:
   - pip install pytest
   - pip install bandit
-  - python setup.py test
+  - pip install -r test-requirements.txt
 
 script:
   pytest
