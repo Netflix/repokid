@@ -1,0 +1,22 @@
+language: python
+
+matrix:
+  include:
+    - python: "2.7"
+
+install:
+  - pip install pytest
+  - pip install bandit
+  - python setup.py test
+
+script:
+  pytest
+  bandit -r -ll -ii -x tests/
+
+after_success:
+  - coveralls
+
+notifications:
+  email:
+    tmcpeak@netflix.com
+    pkelley@netflix.com
