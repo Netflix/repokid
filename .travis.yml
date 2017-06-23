@@ -5,7 +5,7 @@ matrix:
     - python: "2.7"
 
 install:
-  - pip install pytest
+  - pip install coveralls
   - pip install bandit
   - pip install .
   - pip install -r test-requirements.txt
