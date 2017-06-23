@@ -7,11 +7,11 @@ matrix:
 install:
   - pip install pytest
   - pip install bandit
+  - pip install -r test-requirements.txt
 
 script:
-  - pip install -r test-requirements.txt
   - pytest
-  - bandit -r -ll -ii -x tests/
+  - bandit -r . -ll -ii -x tests/
 
 after_success:
   - coveralls
