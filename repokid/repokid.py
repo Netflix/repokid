@@ -245,7 +245,7 @@ def display_roles(account_number, inactive=False):
     rows = list()
 
     roles = Roles([Role(roledata.get_role_data(roleID))
-                  for roleID in tqdm(roledata.roles_ids_for_account(account_number))])
+                  for roleID in tqdm(roledata.role_ids_for_account(account_number))])
 
     if not inactive:
         roles = roles.filter(active=True)
@@ -528,8 +528,17 @@ def _get_aardvark_data(account_number):
 
 def repo_all_roles(account_number, commit=False):
     errors = []
-    for role_name in roledata.get_active_role_names_in_account(account_number):
-        errors.append(repo_role(account_number, role_name, commit=commit))
+
+    role_ids_in_account = roledata.role_ids_for_account(account_number)
+    roles = Roles([])
+    for role_id in role_ids_in_account:
+        roles.append(Role(roledata.get_role_data(role_id), fields=['Active', 'RoleName']))
+
+    roles.filter(active=True)
+
+    for role in roles:
+        errors.append(repo_role(account_number, role.role_name, commit=commit))
+
     if errors:
         LOGGER.error('Error(s) during repo: \n{}'.format(errors))
     else:
@@ -540,7 +549,7 @@ def _find_role_in_cache(account_number, role_name):
     """Return role dictionary for active role with name in account"""
     found = False
 
-    for roleID in roledata.roles_ids_for_account(account_number):
+    for roleID in roledata.role_ids_for_account(account_number):
         role_data = roledata.get_role_data(roleID, fields=['RoleName', 'Active'])
         if role_data['RoleName'].lower() == role_name.lower() and role_data['Active']:
             found = True
@@ -717,7 +726,7 @@ def rollback_role(account_number, role_name, selection=None, commit=None):
 
 
 def repo_stats(output_file, account_number=None):
-    roleIDs = roledata.roles_ids_for_account(account_number) if account_number else roledata.role_ids_for_all_accounts()
+    roleIDs = roledata.role_ids_for_account(account_number) if account_number else roledata.role_ids_for_all_accounts()
     headers = ['RoleId', 'Role Name', 'Account', 'Date', 'Source', 'Permissions Count', 'Disqualified By']
     rows = []
 
