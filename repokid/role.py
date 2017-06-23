@@ -35,10 +35,13 @@ class Role(object):
                 'TotalPermissions': self.total_permissions}
 
     def __eq__(self, other):
-        return self.role_id == other.role_id
+        return self.role_id == other
 
     def __hash__(self):
         return hash(self.role_id)
+
+    def __repr__(self):
+        return self.role_id
 
 
 class Roles(object):
@@ -50,6 +53,16 @@ class Roles(object):
 
     def __len__(self):
         return len(self.roles)
+
+    def __repr__(self):
+        return [role.role_id for role in self.roles]
+
+    def __eq__(self, other):
+        return (all(role.role_id in other for role in self.roles) and
+                all(role.role_id in self.roles for role in other))
+
+    # def append(self, role):
+    #     self.roles.append(role)
 
     def role_id_list(self):
         return [role.role_id for role in self.roles]

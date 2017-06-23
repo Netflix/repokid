@@ -119,7 +119,7 @@ def update_aardvark_data(account, aardvark_data, roles):
 
     # so we'll start with getting active ARN -> role mapping by listing accounts and looking for active
     ARNtoRoleID = {}
-    for roleID in roles_ids_for_account(account):
+    for roleID in role_ids_for_account(account):
         role_data = _get_role_data(roleID, fields=['Arn', 'RoleId', 'Active'])
         if role_data['Active']:
             ARNtoRoleID[role_data['Arn']] = role_data['RoleId']
@@ -195,8 +195,8 @@ def _refresh_updated_time(roleID):
         LOGGER.error('Dynamo table error: {}'.format(e))
 
 
-def roles_ids_for_account(account_number):
-    """Get a list of all active role IDs for a given account number"""
+def role_ids_for_account(account_number):
+    """Get a list of all role IDs for a given account number"""
     role_ids = set()
     try:
         results = DYNAMO_TABLE.query(IndexName='Account',
@@ -258,7 +258,7 @@ def find_and_mark_inactive(account_number, active_roles):
     """Mark roles that used to be active but weren't in current role listing inactive"""
     from repokid.repokid import LOGGER
     active_roles = set(active_roles)
-    known_roles = set(roles_ids_for_account(account_number))
+    known_roles = set(role_ids_for_account(account_number))
     inactive_roles = known_roles - active_roles
 
     for roleID in inactive_roles:
@@ -377,13 +377,3 @@ def get_role_data(roleID, fields=None):
     if role_data and 'AAData' in role_data:
         role_data['AAData'] = _empty_string_from_dynamo_replace(role_data['AAData'])
     return role_data
-
-
-def get_active_role_names_in_account(account_number):
-    """Get a dictionary with role IDs as key of role data for all active roles in a given account"""
-    role_names = []
-    for roleID in tqdm(roles_ids_for_account(account_number)):
-        role_data = get_role_data(roleID, fields=['Active', 'RoleName'])
-        if role_data['Active']:
-            role_names.append(role_data['RoleName'])
-    return role_names
