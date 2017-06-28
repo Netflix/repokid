@@ -22,10 +22,16 @@ repokid config config.json
 
 You will need a [DynamoDB](https://aws.amazon.com/dynamodb/) table called `repokid_roles` (specify account and endpoint in `dynamo_db` in config file).
 
+The table should have the following properties:
+ - `RoleId` (string) as a primary partition key, no primary sort key
+ - A global secondary index named `account` with a primary partition key of `Account` and `RoleId` as a projected attribute
+
 For development, you can run dynamo [locally](http://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.html).
 
 To run locally:
   `java -Djava.library.path=./DynamoDBLocal_lib -jar DynamoDBLocal.jar -sharedDb -inMemory -port 8010`
+  
+If you run the development version the table and index will be created for you automatically.
  
  #### IAM Permissions:
 
@@ -118,5 +124,3 @@ Restore a specific version: `repokid rollback_role <ACCOUNT_NUMBER> <ROLE_NAME> 
 ### Stats
 Repokid keeps counts of the total permissions for each role.  Stats are added any time an `update_role_cache` or
 `repo_role` action occur.  To output all stats to a CSV file run: `repokid repo_stats <OUTPUT_FILENAME>`.  An optional account number can be specified to output stats for a specific account only.
-
-
