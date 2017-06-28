@@ -1,5 +1,8 @@
 Repokid
 =======
+[![NetflixOSS Lifecycle](https://img.shields.io/osslifecycle/Netflix/osstracker.svg)]()
+[![Gitter chat](https://badges.gitter.im/gitterHQ/gitter.png)](https://gitter.im/netflix-repokid)
+
 <img align="center" alt="Repokid Logo" src="docs/images/Repokid.png" width="25%" display="block">
 
 Repokid uses Access Advisor provided by [Aardvark](https://github.com/Netflix-Skunkworks/aardvark)
