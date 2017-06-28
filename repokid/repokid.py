@@ -214,16 +214,14 @@ def update_role_cache(account_number):
     for plugin in CONFIG.get('active_filters'):
         plugins.load_plugin(plugin)
 
-    filtered_roles = set()
     for plugin in plugins.filter_plugins:
         filtered_list = plugin.apply(roles)
         class_name = plugin.__class__.__name__
         for role in filtered_list:
-            filtered_roles.add(role)
             LOGGER.info('Role {} filtered by {}'.format(role.role_name, class_name))
             roles.get_by_id(role.role_id).disqualified_by.append(class_name)
 
-    roledata.update_filtered_roles(filtered_roles)
+    roledata.update_filtered_roles(roles)
 
     LOGGER.info('Getting data from Aardvark')
     aardvark_data = _get_aardvark_data(account_number)
@@ -511,7 +509,7 @@ def _get_aardvark_data(account_number):
             sys.exit(1)
         else:
             if(r_aardvark.status_code != 200):
-                LOGGER.error('Unable to get Aardvark data: {}'.format(e))
+                LOGGER.error('Unable to get Aardvark data')
                 sys.exit(1)
 
             response_data.update(r_aardvark.json())

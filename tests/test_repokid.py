@@ -184,11 +184,9 @@ class TestRepokid(object):
         assert mock_find_and_mark_inactive.mock_calls == [call('123456789012',
                                                           [Role(ROLES[0]), Role(ROLES[1]), Role(ROLES[2])])]
 
-        filtered_roles = set()
-        filtered_roles.add(Role(ROLES[2]))
-        assert mock_update_filtered_roles.mock_calls == [call(filtered_roles)]
-
         roles = Roles([Role(ROLES[0]), Role(ROLES[1]), Role(ROLES[2])])
+        assert mock_update_filtered_roles.mock_calls == [call(roles)]
+
         assert mock_update_aardvark_data.mock_calls == [call('123456789012', AARDVARK_DATA, roles)]
 
         # TODO: validate total permission, repoable, etc are getting updated properly
