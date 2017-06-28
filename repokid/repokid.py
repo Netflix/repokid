@@ -128,9 +128,9 @@ def _generate_default_config(filename=None):
             with open(filename, 'w') as f:
                 json.dump(config_dict, f, indent=4, sort_keys=True)
         except OSError as e:
-            LOGGER.error("Unable to open {} for writing: {}".format(filename, e.message))
+            print("Unable to open {} for writing: {}".format(filename, e.message))
         else:
-            LOGGER.info("Successfully wrote sample config to {}".format(filename))
+            print("Successfully wrote sample config to {}".format(filename))
     return config_dict
 
 
@@ -754,7 +754,8 @@ def main():
 
     if args.get('config'):
         config_filename = args.get('<config_filename>')
-        return _generate_default_config(filename=config_filename)
+        _generate_default_config(filename=config_filename)
+        sys.exit(0)
 
     account_number = args.get('<account_number>')
     _init_config(account_number)
