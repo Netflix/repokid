@@ -100,25 +100,29 @@ ROLES_FOR_DISPLAY = [
         "TotalPermissions": 4,
         "RepoablePermissions": 0,
         "Repoed": "Never",
-        "RepoableServices": []
+        "RepoableServices": [],
+        "Refreshed": "Someday"
     },
     {
         "TotalPermissions": 4,
         "RepoablePermissions": 2,
         "Repoed": "Never",
-        "RepoableServices": ["ec2"]
+        "RepoableServices": ["ec2"],
+        "Refreshed": "Someday"
     },
     {
         "TotalPermissions": 4,
         "RepoablePermissions": 0,
         "Repoed": "Never",
-        "RepoableServices": []
+        "RepoableServices": [],
+        "Refreshed": "Someday"
     },
     {
         "TotalPermissions": 4,
         "RepoablePermissions": 0,
         "Repoed": "Never",
-        "RepoableServices": []
+        "RepoableServices": [],
+        "Refreshed": "Someday"
     }
 ]
 
@@ -187,7 +191,7 @@ class TestRepokid(object):
         roles = Roles([Role(ROLES[0]), Role(ROLES[1]), Role(ROLES[2])])
         assert mock_update_filtered_roles.mock_calls == [call(roles)]
 
-        assert mock_update_aardvark_data.mock_calls == [call('123456789012', AARDVARK_DATA, roles)]
+        assert mock_update_aardvark_data.mock_calls == [call(AARDVARK_DATA, roles)]
 
         # TODO: validate total permission, repoable, etc are getting updated properly
         assert mock_update_repoable_data.mock_calls == [call(roles)]
@@ -220,13 +224,15 @@ class TestRepokid(object):
 
         # first call has inactive role, second doesn't because it's filtered
         assert mock_tabview.mock_calls == [
-            call([['Name', 'Disqualified By', 'Can be repoed', 'Permissions', 'Repoable', 'Repoed', 'Services'],
-                  ['all_services_used', [], True, 4, 0, 'Never', []],
-                  ['inactive_role', [], True, 4, 0, 'Never', []],
-                  ['young_role', [], True, 4, 0, 'Never', []],
-                  ['unused_ec2', [], True, 4, 2, 'Never', ['ec2']]]),
+            call([['Name', 'Refreshed', 'Disqualified By', 'Can be repoed', 'Permissions', 'Repoable', 'Repoed',
+                   'Services'],
+                  ['all_services_used', "Someday", [], True, 4, 0, 'Never', []],
+                  ['inactive_role', "Someday", [], True, 4, 0, 'Never', []],
+                  ['young_role', "Someday", [], True, 4, 0, 'Never', []],
+                  ['unused_ec2', "Someday", [], True, 4, 2, 'Never', ['ec2']]]),
 
-            call([['Name', 'Disqualified By', 'Can be repoed', 'Permissions', 'Repoable', 'Repoed', 'Services'],
-                  ['all_services_used', [], True, 4, 0, 'Never', []],
-                  ['young_role', [], True, 4, 0, 'Never', []],
-                  ['unused_ec2', [], True, 4, 2, 'Never', ['ec2']]])]
+            call([['Name', 'Refreshed', 'Disqualified By', 'Can be repoed', 'Permissions', 'Repoable', 'Repoed',
+                   'Services'],
+                  ['all_services_used', "Someday", [], True, 4, 0, 'Never', []],
+                  ['young_role', "Someday", [], True, 4, 0, 'Never', []],
+                  ['unused_ec2', "Someday", [], True, 4, 2, 'Never', ['ec2']]])]
