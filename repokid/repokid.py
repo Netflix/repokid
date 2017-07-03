@@ -211,11 +211,6 @@ def _get_role_permissions(role):
             if statement['Effect'].lower() == 'allow':
                 permissions = permissions.union(get_actions_from_statement(statement))
 
-    # TODO: document what this does
-    for permission in permissions:
-        if permission.startswith('tag:'):
-            LOGGER.info('Role {} has {}'.format(role.role_name, permission))
-
     global WEIRD
     weird_permissions = permissions.difference(all_permissions)
     if weird_permissions:
