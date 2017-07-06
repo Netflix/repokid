@@ -30,6 +30,7 @@ import os
 import pprint
 import requests
 import sys
+import time
 
 import botocore
 from cloudaux.aws.iam import list_roles, get_role_inline_policies
@@ -131,7 +132,8 @@ def _generate_default_config(filename=None):
             }
         },
         "repo_requirements": {
-            "oldest_aa_data_days": 5
+            "oldest_aa_data_days": 5,
+            "exclude_new_permissions_for_days": 14
         }
     }
     if filename:
@@ -219,26 +221,31 @@ def _get_role_permissions(role):
     return permissions
 
 
-def _get_repoable_permissions(permissions, aa_data):
+def _get_repoable_permissions(permissions, aa_data, no_repo_permissions):
     """
     Generate a list of repoable permissions for a role based on the list of all permissions the role's policies
     currently allow and Access Advisor data for the services included in the role's policies.
 
     The first step is to come up with a list of services that were used within the time threshold (the same defined)
-    in the age filter config. Permissions are repoable if they aren't in the used list and aren't in the global list
-    of unsupported services/actions (IAM_ACCESS_ADVISOR_UNSUPPORTED_SERVICES, IAM_ACCESS_ADVISOR_UNSUPPORTED_ACTIONS).
+    in the age filter config. Permissions are repoable if they aren't in the used list, aren't in the global list
+    of unsupported services/actions (IAM_ACCESS_ADVISOR_UNSUPPORTED_SERVICES, IAM_ACCESS_ADVISOR_UNSUPPORTED_ACTIONS),
+    and aren't being temporarily ignored because they're on the no_repo_permissions list (newly added).
 
     Args:
         permissions (list): The full list of permissions that the role's permissions allow
         aa_data (list): A list of Access Advisor data for a role. Each element is a dictionary with a couple required
                         attributes: lastAuthenticated (epoch time in milliseconds when the service was last used and
                         serviceNamespace (the service used)
+        no_repo_permissions (dict): Keys are the name of permissions and values are the time the entry expires
 
     Returns:
         set: Permissions that are 'repoable' (not used within the time threshold)
     """
     ago = datetime.timedelta(CONFIG['filter_config']['AgeFilter']['minimum_age'])
     now = datetime.datetime.now(tzlocal())
+
+    current_time = time.time()
+    no_repo_list = [perm.lower() for perm in no_repo_permissions if no_repo_permissions[perm] > current_time]
 
     used_services = set()
     for service in aa_data:
@@ -258,6 +265,10 @@ def _get_repoable_permissions(permissions, aa_data):
         if permission.split(':')[0] not in used_services:
             if permission.lower() in IAM_ACCESS_ADVISOR_UNSUPPORTED_ACTIONS:
                 LOGGER.warn('skipping {}'.format(permission))
+                continue
+
+            if permission.lower() in no_repo_list:
+                LOGGER.warn('skipping {} because it is in the no repo list'.format(permission))
                 continue
 
             repoable_permissions.add(permission.lower())
@@ -294,7 +305,7 @@ def _calculate_repo_scores(roles):
 
         # permissions are only repoable if the role isn't being disqualified by filter(s)
         if len(role.disqualified_by) == 0:
-            repoable_permissions = _get_repoable_permissions(permissions, role.aa_data)
+            repoable_permissions = _get_repoable_permissions(permissions, role.aa_data, role.no_repo_permissions)
             repoable_services = set([permission.split(':')[0] for permission in repoable_permissions])
             repoable_services = sorted(repoable_services)
             role.repoable_permissions = len(repoable_permissions)
@@ -593,6 +604,23 @@ def display_roles(account_number, inactive=False):
             csv_writer.writerow(row)
 
 
+def _find_newly_added_permissions(old_policy, new_policy):
+    """
+    Compare and old version of policies to a new version and return a set of permissions that were added.  This will
+    be used to maintain a list of permissions that were newly added and should not be repoed for a period of time.
+
+    Args:
+        old_policy
+        new_policy
+
+    Returns:
+        set: Exapnded set of permissions that are in the new policy and not the old one
+    """
+    old_permissions = _get_role_permissions(Role({'Policies': [{'Policy': old_policy}]}))
+    new_permissions = _get_role_permissions(Role({'Policies': [{'Policy': new_policy}]}))
+    return new_permissions - old_permissions
+
+
 def find_roles_with_permission(permission):
     """
     Search roles in all accounts for a policy with a given permission, log the ARN of each role with this permission
@@ -675,7 +703,7 @@ def display_role(account_number, role_name):
     repoable_permissions = set([])
     permissions = _get_role_permissions(role)
     if len(role.disqualified_by) == 0:
-        repoable_permissions = _get_repoable_permissions(permissions, role.aa_data)
+        repoable_permissions = _get_repoable_permissions(permissions, role.aa_data, role.no_repo_permissions)
 
     print "Repoable services:"
     headers = ['Service', 'Action', 'Repoable']
@@ -749,7 +777,7 @@ def repo_role(account_number, role_name, commit=False):
         return
 
     permissions = _get_role_permissions(role)
-    repoable_permissions = _get_repoable_permissions(permissions, role.aa_data)
+    repoable_permissions = _get_repoable_permissions(permissions, role.aa_data, role.no_repo_permissions)
     repoed_policies, deleted_policy_names = _get_repoed_policy(role.policies[-1]['Policy'], repoable_permissions)
 
     policies_length = len(json.dumps(repoed_policies))

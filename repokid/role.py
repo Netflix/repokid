@@ -6,6 +6,7 @@ class Role(object):
         self.assume_role_policy_document = role_dict.get('AssumeRolePolicyDocument', None)
         self.create_date = role_dict.get('CreateDate', None)
         self.disqualified_by = role_dict.get('DisqualifiedBy', [])
+        self.no_repo_permissions = role_dict.get('NoRepoPermissions', {})
         self.policies = role_dict.get('Policies', [])
         self.refreshed = role_dict.get('Refreshed', '')
         self.repoable_permissions = role_dict.get('RepoablePermissions', 0)
@@ -27,6 +28,7 @@ class Role(object):
                 'CreateDate': self.create_date,
                 'DisqualifiedBy': self.disqualified_by,
                 'Policies': self.policies,
+                'NoRepoPermissions': self.no_repo_permissions,
                 'Refreshed': self.refreshed,
                 'RepoablePermissions': self.repoable_permissions,
                 'RepoableServices': self.repoable_services,

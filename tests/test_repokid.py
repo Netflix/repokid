@@ -248,10 +248,13 @@ class TestRepokid(object):
 
         required_iam_config = ['assume_role', 'session_name', 'region']
 
+        required_repo_requirements = ['oldest_aa_data_days', 'exclude_new_permissions_for_days']
+
         assert all(field in generated_config for field in required_config_fields)
         assert all(field in generated_config['filter_config'] for field in required_filter_configs)
         assert all(field in generated_config['dynamo_db'] for field in required_dynamo_config)
         assert all(field in generated_config['connection_iam'] for field in required_iam_config)
+        assert all(field in generated_config['repo_requirements'] for field in required_repo_requirements)
 
     @patch('repokid.repokid.expand_policy')
     @patch('repokid.repokid.get_actions_from_statement')
@@ -278,16 +281,19 @@ class TestRepokid(object):
         repokid.repokid.IAM_ACCESS_ADVISOR_UNSUPPORTED_ACTIONS = ['service_1:action_3', 'service_1:action_4']
 
         permissions = ['service_1:action_1', 'service_1:action_2', 'service_1:action_3', 'service_1:action_4',
-                       'service_2:action_1', 'service_3:action_1', 'service_3:action_2']
+                       'service_2:action_1', 'service_3:action_1', 'service_3:action_2', 'service_4:action_1',
+                       'service_4:action_2']
 
         aa_data = [{'serviceNamespace': 'service_1', 'lastAuthenticated': (time.time() - 90000) * 1000},
                    {'serviceNamespace': 'service_2', 'lastAuthenticated': (time.time() - 90000) * 1000},
                    {'serviceNamespace': 'service_3', 'lastAuthenticated': time.time() * 1000}]
 
-        repoable_permissions = repokid.repokid._get_repoable_permissions(permissions, aa_data)
+        no_repo_permissions = {'service_4:action_1': time.time()-1, 'service_4:action_2': time.time()+1000}
+
+        repoable_permissions = repokid.repokid._get_repoable_permissions(permissions, aa_data, no_repo_permissions)
         # service_1:action_3 and action_4 are unsupported actions, service_2 is an unsupported service, service_3
-        # was used too recently
-        assert repoable_permissions == set(['service_1:action_1', 'service_1:action_2'])
+        # was used too recently, service_4 action 2 is in no_repo_permissions and not expired
+        assert repoable_permissions == set(['service_1:action_1', 'service_1:action_2', 'service_4:action_1'])
 
     @patch('repokid.repokid._get_role_permissions')
     @patch('repokid.repokid._get_repoable_permissions')
@@ -333,3 +339,10 @@ class TestRepokid(object):
                                                                   'Resource': ['*'],
                                                                   'Effect': 'Allow'}]}}
         assert empty_policies == ['iam_perms']
+
+    def test_find_newly_added_permissions(self):
+        old_policy = ROLE_POLICIES['all_services_used']
+        new_policy = ROLE_POLICIES['unused_ec2']
+
+        new_perms = repokid.repokid._find_newly_added_permissions(old_policy, new_policy)
+        assert new_perms == set(['ec2:allocatehosts', 'ec2:associateaddress'])

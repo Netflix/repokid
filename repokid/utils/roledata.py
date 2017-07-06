@@ -1,9 +1,12 @@
 from datetime import datetime
 import sys
+import time
 
 import boto3
 from botocore.exceptions import ClientError as BotoClientError
 from cloudaux.aws.sts import boto3_cached_conn
+
+import repokid.repokid
 
 # used as a placeholder for empty SID to work around this: https://github.com/aws/aws-sdk-js/issues/833
 DYNAMO_EMPTY_STRING = "---DYNAMO-EMPTY-STRING---"
@@ -24,7 +27,8 @@ def add_new_policy_version(role, current_policy, update_source):
     Returns:
         None
     """
-    new_item_index = len(role.policies)
+    cur_role_data = _get_role_data(role.role_id, fields=['Policies'])
+    new_item_index = len(cur_role_data.get('Policies', []))
 
     try:
         policy_entry = {'Source': update_source, 'Discovered': datetime.utcnow().isoformat(), 'Policy': current_policy}
@@ -279,6 +283,46 @@ def update_aardvark_data(aardvark_data, roles):
             LOGGER.error('Dynamo table error: {}'.format(e))
 
 
+def update_no_repo_permissions(role, newly_added_permissions):
+    """
+    Update Dyanmo entry for newly added permissions. Any that were newly detected get added with an expiration
+    date of now plus the config setting for 'repo_requirements': 'exclude_new_permissions_for_days'. Expired entries
+    get deleted. Also update the role object with the new no-repo-permissions.
+
+    Args:
+        role
+        newly_added_permissions (set)
+
+    Returns:
+        None
+    """
+    current_ignored_permissions = _get_role_data(role.role_id, fields=['NoRepoPermissions']).get(
+                                                 'NoRepoPermissions', {})
+    new_ignored_permissions = {}
+
+    current_time = int(time.time())
+    new_perms_expire_time = current_time + (
+        24 * 60 * 60 * repokid.repokid.CONFIG['repo_requirements'].get('exclude_new_permissions_for_days', 14))
+
+    # only copy non-expired items to the new dictionary
+    for permission, expire_time in current_ignored_permissions.items():
+        if expire_time > current_time:
+            new_ignored_permissions[permission] = current_ignored_permissions[permission]
+
+    for permission in newly_added_permissions:
+        new_ignored_permissions[permission] = new_perms_expire_time
+
+    role.no_repo_permissions = new_ignored_permissions
+
+    try:
+        DYNAMO_TABLE.update_item(Key={'RoleId': role.role_id},
+                                 UpdateExpression="SET NoRepoPermissions=:nrp",
+                                 ExpressionAttributeValues={":nrp": new_ignored_permissions})
+    except BotoClientError as e:
+        from repokid.repokid import LOGGER
+        LOGGER.error('Dynamo table error: {}'.format(e))
+
+
 def update_repoable_data(roles):
     """
     Update total permissions and repoable permissions count and a list of repoable services in Dynamo for each role
@@ -307,7 +351,8 @@ def update_repoable_data(roles):
 def update_role_data(role, current_policy):
     """
     Compare the current version of a policy for a role and what has been previously stored in Dynamo.
-      - If current and new policy versions are different store the new version in Dynamo.
+      - If current and new policy versions are different store the new version in Dynamo. Add any newly added
+          permissions to temporary permission blacklist. Purge any old entries from permission blacklist.
       - Refresh the updated time on the role policy
       - If the role is completely new, store the first version in Dynamo
       - Updates the role with full history of policies, including current version
@@ -326,10 +371,16 @@ def update_role_data(role, current_policy):
 
     if stored_role:
         # is the policy list the same as the last we had?
-        if current_policy != _empty_string_from_dynamo_replace(stored_role['Policies'][-1]['Policy']):
+        old_policy = _empty_string_from_dynamo_replace(stored_role['Policies'][-1]['Policy'])
+        if current_policy != old_policy:
             add_new_policy_version(role, current_policy, 'Scan')
             LOGGER.info('{} has different inline policies than last time, adding to role store'.format(role.arn))
 
+            newly_added_permissions = repokid.repokid._find_newly_added_permissions(old_policy, current_policy)
+        else:
+            newly_added_permissions = set()
+
+        update_no_repo_permissions(role, newly_added_permissions)
         _refresh_updated_time(role.role_id)
     else:
         _store_item(role, current_policy)
