@@ -386,7 +386,7 @@ def update_role_data(role, current_policy):
         _store_item(role, current_policy)
         LOGGER.info('Added new role ({}): {}'.format(role.role_id, role.arn))
 
-    role.policies = get_role_data(role.role_id, fields=['Policies'])['Policies']
+    role.policies = get_role_data(role.role_id, fields=['Policies']).get('Policies', [])
 
 
 def update_stats(roles, source='Scan'):
