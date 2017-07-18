@@ -323,6 +323,27 @@ def update_no_repo_permissions(role, newly_added_permissions):
         LOGGER.error('Dynamo table error: {}'.format(e))
 
 
+def update_opt_out(role):
+    """
+    Update opt-out object for a role - remove (set to empty dict) any entries that have expired
+    Opt-out objects should have the form {'expire': xxx, 'owner': xxx, 'reason': xxx}
+
+    Args:
+        role
+
+    Returns:
+        None
+    """
+    if role.opt_out and int(role.opt_out['expire']) < int(time.time()):
+        try:
+            DYNAMO_TABLE.update_item(Key={'RoleId': role.role_id},
+                                     UpdateExpression="SET OptOut=:oo",
+                                     ExpressionAttributeValues={":oo": {}})
+        except BotoClientError as e:
+            from repokid.repokid import LOGGER
+            LOGGER.error('Dynamo table error: {}'.format(e))
+
+
 def update_repoable_data(roles):
     """
     Update total permissions and repoable permissions count and a list of repoable services in Dynamo for each role
@@ -367,7 +388,7 @@ def update_role_data(role, current_policy):
     from repokid.repokid import LOGGER
 
     # policy_entry: source, discovered, policy
-    stored_role = _get_role_data(role.role_id, fields=['Policies'])
+    stored_role = _get_role_data(role.role_id, fields=['OptOut', 'Policies'])
 
     if stored_role:
         # is the policy list the same as the last we had?
@@ -381,6 +402,7 @@ def update_role_data(role, current_policy):
             newly_added_permissions = set()
 
         update_no_repo_permissions(role, newly_added_permissions)
+        update_opt_out(role)
         _refresh_updated_time(role.role_id)
     else:
         _store_item(role, current_policy)

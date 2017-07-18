@@ -18,7 +18,7 @@ Options:
     -c --commit     Actually do things.
 """
 
-__version__ = '0.5'
+__version__ = '0.6'
 
 import copy
 import csv
@@ -80,7 +80,8 @@ def _generate_default_config(filename=None):
         "active_filters": [
             "repokid.filters.age:AgeFilter",
             "repokid.filters.lambda:LambdaFilter",
-            "repokid.filters.blacklist:BlacklistFilter"
+            "repokid.filters.blacklist:BlacklistFilter",
+            "repokid.filters.optout.OptOutFilter"
         ],
 
         "aardvark_api_location": "<AARDVARK_API_LOCATION>",
