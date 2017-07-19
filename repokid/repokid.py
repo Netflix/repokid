@@ -1,4 +1,16 @@
-#!/usr/bin/env python
+#     Copyright 2017 Netflix, Inc.
+#
+#     Licensed under the Apache License, Version 2.0 (the "License");
+#     you may not use this file except in compliance with the License.
+#     You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+#     Unless required by applicable law or agreed to in writing, software
+#     distributed under the License is distributed on an "AS IS" BASIS,
+#     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#     See the License for the specific language governing permissions and
+#     limitations under the License.
 """
 Usage:
     repokid config <config_filename>
@@ -17,43 +29,30 @@ Options:
     --version       Show Version
     -c --commit     Actually do things.
 """
-
-__version__ = '0.6'
-
-import copy
 import csv
 import datetime
-from dateutil.tz import tzlocal
 import json
-import logging
-import os
 import pprint
 import requests
 import sys
-import time
 
 import botocore
 from cloudaux.aws.iam import list_roles, get_role_inline_policies
 from docopt import docopt
 import import_string
-from policyuniverse import expand_policy, get_actions_from_statement, all_permissions
 from tabulate import tabulate
 import tabview as t
 from tqdm import tqdm
 
+from . import LOGGER as LOGGER
+from . import CONFIG as CONFIG
+from . import __version__ as __version__
 from role import Role, Roles
 from utils import roledata
 
 
-IAM_ACCESS_ADVISOR_UNSUPPORTED_SERVICES = frozenset(['lightsail'])
-IAM_ACCESS_ADVISOR_UNSUPPORTED_ACTIONS = frozenset(['iam:passrole'])
-
 # http://docs.aws.amazon.com/IAM/latest/UserGuide/reference_iam-limits.html
 MAX_AWS_POLICY_SIZE = 10240
-
-CONFIG = None
-LOGGER = None
-WEIRD = set([])
 
 
 def _generate_default_config(filename=None):
@@ -146,242 +145,6 @@ def _generate_default_config(filename=None):
         else:
             print("Successfully wrote sample config to {}".format(filename))
     return config_dict
-
-
-def _init_config(account_number):
-    """
-    Try to find config by searching for it in a few paths, load it, and store it in the global CONFIG
-
-    Args:
-        account_number (string): The current account number Repokid is being run against. This is needed to provide
-                                 the right config to the blacklist filter.
-
-    Returns:
-        None
-    """
-    global CONFIG
-    load_config_paths = [os.path.join(os.getcwd(), 'config.json'),
-                         '/etc/repokid/config.json',
-                         '/apps/repokid/config.json']
-    for path in load_config_paths:
-        try:
-            with open(path, 'r') as f:
-                CONFIG = json.load(f)
-                print("Loaded config from {}".format(path))
-                # Blacklist needs to know the current account
-                CONFIG['filter_config']['BlacklistFilter']['current_account'] = account_number
-        except IOError:
-            print("Unable to load config from {}, trying next location".format(path))
-        else:
-            return
-    print("Config not found in any path, using defaults")
-    CONFIG = _generate_default_config()
-
-
-def _init_logging():
-    """
-    Initialize global LOGGER object with config defined in the global CONFIG object
-
-    Args:
-        None
-
-    Returns:
-        None
-    """
-    global LOGGER
-    logging.config.dictConfig(CONFIG['logging'])
-    LOGGER = logging.getLogger(__name__)
-
-
-def _get_role_permissions(role):
-    """
-    Expand the most recent version of policies from a role to produce a list of all the permissions that are allowed
-    (permission is included in one or more statements that is allowed).  To perform expansion the policyuniverse
-    library is used. The result is a list of all of the individual permissions that are allowed in any of the
-    statements. If our resultant list contains any permissions that aren't listed in the master list of permissions
-    we'll add them to our global list of WEIRD permissions to warn about later.
-
-    Args:
-        role (Role): The role object that we're getting a list of permissions for
-
-    Returns:
-        set: A set of permissions that the role has policies that allow
-    """
-    permissions = set()
-    for policy_name, policy in role.policies[-1]['Policy'].items():
-        policy = expand_policy(policy=policy, expand_deny=False)
-        for statement in policy.get('Statement'):
-            if statement['Effect'].lower() == 'allow':
-                permissions = permissions.union(get_actions_from_statement(statement))
-
-    global WEIRD
-    weird_permissions = permissions.difference(all_permissions)
-    if weird_permissions:
-        WEIRD = WEIRD.union(weird_permissions)
-
-    return permissions
-
-
-def _get_repoable_permissions(permissions, aa_data, no_repo_permissions):
-    """
-    Generate a list of repoable permissions for a role based on the list of all permissions the role's policies
-    currently allow and Access Advisor data for the services included in the role's policies.
-
-    The first step is to come up with a list of services that were used within the time threshold (the same defined)
-    in the age filter config. Permissions are repoable if they aren't in the used list, aren't in the global list
-    of unsupported services/actions (IAM_ACCESS_ADVISOR_UNSUPPORTED_SERVICES, IAM_ACCESS_ADVISOR_UNSUPPORTED_ACTIONS),
-    and aren't being temporarily ignored because they're on the no_repo_permissions list (newly added).
-
-    Args:
-        permissions (list): The full list of permissions that the role's permissions allow
-        aa_data (list): A list of Access Advisor data for a role. Each element is a dictionary with a couple required
-                        attributes: lastAuthenticated (epoch time in milliseconds when the service was last used and
-                        serviceNamespace (the service used)
-        no_repo_permissions (dict): Keys are the name of permissions and values are the time the entry expires
-
-    Returns:
-        set: Permissions that are 'repoable' (not used within the time threshold)
-    """
-    ago = datetime.timedelta(CONFIG['filter_config']['AgeFilter']['minimum_age'])
-    now = datetime.datetime.now(tzlocal())
-
-    current_time = time.time()
-    no_repo_list = [perm.lower() for perm in no_repo_permissions if no_repo_permissions[perm] > current_time]
-
-    used_services = set()
-    for service in aa_data:
-        accessed = service['lastAuthenticated']
-        if not accessed:
-            continue
-        accessed = datetime.datetime.fromtimestamp(accessed / 1000, tzlocal())
-        if accessed > now - ago:
-            used_services.add(service['serviceNamespace'])
-
-    repoable_permissions = set()
-    for permission in permissions:
-        if permission.split(':')[0] in IAM_ACCESS_ADVISOR_UNSUPPORTED_SERVICES:
-            LOGGER.warn('skipping {}'.format(permission))
-            continue
-
-        if permission.split(':')[0] not in used_services:
-            if permission.lower() in IAM_ACCESS_ADVISOR_UNSUPPORTED_ACTIONS:
-                LOGGER.warn('skipping {}'.format(permission))
-                continue
-
-            if permission.lower() in no_repo_list:
-                LOGGER.warn('skipping {} because it is in the no repo list'.format(permission))
-                continue
-
-            repoable_permissions.add(permission.lower())
-
-    return repoable_permissions
-
-
-def _calculate_repo_scores(roles):
-    """
-    Get the total and repoable permissions count and set of repoable services for every role in the account.
-    For each role:
-      1) call _get_role_permissions
-      2) call _get_repoable_permi (count), repoable_permissions (count), and repoable_services (list) for the role
-
-    Each time we got the role permissions we built a list of any permissions that the role's policies granted access
-    to but weren't in our master list of permissions AWS has.  At the end of this run we'll warn about any of these.
-
-    Args:
-        roles (Roles): The set of all roles we're analyzing
-
-    Returns:
-        None
-    """
-    for role in roles:
-        permissions = _get_role_permissions(role)
-        role.total_permissions = len(permissions)
-
-        # if we don't have any access advisor data for a service than nothing is repoable
-        if not role.aa_data:
-            LOGGER.info('No data found in access advisor for {}'.format(role.role_id))
-            role.repoable_permissions = 0
-            role.repoable_services = []
-            continue
-
-        # permissions are only repoable if the role isn't being disqualified by filter(s)
-        if len(role.disqualified_by) == 0:
-            repoable_permissions = _get_repoable_permissions(permissions, role.aa_data, role.no_repo_permissions)
-            repoable_services = set([permission.split(':')[0] for permission in repoable_permissions])
-            repoable_services = sorted(repoable_services)
-            role.repoable_permissions = len(repoable_permissions)
-            role.repoable_services = repoable_services
-        else:
-            role.repoable_permissions = 0
-            role.repoable_services = []
-
-    if WEIRD:
-        all_services = set([permission.split(':')[0] for permission in all_permissions])
-        # print('Not sure about these permissions:\n{}'.format(json.dumps(list(WEIRD), indent=2, sort_keys=True)))
-        weird_services = set([permission.split(':')[0] for permission in WEIRD])
-        weird_services = weird_services.difference(all_services)
-        LOGGER.warn('Not sure about these services:\n{}'.format(json.dumps(list(weird_services), indent=2,
-                    sort_keys=True)))
-
-
-def _get_repoed_policy(policies, repoable_permissions):
-    """
-    This function contains the logic to rewrite the policy to remove any repoable permissions. To do so we:
-      - Iterate over role policies
-      - Iterate over policy statements
-      - Skip Deny statements
-      - Remove any actions that are in repoable_permissions
-      - Remove any statements that now have zero actions
-      - Remove any policies that now have zero statements
-
-    Args:
-        policies (dict): All of the inline policies as a dict with name and policy contents
-        repoable_permissions (set): A set of all of the repoable permissions for policies
-
-    Returns:
-        dict: The rewritten set of all inline policies
-        list: Any policies that are now empty as a result of the rewrites
-    """
-    # work with our own copy; don't mess with the CACHE copy.
-    role_policies = copy.deepcopy(policies)
-
-    empty_policies = []
-    for policy_name, policy in role_policies.items():
-        # list of indexes in the policy that are empty
-        empty_statements = []
-
-        if type(policy['Statement']) is dict:
-            policy['Statement'] = [policy['Statement']]
-
-        for idx, statement in enumerate(policy['Statement']):
-            if statement['Effect'].lower() == 'allow':
-                statement_actions = get_actions_from_statement(statement)
-                statement_actions = statement_actions.difference(repoable_permissions)
-
-                # get_actions_from_statement has already inverted this so our new statement should be 'Action'
-                if 'NotAction' in statement:
-                    del statement['NotAction']
-
-                # by putting this into a set, we lose order, which may be confusing to someone.
-                statement['Action'] = sorted(list(statement_actions))
-
-                # mark empty statements to be removed
-                if len(statement['Action']) == 0:
-                    empty_statements.append(idx)
-
-        # do the actual removal of empty statements
-        for idx in sorted(empty_statements, reverse=True):
-            del policy['Statement'][idx]
-
-        # mark empty policies to be removed
-        if len(policy['Statement']) == 0:
-            empty_policies.append(policy_name)
-
-    # do the actual removal of empty policies.
-    for policy_name in empty_policies:
-        del role_policies[policy_name]
-
-    return role_policies, empty_policies
 
 
 def _get_aardvark_data(account_number):
@@ -555,7 +318,7 @@ def update_role_cache(account_number):
     roledata.update_aardvark_data(aardvark_data, roles)
 
     LOGGER.info('Calculating repoable permissions and services')
-    _calculate_repo_scores(roles)
+    roledata._calculate_repo_scores(roles)
     roledata.update_repoable_data(roles)
 
     LOGGER.info('Updating stats')
@@ -605,23 +368,6 @@ def display_roles(account_number, inactive=False):
             csv_writer.writerow(row)
 
 
-def _find_newly_added_permissions(old_policy, new_policy):
-    """
-    Compare and old version of policies to a new version and return a set of permissions that were added.  This will
-    be used to maintain a list of permissions that were newly added and should not be repoed for a period of time.
-
-    Args:
-        old_policy
-        new_policy
-
-    Returns:
-        set: Exapnded set of permissions that are in the new policy and not the old one
-    """
-    old_permissions = _get_role_permissions(Role({'Policies': [{'Policy': old_policy}]}))
-    new_permissions = _get_role_permissions(Role({'Policies': [{'Policy': new_policy}]}))
-    return new_permissions - old_permissions
-
-
 def find_roles_with_permission(permission):
     """
     Search roles in all accounts for a policy with a given permission, log the ARN of each role with this permission
@@ -634,7 +380,7 @@ def find_roles_with_permission(permission):
     """
     for roleID in roledata.role_ids_for_all_accounts():
         role = Role(roledata.get_role_data(roleID, fields=['Policies', 'RoleName', 'Arn']))
-        permissions = _get_role_permissions(role)
+        permissions = roledata._get_role_permissions(role)
         if permission.lower() in permissions:
             LOGGER.info('ARN {arn} has {permission}'.format(arn=role.arn, permission=permission))
 
@@ -702,9 +448,9 @@ def display_role(account_number, role_name):
         return
 
     repoable_permissions = set([])
-    permissions = _get_role_permissions(role)
+    permissions = roledata._get_role_permissions(role)
     if len(role.disqualified_by) == 0:
-        repoable_permissions = _get_repoable_permissions(permissions, role.aa_data, role.no_repo_permissions)
+        repoable_permissions = roledata._get_repoable_permissions(permissions, role.aa_data, role.no_repo_permissions)
 
     print "Repoable services:"
     headers = ['Service', 'Action', 'Repoable']
@@ -718,7 +464,7 @@ def display_role(account_number, role_name):
     rows = sorted(rows, key=lambda x: (x[2], x[0], x[1]))
     print tabulate(rows, headers=headers) + '\n\n'
 
-    repoed_policies, _ = _get_repoed_policy(role.policies[-1]['Policy'], repoable_permissions)
+    repoed_policies, _ = roledata._get_repoed_policy(role.policies[-1]['Policy'], repoable_permissions)
 
     if repoed_policies:
         print('Repo\'d Policies: \n{}'.format(json.dumps(repoed_policies, indent=2, sort_keys=True)))
@@ -777,9 +523,10 @@ def repo_role(account_number, role_name, commit=False):
         LOGGER.error('AAData older than threshold for these services: {}'.format(old_aa_data_services))
         return
 
-    permissions = _get_role_permissions(role)
-    repoable_permissions = _get_repoable_permissions(permissions, role.aa_data, role.no_repo_permissions)
-    repoed_policies, deleted_policy_names = _get_repoed_policy(role.policies[-1]['Policy'], repoable_permissions)
+    permissions = roledata._get_role_permissions(role)
+    repoable_permissions = roledata._get_repoable_permissions(permissions, role.aa_data, role.no_repo_permissions)
+    repoed_policies, deleted_policy_names = roledata._get_repoed_policy(role.policies[-1]['Policy'],
+                                                                        repoable_permissions)
 
     policies_length = len(json.dumps(repoed_policies))
     if not commit:
@@ -832,7 +579,7 @@ def repo_role(account_number, role_name, commit=False):
         roledata.set_repoed(role.role_id)
 
         # update total and repoable permissions and services
-        role.total_permissions = len(_get_role_permissions(role))
+        role.total_permissions = len(roledata._get_role_permissions(role))
         role.repoable_permissions = 0
         role.repoable_services = []
         roledata.update_repoable_data([role])
@@ -920,9 +667,11 @@ def rollback_role(account_number, role_name, selection=None, commit=None):
             except botocore.excpetion.ClientError as e:
                 LOGGER.error("Unable to delete policy {}.  Error: {}".format(policy_name, e.message))
 
+    # TODO: possibly update the total and repoable permissions here, we'd have to get Aardvark and all that
+
     current_policies = get_role_inline_policies(role.as_dict(), **conn) or {}
     roledata.add_new_policy_version(role, current_policies, 'Restore')
-    role.total_permissions = len(_get_role_permissions(role))
+    role.total_permissions = len(roledata._get_role_permissions(role))
 
     # update stats
     roledata.update_stats([role], source='Restore')
@@ -994,6 +743,7 @@ def repo_stats(output_file, account_number=None):
 
 
 def main():
+    global CONFIG
     args = docopt(__doc__, version='Repokid {version}'.format(version=__version__))
 
     if args.get('config'):
@@ -1002,8 +752,12 @@ def main():
         sys.exit(0)
 
     account_number = args.get('<account_number>')
-    _init_config(account_number)
-    _init_logging()
+
+    if not CONFIG:
+        CONFIG = _generate_default_config()
+
+    # Blacklist needs to know the current account
+    CONFIG['filter_config']['BlacklistFilter']['current_account'] = account_number
 
     roledata.dynamo_get_or_create_table(**CONFIG['dynamo_db'])
 

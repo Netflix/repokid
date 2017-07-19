@@ -18,7 +18,7 @@ import sys
 from setuptools import setup, find_packages
 
 _version_re = re.compile(r'__version__\s+=\s+(.*)')
-with open('repokid/repokid.py', 'rb') as f:
+with open('repokid/__init__.py', 'rb') as f:
     REPOKID_VERSION = str(ast.literal_eval(_version_re.search(
         f.read().decode('utf-8')).group(1)))
 
@@ -48,6 +48,7 @@ setup(
     entry_points={
         'console_scripts': [
             'repokid = repokid.repokid:main',
+            'repokid_reactor = repokid.repokid_reactor:main'
         ],
     }
 )
