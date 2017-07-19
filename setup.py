@@ -36,7 +36,7 @@ setup(
     packages=find_packages(),
     install_requires=[
         'boto3==1.4.4',
-        'cloudaux==1.3.0',
+        'cloudaux==1.3.1',
         'docopt==0.6.2',
         'import_string==0.1.0',
         'policyuniverse==1.0.6.2',
