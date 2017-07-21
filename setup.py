@@ -48,7 +48,7 @@ setup(
     entry_points={
         'console_scripts': [
             'repokid = repokid.repokid:main',
-            'repokid_reactor = repokid.repokid_reactor:main'
+            'reactor = repokid.repokid_reactor:main'
         ],
     }
 )
