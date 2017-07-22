@@ -1,3 +1,18 @@
+#     Copyright 2017 Netflix, Inc.
+#
+#     Licensed under the Apache License, Version 2.0 (the "License");
+#     you may not use this file except in compliance with the License.
+#     You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+#     Unless required by applicable law or agreed to in writing, software
+#     distributed under the License is distributed on an "AS IS" BASIS,
+#     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#     See the License for the specific language governing permissions and
+#     limitations under the License.
+
+
 class Role(object):
     def __init__(self, role_dict):
         self.aa_data = role_dict.get('AAData', {})
@@ -7,6 +22,7 @@ class Role(object):
         self.create_date = role_dict.get('CreateDate', None)
         self.disqualified_by = role_dict.get('DisqualifiedBy', [])
         self.no_repo_permissions = role_dict.get('NoRepoPermissions', {})
+        self.opt_out = role_dict.get('OptOut', {})
         self.policies = role_dict.get('Policies', [])
         self.refreshed = role_dict.get('Refreshed', '')
         self.repoable_permissions = role_dict.get('RepoablePermissions', 0)
@@ -29,6 +45,7 @@ class Role(object):
                 'DisqualifiedBy': self.disqualified_by,
                 'Policies': self.policies,
                 'NoRepoPermissions': self.no_repo_permissions,
+                'OptOut': self.opt_out,
                 'Refreshed': self.refreshed,
                 'RepoablePermissions': self.repoable_permissions,
                 'RepoableServices': self.repoable_services,

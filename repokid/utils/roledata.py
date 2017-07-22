@@ -1,16 +1,40 @@
-from datetime import datetime
+#     Copyright 2017 Netflix, Inc.
+#
+#     Licensed under the Apache License, Version 2.0 (the "License");
+#     you may not use this file except in compliance with the License.
+#     You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+#     Unless required by applicable law or agreed to in writing, software
+#     distributed under the License is distributed on an "AS IS" BASIS,
+#     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#     See the License for the specific language governing permissions and
+#     limitations under the License.
+import copy
+import datetime
+from dateutil.tz import tzlocal
+import json
 import sys
 import time
 
 import boto3
 from botocore.exceptions import ClientError as BotoClientError
 from cloudaux.aws.sts import boto3_cached_conn
+from policyuniverse import expand_policy, get_actions_from_statement, all_permissions
 
-import repokid.repokid
+from repokid import CONFIG as CONFIG
+from repokid import LOGGER as LOGGER
+from repokid.role import Role
 
 # used as a placeholder for empty SID to work around this: https://github.com/aws/aws-sdk-js/issues/833
 DYNAMO_EMPTY_STRING = "---DYNAMO-EMPTY-STRING---"
 DYNAMO_TABLE = None
+
+IAM_ACCESS_ADVISOR_UNSUPPORTED_SERVICES = frozenset(['lightsail'])
+IAM_ACCESS_ADVISOR_UNSUPPORTED_ACTIONS = frozenset(['iam:passrole'])
+
+WEIRD = set([])
 
 
 def add_new_policy_version(role, current_policy, update_source):
@@ -31,7 +55,8 @@ def add_new_policy_version(role, current_policy, update_source):
     new_item_index = len(cur_role_data.get('Policies', []))
 
     try:
-        policy_entry = {'Source': update_source, 'Discovered': datetime.utcnow().isoformat(), 'Policy': current_policy}
+        policy_entry = {'Source': update_source, 'Discovered': datetime.datetime.utcnow().isoformat(),
+                        'Policy': current_policy}
 
         DYNAMO_TABLE.update_item(Key={'RoleId': role.role_id},
                                  UpdateExpression="SET #polarray[{}] = :pol".format(new_item_index),
@@ -39,7 +64,6 @@ def add_new_policy_version(role, current_policy, update_source):
                                  ExpressionAttributeValues={":pol": _empty_string_to_dynamo_replace(policy_entry)})
 
     except BotoClientError as e:
-        from repokid.repokid import LOGGER
         LOGGER.error('Dynamo table error: {}'.format(e))
 
     role.policies = get_role_data(role.role_id, fields=['Policies'])['Policies']
@@ -121,7 +145,6 @@ def dynamo_get_or_create_table(**dynamo_config):
         if "ResourceInUseException" in e.message:
             table = resource.Table('repokid_roles')
         else:
-            from repokid.repokid import LOGGER
             LOGGER.error(e)
             sys.exit(1)
     DYNAMO_TABLE = table
@@ -139,7 +162,7 @@ def find_and_mark_inactive(account_number, active_roles):
     Returns:
         None
     """
-    from repokid.repokid import LOGGER
+
     active_roles = set(active_roles)
     known_roles = set(role_ids_for_account(account_number))
     inactive_roles = known_roles - active_roles
@@ -155,6 +178,23 @@ def find_and_mark_inactive(account_number, active_roles):
                 LOGGER.error('Dynamo table error: {}'.format(e))
             else:
                 LOGGER.info('Marked role ({}): {} inactive'.format(roleID, role_dict['Arn']))
+
+
+def find_newly_added_permissions(old_policy, new_policy):
+    """
+    Compare and old version of policies to a new version and return a set of permissions that were added.  This will
+    be used to maintain a list of permissions that were newly added and should not be repoed for a period of time.
+
+    Args:
+        old_policy
+        new_policy
+
+    Returns:
+        set: Exapnded set of permissions that are in the new policy and not the old one
+    """
+    old_permissions = _get_role_permissions(Role({'Policies': [{'Policy': old_policy}]}))
+    new_permissions = _get_role_permissions(Role({'Policies': [{'Policy': new_policy}]}))
+    return new_permissions - old_permissions
 
 
 def get_role_data(roleID, fields=None):
@@ -204,7 +244,6 @@ def role_ids_for_account(account_number):
                                          ExclusiveStartKey=results.get('LastEvaluatedKey'))
             role_ids.update([return_dict['RoleId'] for return_dict in results.get('Items')])
     except BotoClientError as e:
-        from repokid.repokid import LOGGER
         LOGGER.error('Dynamo table error: {}'.format(e))
 
     return role_ids
@@ -231,7 +270,6 @@ def role_ids_for_all_accounts():
                                          ExclusiveStartKey=response['LastEvaluatedKey'])
             role_ids.extend([role_dict['RoleId'] for role_dict in response['Items']])
     except BotoClientError as e:
-        from repokid.repokid import LOGGER
         LOGGER.error('Dynamo table error: {}'.format(e))
 
     return role_ids
@@ -250,10 +288,9 @@ def set_repoed(role_id):
     try:
         DYNAMO_TABLE.update_item(Key={'RoleId': role_id},
                                  UpdateExpression="SET Repoed = :now, RepoableServices = :el",
-                                 ExpressionAttributeValues={":now": datetime.utcnow().isoformat(),
+                                 ExpressionAttributeValues={":now": datetime.datetime.utcnow().isoformat(),
                                                             ":el": []})
     except BotoClientError as e:
-        from repokid.repokid import LOGGER
         LOGGER.error('Dynamo table error: {}'.format(e))
 
 
@@ -279,7 +316,6 @@ def update_aardvark_data(aardvark_data, roles):
                                      ":aa_data": _empty_string_to_dynamo_replace(role.aa_data)
                                      })
         except BotoClientError as e:
-            from repokid.repokid import LOGGER
             LOGGER.error('Dynamo table error: {}'.format(e))
 
 
@@ -302,7 +338,7 @@ def update_no_repo_permissions(role, newly_added_permissions):
 
     current_time = int(time.time())
     new_perms_expire_time = current_time + (
-        24 * 60 * 60 * repokid.repokid.CONFIG['repo_requirements'].get('exclude_new_permissions_for_days', 14))
+        24 * 60 * 60 * CONFIG['repo_requirements'].get('exclude_new_permissions_for_days', 14))
 
     # only copy non-expired items to the new dictionary
     for permission, expire_time in current_ignored_permissions.items():
@@ -319,8 +355,27 @@ def update_no_repo_permissions(role, newly_added_permissions):
                                  UpdateExpression="SET NoRepoPermissions=:nrp",
                                  ExpressionAttributeValues={":nrp": new_ignored_permissions})
     except BotoClientError as e:
-        from repokid.repokid import LOGGER
         LOGGER.error('Dynamo table error: {}'.format(e))
+
+
+def update_opt_out(role):
+    """
+    Update opt-out object for a role - remove (set to empty dict) any entries that have expired
+    Opt-out objects should have the form {'expire': xxx, 'owner': xxx, 'reason': xxx}
+
+    Args:
+        role
+
+    Returns:
+        None
+    """
+    if role.opt_out and int(role.opt_out['expire']) < int(time.time()):
+        try:
+            DYNAMO_TABLE.update_item(Key={'RoleId': role.role_id},
+                                     UpdateExpression="SET OptOut=:oo",
+                                     ExpressionAttributeValues={":oo": {}})
+        except BotoClientError as e:
+            LOGGER.error('Dynamo table error: {}'.format(e))
 
 
 def update_repoable_data(roles):
@@ -344,7 +399,6 @@ def update_repoable_data(roles):
                                      ":rs": role.repoable_services
                                      })
         except BotoClientError as e:
-            from repokid.repokid import LOGGER
             LOGGER.error('Dynamo table error: {}'.format(e))
 
 
@@ -364,10 +418,9 @@ def update_role_data(role, current_policy):
     Returns:
         None
     """
-    from repokid.repokid import LOGGER
 
     # policy_entry: source, discovered, policy
-    stored_role = _get_role_data(role.role_id, fields=['Policies'])
+    stored_role = _get_role_data(role.role_id, fields=['OptOut', 'Policies'])
 
     if stored_role:
         # is the policy list the same as the last we had?
@@ -376,11 +429,12 @@ def update_role_data(role, current_policy):
             add_new_policy_version(role, current_policy, 'Scan')
             LOGGER.info('{} has different inline policies than last time, adding to role store'.format(role.arn))
 
-            newly_added_permissions = repokid.repokid._find_newly_added_permissions(old_policy, current_policy)
+            newly_added_permissions = find_newly_added_permissions(old_policy, current_policy)
         else:
             newly_added_permissions = set()
 
         update_no_repo_permissions(role, newly_added_permissions)
+        update_opt_out(role)
         _refresh_updated_time(role.role_id)
     else:
         _store_item(role, current_policy)
@@ -401,7 +455,7 @@ def update_stats(roles, source='Scan'):
         None
     """
     for role in roles:
-        cur_stats = {'Date': datetime.utcnow().isoformat(),
+        cur_stats = {'Date': datetime.datetime.utcnow().isoformat(),
                      'DisqualifiedBy': role.disqualified_by,
                      'PermissionsCount': role.total_permissions,
                      'Source': source}
@@ -414,7 +468,6 @@ def update_stats(roles, source='Scan'):
                                      ExpressionAttributeValues={":empty_list": [], ":stats": [cur_stats]})
 
         except BotoClientError as e:
-            from repokid.repokid import LOGGER
             LOGGER.error('Dynamo table error: {}'.format(e))
 
 
@@ -434,8 +487,54 @@ def update_filtered_roles(roles):
                                      UpdateExpression="SET DisqualifiedBy = :dqby",
                                      ExpressionAttributeValues={":dqby": role.disqualified_by})
         except BotoClientError as e:
-            from repokid.repokid import LOGGER
             LOGGER.error('Dynamo table error: {}'.format(e))
+
+
+def _calculate_repo_scores(roles):
+    """
+    Get the total and repoable permissions count and set of repoable services for every role in the account.
+    For each role:
+      1) call _get_role_permissions
+      2) call _get_repoable_permissions (count), repoable_permissions (count), and repoable_services (list) for role
+
+    Each time we got the role permissions we built a list of any permissions that the role's policies granted access
+    to but weren't in our master list of permissions AWS has.  At the end of this run we'll warn about any of these.
+
+    Args:
+        roles (Roles): The set of all roles we're analyzing
+
+    Returns:
+        None
+    """
+    for role in roles:
+        permissions = _get_role_permissions(role)
+        role.total_permissions = len(permissions)
+
+        # if we don't have any access advisor data for a service than nothing is repoable
+        if not role.aa_data:
+            LOGGER.info('No data found in access advisor for {}'.format(role.role_id))
+            role.repoable_permissions = 0
+            role.repoable_services = []
+            continue
+
+        # permissions are only repoable if the role isn't being disqualified by filter(s)
+        if len(role.disqualified_by) == 0:
+            repoable_permissions = _get_repoable_permissions(permissions, role.aa_data, role.no_repo_permissions)
+            repoable_services = set([permission.split(':')[0] for permission in repoable_permissions])
+            repoable_services = sorted(repoable_services)
+            role.repoable_permissions = len(repoable_permissions)
+            role.repoable_services = repoable_services
+        else:
+            role.repoable_permissions = 0
+            role.repoable_services = []
+
+    if WEIRD:
+        all_services = set([permission.split(':')[0] for permission in all_permissions])
+        # print('Not sure about these permissions:\n{}'.format(json.dumps(list(WEIRD), indent=2, sort_keys=True)))
+        weird_services = set([permission.split(':')[0] for permission in WEIRD])
+        weird_services = weird_services.difference(all_services)
+        LOGGER.warn('Not sure about these services:\n{}'.format(json.dumps(list(weird_services), indent=2,
+                    sort_keys=True)))
 
 
 def _empty_string_from_dynamo_replace(obj):
@@ -478,6 +577,151 @@ def _empty_string_to_dynamo_replace(obj):
         return obj
 
 
+def _get_repoable_permissions(permissions, aa_data, no_repo_permissions):
+    """
+    Generate a list of repoable permissions for a role based on the list of all permissions the role's policies
+    currently allow and Access Advisor data for the services included in the role's policies.
+
+    The first step is to come up with a list of services that were used within the time threshold (the same defined)
+    in the age filter config. Permissions are repoable if they aren't in the used list, aren't in the global list
+    of unsupported services/actions (IAM_ACCESS_ADVISOR_UNSUPPORTED_SERVICES, IAM_ACCESS_ADVISOR_UNSUPPORTED_ACTIONS),
+    and aren't being temporarily ignored because they're on the no_repo_permissions list (newly added).
+
+    Args:
+        permissions (list): The full list of permissions that the role's permissions allow
+        aa_data (list): A list of Access Advisor data for a role. Each element is a dictionary with a couple required
+                        attributes: lastAuthenticated (epoch time in milliseconds when the service was last used and
+                        serviceNamespace (the service used)
+        no_repo_permissions (dict): Keys are the name of permissions and values are the time the entry expires
+
+    Returns:
+        set: Permissions that are 'repoable' (not used within the time threshold)
+    """
+    ago = datetime.timedelta(CONFIG['filter_config']['AgeFilter']['minimum_age'])
+    now = datetime.datetime.now(tzlocal())
+
+    current_time = time.time()
+    no_repo_list = [perm.lower() for perm in no_repo_permissions if no_repo_permissions[perm] > current_time]
+
+    used_services = set()
+    for service in aa_data:
+        accessed = service['lastAuthenticated']
+        if not accessed:
+            continue
+        accessed = datetime.datetime.fromtimestamp(accessed / 1000, tzlocal())
+        if accessed > now - ago:
+            used_services.add(service['serviceNamespace'])
+
+    repoable_permissions = set()
+    for permission in permissions:
+        if permission.split(':')[0] in IAM_ACCESS_ADVISOR_UNSUPPORTED_SERVICES:
+            LOGGER.warn('skipping {}'.format(permission))
+            continue
+
+        # we have an unused service but need to make sure it's repoable
+        if permission.split(':')[0] not in used_services:
+            if permission.lower() in IAM_ACCESS_ADVISOR_UNSUPPORTED_ACTIONS:
+                LOGGER.warn('skipping {}'.format(permission))
+                continue
+
+            if permission.lower() in no_repo_list:
+                LOGGER.warn('skipping {} because it is in the no repo list'.format(permission))
+                continue
+
+            repoable_permissions.add(permission.lower())
+
+    return repoable_permissions
+
+
+def _get_repoed_policy(policies, repoable_permissions):
+    """
+    This function contains the logic to rewrite the policy to remove any repoable permissions. To do so we:
+      - Iterate over role policies
+      - Iterate over policy statements
+      - Skip Deny statements
+      - Remove any actions that are in repoable_permissions
+      - Remove any statements that now have zero actions
+      - Remove any policies that now have zero statements
+
+    Args:
+        policies (dict): All of the inline policies as a dict with name and policy contents
+        repoable_permissions (set): A set of all of the repoable permissions for policies
+
+    Returns:
+        dict: The rewritten set of all inline policies
+        list: Any policies that are now empty as a result of the rewrites
+    """
+    # work with our own copy; don't mess with the CACHE copy.
+    role_policies = copy.deepcopy(policies)
+
+    empty_policies = []
+    for policy_name, policy in role_policies.items():
+        # list of indexes in the policy that are empty
+        empty_statements = []
+
+        if type(policy['Statement']) is dict:
+            policy['Statement'] = [policy['Statement']]
+
+        for idx, statement in enumerate(policy['Statement']):
+            if statement['Effect'].lower() == 'allow':
+                statement_actions = get_actions_from_statement(statement)
+                statement_actions = statement_actions.difference(repoable_permissions)
+
+                # get_actions_from_statement has already inverted this so our new statement should be 'Action'
+                if 'NotAction' in statement:
+                    del statement['NotAction']
+
+                # by putting this into a set, we lose order, which may be confusing to someone.
+                statement['Action'] = sorted(list(statement_actions))
+
+                # mark empty statements to be removed
+                if len(statement['Action']) == 0:
+                    empty_statements.append(idx)
+
+        # do the actual removal of empty statements
+        for idx in sorted(empty_statements, reverse=True):
+            del policy['Statement'][idx]
+
+        # mark empty policies to be removed
+        if len(policy['Statement']) == 0:
+            empty_policies.append(policy_name)
+
+    # do the actual removal of empty policies.
+    for policy_name in empty_policies:
+        del role_policies[policy_name]
+
+    return role_policies, empty_policies
+
+
+def _get_role_permissions(role):
+    """
+    Expand the most recent version of policies from a role to produce a list of all the permissions that are allowed
+    (permission is included in one or more statements that is allowed).  To perform expansion the policyuniverse
+    library is used. The result is a list of all of the individual permissions that are allowed in any of the
+    statements. If our resultant list contains any permissions that aren't listed in the master list of permissions
+    we'll add them to our global list of WEIRD permissions to warn about later.
+
+    Args:
+        role (Role): The role object that we're getting a list of permissions for
+
+    Returns:
+        set: A set of permissions that the role has policies that allow
+    """
+    permissions = set()
+    for policy_name, policy in role.policies[-1]['Policy'].items():
+        policy = expand_policy(policy=policy, expand_deny=False)
+        for statement in policy.get('Statement'):
+            if statement['Effect'].lower() == 'allow':
+                permissions = permissions.union(get_actions_from_statement(statement))
+
+    global WEIRD
+    weird_permissions = permissions.difference(all_permissions)
+    if weird_permissions:
+        WEIRD = WEIRD.union(weird_permissions)
+
+    return permissions
+
+
 def _get_role_data(roleID, fields=None):
     """
     Get raw role data as a dictionary for a given role by ID
@@ -496,7 +740,6 @@ def _get_role_data(roleID, fields=None):
         else:
             response = DYNAMO_TABLE.get_item(Key={'RoleId': roleID})
     except BotoClientError as e:
-        from repokid.repokid import LOGGER
         LOGGER.error('Dynamo table error: {}'.format(e))
     else:
         if 'Item' in response:
@@ -519,10 +762,9 @@ def _refresh_updated_time(roleID):
         DYNAMO_TABLE.update_item(Key={'RoleId': roleID},
                                  UpdateExpression="SET Refreshed = :cur_time",
                                  ExpressionAttributeValues={
-                                 ":cur_time": datetime.utcnow().isoformat()
+                                 ":cur_time": datetime.datetime.utcnow().isoformat()
                                  })
     except BotoClientError as e:
-        from repokid.repokid import LOGGER
         LOGGER.error('Dynamo table error: {}'.format(e))
 
 
@@ -537,10 +779,10 @@ def _store_item(role, current_policy):
     Returns:
         None
     """
-    policy_entry = {'Source': 'Scan', 'Discovered': datetime.utcnow().isoformat(), 'Policy': current_policy}
+    policy_entry = {'Source': 'Scan', 'Discovered': datetime.datetime.utcnow().isoformat(), 'Policy': current_policy}
 
     role.policies = [policy_entry]
-    role.refreshed = datetime.utcnow().isoformat()
+    role.refreshed = datetime.datetime.utcnow().isoformat()
     role.active = True
     role.repoed = 'Never'
 
@@ -555,5 +797,4 @@ def _store_item(role, current_policy):
                                     'Active': role.active,
                                     'Repoed': role.repoed})
     except BotoClientError as e:
-        from repokid.repokid import LOGGER
         LOGGER.error('Dynamo table error: {}'.format(e))
