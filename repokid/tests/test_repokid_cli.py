@@ -18,7 +18,7 @@ from mock import call, patch
 
 from dateutil.tz import tzlocal
 
-import repokid.repokid
+import repokid.cli.repokid_cli
 from repokid.role import Role, Roles
 import repokid.utils.roledata
 
@@ -137,19 +137,17 @@ ROLES_FOR_DISPLAY = [
 ]
 
 
-class TestRepokid(object):
+class TestRepokidCLI(object):
     @patch('repokid.utils.roledata.update_stats')
-    @patch('repokid.utils.roledata.update_repoable_data')
-    @patch('repokid.utils.roledata.update_aardvark_data')
-    @patch('repokid.utils.roledata.update_filtered_roles')
     @patch('repokid.utils.roledata.find_and_mark_inactive')
     @patch('repokid.utils.roledata.update_role_data')
-    @patch('repokid.repokid._get_aardvark_data')
-    @patch('repokid.repokid.get_role_inline_policies')
-    @patch('repokid.repokid.list_roles')
+    @patch('repokid.cli.repokid_cli.set_role_data')
+    @patch('repokid.cli.repokid_cli._get_aardvark_data')
+    @patch('repokid.cli.repokid_cli.get_role_inline_policies')
+    @patch('repokid.cli.repokid_cli.list_roles')
     def test_repokid_update_role_cache(self, mock_list_roles, mock_get_role_inline_policies, mock_get_aardvark_data,
-                                       mock_update_role_data, mock_find_and_mark_inactive, mock_update_filtered_roles,
-                                       mock_update_aardvark_data, mock_update_repoable_data, mock_update_stats):
+                                       mock_set_role_data, mock_update_role_data, mock_find_and_mark_inactive,
+                                       mock_update_stats):
 
         # only active roles
         mock_list_roles.return_value = ROLES[:3]
@@ -160,51 +158,53 @@ class TestRepokid(object):
 
         mock_get_aardvark_data.return_value = AARDVARK_DATA
 
-        def update_role_data(role, current_policies):
+        def update_role_data(dynamo_table, account_number, role, current_policies):
             role.policies = role.policies = [{'Policy': current_policies}]
 
         mock_update_role_data.side_effect = update_role_data
 
-        repokid.repokid.CONFIG = {"connection_iam": {},
-                                  "active_filters": ["repokid.filters.age:AgeFilter"],
-                                  "filter_config": {"AgeFilter": {"minimum_age": 90}}}
+        config = {"aardvark_api_location": "", "connection_iam": {},
+                  "active_filters": ["repokid.filters.age:AgeFilter"], "filter_config":
+                  {"AgeFilter": {"minimum_age": 90}, "BlacklistFilter": {}}}
 
         console_logger = logging.StreamHandler()
         console_logger.setLevel(logging.WARNING)
 
-        repokid.repokid.LOGGER = logging.getLogger('test')
-        repokid.repokid.LOGGER.addHandler(console_logger)
+        repokid.cli.repokid_cli.LOGGER = logging.getLogger('test')
+        repokid.cli.repokid_cli.LOGGER.addHandler(console_logger)
 
-        repokid.repokid.update_role_cache('123456789012')
+        dynamo_table = None
+        account_number = '123456789012'
+
+        repokid.cli.repokid_cli.update_role_cache(account_number, dynamo_table, config)
 
         # validate update data called for each role
-        assert mock_update_role_data.mock_calls == [call(Role(ROLES[0]), ROLE_POLICIES['all_services_used']),
-                                                    call(Role(ROLES[1]), ROLE_POLICIES['unused_ec2']),
-                                                    call(Role(ROLES[2]), ROLE_POLICIES['all_services_used'])]
+        assert mock_update_role_data.mock_calls == [
+            call(dynamo_table, account_number, Role(ROLES[0]), ROLE_POLICIES['all_services_used']),
+            call(dynamo_table, account_number, Role(ROLES[1]), ROLE_POLICIES['unused_ec2']),
+            call(dynamo_table, account_number, Role(ROLES[2]), ROLE_POLICIES['all_services_used'])]
 
         # all roles active
-        assert mock_find_and_mark_inactive.mock_calls == [call('123456789012',
+        assert mock_find_and_mark_inactive.mock_calls == [call(dynamo_table, account_number,
                                                           [Role(ROLES[0]), Role(ROLES[1]), Role(ROLES[2])])]
 
         roles = Roles([Role(ROLES[0]), Role(ROLES[1]), Role(ROLES[2])])
-        assert mock_update_filtered_roles.mock_calls == [call(roles)]
-
-        assert mock_update_aardvark_data.mock_calls == [call(AARDVARK_DATA, roles)]
 
         # TODO: validate total permission, repoable, etc are getting updated properly
-        assert mock_update_repoable_data.mock_calls == [call(roles)]
 
-        assert mock_update_stats.mock_calls == [call(roles, source='Scan')]
+        assert mock_update_stats.mock_calls == [call(dynamo_table, roles, source='Scan')]
+
+        # TODO: set_role_data called with
 
     @patch('tabview.view')
-    @patch('repokid.utils.roledata.get_role_data')
-    @patch('repokid.utils.roledata.role_ids_for_account')
+    @patch('repokid.cli.repokid_cli.get_role_data')
+    @patch('repokid.cli.repokid_cli.role_ids_for_account')
     def test_repokid_display_roles(self, mock_role_ids_for_account, mock_get_role_data, mock_tabview):
         console_logger = logging.StreamHandler()
         console_logger.setLevel(logging.WARNING)
 
-        repokid.repokid.LOGGER = logging.getLogger('test')
-        repokid.repokid.LOGGER.addHandler(console_logger)
+        repokid.cli.repokid_cli.LOGGER = logging.getLogger('test')
+        repokid.cli.repokid_cli.LOGGER.addHandler(console_logger)
 
         mock_role_ids_for_account.return_value = ['AROAABCDEFGHIJKLMNOPA', 'AROAABCDEFGHIJKLMNOPB',
                                                   'AROAABCDEFGHIJKLMNOPC', 'AROAABCDEFGHIJKLMNOPD']
@@ -217,8 +217,8 @@ class TestRepokid(object):
                                           ROLES_FOR_DISPLAY[3], ROLES_FOR_DISPLAY[0], ROLES_FOR_DISPLAY[1],
                                           ROLES_FOR_DISPLAY[2], ROLES_FOR_DISPLAY[3]]
 
-        repokid.repokid.display_roles('123456789012', inactive=True)
-        repokid.repokid.display_roles('123456789012', inactive=False)
+        repokid.cli.repokid_cli.display_roles('123456789012', None, inactive=True)
+        repokid.cli.repokid_cli.display_roles('123456789012', None, inactive=False)
 
         # first call has inactive role, second doesn't because it's filtered
         assert mock_tabview.mock_calls == [
@@ -236,7 +236,7 @@ class TestRepokid(object):
                   ['unused_ec2', "Someday", [], True, 4, 2, 'Never', ['ec2']]])]
 
     def test_generate_default_config(self):
-        generated_config = repokid.repokid._generate_default_config()
+        generated_config = repokid.cli.repokid_cli._generate_default_config()
 
         required_config_fields = ['filter_config', 'active_filters', 'aardvark_api_location', 'connection_iam',
                                   'dynamo_db', 'logging', 'repo_requirements']

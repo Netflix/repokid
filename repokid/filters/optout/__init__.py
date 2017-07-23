@@ -1,6 +1,6 @@
 import time.time
 
-from repokid.repokid import Filter
+from repokid.cli.repokid_cli import Filter
 
 
 class OptOutFilter(Filter):

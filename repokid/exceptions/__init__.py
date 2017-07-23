@@ -1,0 +1,2 @@
+class UnexpectedDynamoUpdateValue(Exception):
+    pass
