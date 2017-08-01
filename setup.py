@@ -13,21 +13,12 @@
 #     limitations under the License.
 import re
 import ast
-import os.path
-import sys
 from setuptools import setup, find_packages
 
 _version_re = re.compile(r'__version__\s+=\s+(.*)')
 with open('repokid/__init__.py', 'rb') as f:
     REPOKID_VERSION = str(ast.literal_eval(_version_re.search(
         f.read().decode('utf-8')).group(1)))
-
-ROOT = os.path.realpath(os.path.join(os.path.dirname(__file__)))
-
-# When executing the setup.py, we need to be able to import ourselves.  This
-# means that we need to add the src/ directory to the sys.path
-
-sys.path.insert(0, ROOT)
 
 setup(
     name='repokid',
@@ -47,8 +38,7 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            'repokid = repokid.repokid:main',
-            'reactor = repokid.repokid_reactor:main'
+            'repokid = repokid.cli.repokid_cli:main'
         ],
     }
 )

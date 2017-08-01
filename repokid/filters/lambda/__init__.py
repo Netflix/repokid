@@ -1,4 +1,4 @@
-from repokid.repokid import Filter
+from repokid.cli.repokid_cli import Filter
 
 
 class LambdaFilter(Filter):

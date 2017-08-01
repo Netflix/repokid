@@ -12,7 +12,7 @@ install:
 
 script:
   - coverage run --source repokid -m py.test
-  - bandit -r . -ll -ii -x tests/
+  - bandit -r . -ll -ii -x repokid/tests/
 
 after_success:
   - coveralls

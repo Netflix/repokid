@@ -125,7 +125,7 @@ class TestRoledata(object):
         assert permissions == set(ROLE_POLICIES['unused_ec2']['ec2_perms'])
 
     def test_get_repoable_permissions(self):
-        repokid.utils.roledata.CONFIG = {'filter_config': {'AgeFilter': {'minimum_age': 1}}}
+        minimum_age = 1
         repokid.utils.roledata.IAM_ACCESS_ADVISOR_UNSUPPORTED_SERVICES = ['service_2']
         repokid.utils.roledata.IAM_ACCESS_ADVISOR_UNSUPPORTED_ACTIONS = ['service_1:action_3', 'service_1:action_4']
 
@@ -141,7 +141,7 @@ class TestRoledata(object):
         no_repo_permissions = {'service_4:action_1': time.time()-1, 'service_4:action_2': time.time()+1000}
 
         repoable_permissions = repokid.utils.roledata._get_repoable_permissions(permissions, aa_data,
-                                                                                no_repo_permissions)
+                                                                                no_repo_permissions, minimum_age)
         # service_1:action_3 and action_4 are unsupported actions, service_2 is an unsupported service, service_3
         # was used too recently, service_4 action 2 is in no_repo_permissions and not expired
         assert repoable_permissions == set(['service_1:action_1', 'service_1:action_2', 'service_4:action_1'])
@@ -170,7 +170,8 @@ class TestRoledata(object):
 
         mock_get_repoable_permissions.side_effect = [set(['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy'])]
 
-        repokid.utils.roledata._calculate_repo_scores(roles)
+        minimum_age = 90
+        repokid.utils.roledata._calculate_repo_scores(roles, minimum_age)
 
         assert roles[0].repoable_permissions == 2
         assert roles[0].repoable_services == ['iam']

@@ -44,11 +44,13 @@ from tabulate import tabulate
 import tabview as t
 from tqdm import tqdm
 
-from . import LOGGER as LOGGER
-from . import CONFIG as CONFIG
-from . import __version__ as __version__
-from role import Role, Roles
-from utils import roledata
+from repokid import LOGGER
+from repokid import CONFIG
+from repokid import __version__ as __version__
+from repokid.role import Role, Roles
+from repokid.utils.dynamo import (dynamo_get_or_create_table, find_role_in_cache, get_role_data, role_ids_for_account,
+                                  role_ids_for_all_accounts, set_role_data)
+import repokid.utils.roledata as roledata
 
 
 # http://docs.aws.amazon.com/IAM/latest/UserGuide/reference_iam-limits.html
@@ -147,7 +149,7 @@ def _generate_default_config(filename=None):
     return config_dict
 
 
-def _get_aardvark_data(account_number):
+def _get_aardvark_data(account_number, aardvark_api_location):
     """
     Make a request to the Aardvark server to get all data about a given account.
     We'll request in groups of PAGE_SIZE and check the current count to see if we're done. Keep requesting as long as
@@ -164,13 +166,6 @@ def _get_aardvark_data(account_number):
 
     PAGE_SIZE = 1000
     page_num = 1
-
-    try:
-        aardvark_api_location = CONFIG['aardvark_api_location']
-    except KeyError:
-        LOGGER.error("Unable to find aardvark_api_location in config")
-        # if we're trying to get aardvark data and can't we should quit
-        sys.exit(1)
 
     payload = {'phrase': '{}'.format(account_number)}
     while True:
@@ -197,30 +192,6 @@ def _get_aardvark_data(account_number):
     return response_data
 
 
-def _find_role_in_cache(account_number, role_name):
-    """Return role dictionary for active role with name in account
-
-    Args:
-        account_number (string)
-        role_name (string)
-
-    Returns:
-        dict: A dict with the roledata for the given role in account, else None if not found
-    """
-    found = False
-
-    for roleID in roledata.role_ids_for_account(account_number):
-        role_data = roledata.get_role_data(roleID, fields=['RoleName', 'Active'])
-        if role_data['RoleName'].lower() == role_name.lower() and role_data['Active']:
-            found = True
-            break
-
-    if found:
-        return roledata.get_role_data(roleID)
-    else:
-        return None
-
-
 # inspiration from https://github.com/slackhq/python-rtmbot/blob/master/rtmbot/core.py
 class FilterPlugins(object):
     """
@@ -231,7 +202,7 @@ class FilterPlugins(object):
         """Initialize empty list"""
         self.filter_plugins = []
 
-    def load_plugin(self, module):
+    def load_plugin(self, module, config=None):
         """Import a module by path, instantiate it with plugin specific config and add to the list of active plugins"""
         cls = None
         try:
@@ -241,7 +212,7 @@ class FilterPlugins(object):
         else:
             plugin = None
             try:
-                plugin = cls(config=CONFIG['filter_config'].get(cls.__name__))
+                plugin = cls(config=config)
             except KeyError:
                 plugin = cls()
             LOGGER.info('Loaded plugin {}'.format(module))
@@ -257,7 +228,7 @@ class Filter(object):
         raise NotImplementedError
 
 
-def update_role_cache(account_number):
+def update_role_cache(account_number, dynamo_table, config):
     """
     Update data about all roles in a given account:
       1) list all the roles and initiate a role object with basic data including name and roleID
@@ -281,7 +252,7 @@ def update_role_cache(account_number):
     Returns:
         None
     """
-    conn = CONFIG['connection_iam']
+    conn = config['connection_iam']
     conn['account_number'] = account_number
 
     roles = Roles([Role(role_data) for role_data in list_roles(**conn)])
@@ -289,43 +260,58 @@ def update_role_cache(account_number):
     active_roles = []
     LOGGER.info('Updating role data for account {}'.format(account_number))
     for role in tqdm(roles):
+        role.account = account_number
         current_policies = get_role_inline_policies(role.as_dict(), **conn) or {}
         active_roles.append(role.role_id)
-        roledata.update_role_data(role, current_policies)
+        roledata.update_role_data(dynamo_table, account_number, role, current_policies)
 
     LOGGER.info('Finding inactive accounts')
-    roledata.find_and_mark_inactive(account_number, active_roles)
+    roledata.find_and_mark_inactive(dynamo_table, account_number, active_roles)
 
     LOGGER.info('Filtering roles')
     plugins = FilterPlugins()
 
-    for plugin in CONFIG.get('active_filters'):
-        plugins.load_plugin(plugin)
+    # Blacklist needs to know the current account
+    config['filter_config']['BlacklistFilter']['current_account'] = account_number
+
+    for plugin_path in config.get('active_filters'):
+        plugin_name = plugin_path.split(':')[1]
+        plugins.load_plugin(plugin_path, config=config['filter_config'].get(plugin_name, None))
 
     for plugin in plugins.filter_plugins:
         filtered_list = plugin.apply(roles)
         class_name = plugin.__class__.__name__
-        for role in filtered_list:
-            LOGGER.info('Role {} filtered by {}'.format(role.role_name, class_name))
-            roles.get_by_id(role.role_id).disqualified_by.append(class_name)
+        for filtered_role in filtered_list:
+            LOGGER.info('Role {} filtered by {}'.format(filtered_role.role_name, class_name))
+            filtered_role.disqualified_by.append(class_name)
 
-    roledata.update_filtered_roles(roles)
+    for role in roles:
+        set_role_data(dynamo_table, role.role_id, {'DisqualifiedBy': role.disqualified_by})
 
     LOGGER.info('Getting data from Aardvark')
-    aardvark_data = _get_aardvark_data(account_number)
+    aardvark_data = _get_aardvark_data(account_number, config['aardvark_api_location'])
 
     LOGGER.info('Updating with Aardvark data')
-    roledata.update_aardvark_data(aardvark_data, roles)
+    for role in roles:
+        try:
+            role.aa_data = aardvark_data[role.arn]
+        except KeyError:
+            LOGGER.info('Aardvark data not found for role: {} ({})'.format(role.role_id, role.role_name))
+        else:
+            set_role_data(dynamo_table, role.role_id, {'AAData': role.aa_data})
 
     LOGGER.info('Calculating repoable permissions and services')
-    roledata._calculate_repo_scores(roles)
-    roledata.update_repoable_data(roles)
+    roledata._calculate_repo_scores(roles, config['filter_config']['AgeFilter']['minimum_age'])
+    for role in roles:
+        set_role_data(dynamo_table, role.role_id, {'TotalPermissions': role.total_permissions,
+                                                   'RepoablePermissions': role.repoable_permissions,
+                                                   'RepoableServices': role.repoable_services})
 
     LOGGER.info('Updating stats')
-    roledata.update_stats(roles, source='Scan')
+    roledata.update_stats(dynamo_table, roles, source='Scan')
 
 
-def display_roles(account_number, inactive=False):
+def display_roles(account_number, dynamo_table, inactive=False):
     """
     Display a table with data about all roles in an account and write a csv file with the data.
 
@@ -341,8 +327,8 @@ def display_roles(account_number, inactive=False):
 
     rows = list()
 
-    roles = Roles([Role(roledata.get_role_data(roleID))
-                  for roleID in tqdm(roledata.role_ids_for_account(account_number))])
+    roles = Roles([Role(get_role_data(dynamo_table, roleID))
+                  for roleID in tqdm(role_ids_for_account(dynamo_table, account_number))])
 
     if not inactive:
         roles = roles.filter(active=True)
@@ -368,7 +354,7 @@ def display_roles(account_number, inactive=False):
             csv_writer.writerow(row)
 
 
-def find_roles_with_permission(permission):
+def find_roles_with_permission(permission, dynamo_table):
     """
     Search roles in all accounts for a policy with a given permission, log the ARN of each role with this permission
 
@@ -378,14 +364,14 @@ def find_roles_with_permission(permission):
     Returns:
         None
     """
-    for roleID in roledata.role_ids_for_all_accounts():
-        role = Role(roledata.get_role_data(roleID, fields=['Policies', 'RoleName', 'Arn']))
+    for roleID in role_ids_for_all_accounts(dynamo_table):
+        role = Role(get_role_data(dynamo_table, roleID, fields=['Policies', 'RoleName', 'Arn']))
         permissions = roledata._get_role_permissions(role)
         if permission.lower() in permissions:
             LOGGER.info('ARN {arn} has {permission}'.format(arn=role.arn, permission=permission))
 
 
-def display_role(account_number, role_name):
+def display_role(account_number, role_name, dynamo_table, config):
     """
     Displays data about a role in a given account:
       1) Name, which filters are disqualifying it from repo, if it's repoable, total/repoable permissions,
@@ -402,7 +388,7 @@ def display_role(account_number, role_name):
     Returns:
         None
     """
-    role_data = _find_role_in_cache(account_number, role_name)
+    role_data = find_role_in_cache(dynamo_table, account_number, role_name)
     if not role_data:
         LOGGER.warn('Could not find role with name {}'.format(role_name))
         return
@@ -450,7 +436,8 @@ def display_role(account_number, role_name):
     repoable_permissions = set([])
     permissions = roledata._get_role_permissions(role)
     if len(role.disqualified_by) == 0:
-        repoable_permissions = roledata._get_repoable_permissions(permissions, role.aa_data, role.no_repo_permissions)
+        repoable_permissions = roledata._get_repoable_permissions(permissions, role.aa_data, role.no_repo_permissions,
+                                                                  config['filter_config']['AgeFilter']['minimum_age'])
 
     print "Repoable services:"
     headers = ['Service', 'Action', 'Repoable']
@@ -473,11 +460,11 @@ def display_role(account_number, role_name):
 
     # need to check if all policies would be too large
     if len(json.dumps(repoed_policies)) > MAX_AWS_POLICY_SIZE:
-        LOGGER.error("Policies would exceed the AWS size limit after repo for role: {}.  "
-                     "Please manually minify.".format(role_name))
+        LOGGER.warning("Policies would exceed the AWS size limit after repo for role: {}.  "
+                       "Please manually minify.".format(role_name))
 
 
-def repo_role(account_number, role_name, commit=False):
+def repo_role(account_number, role_name, dynamo_table, config, commit=False):
     """
     Calculate what repoing can be done for a role and then actually do it if commit is set
       1) Check that a role exists, it isn't being disqualified by a filter, and that is has fresh AA data
@@ -493,7 +480,7 @@ def repo_role(account_number, role_name, commit=False):
     """
     errors = []
 
-    role_data = _find_role_in_cache(account_number, role_name)
+    role_data = find_role_in_cache(dynamo_table, account_number, role_name)
     if not role_data:
         LOGGER.warn('Could not find role with name {}'.format(role_name))
         return
@@ -516,7 +503,7 @@ def repo_role(account_number, role_name, commit=False):
     old_aa_data_services = []
     for aa_service in role.aa_data:
         if(datetime.datetime.strptime(aa_service['lastUpdated'], '%a, %d %b %Y %H:%M:%S %Z') <
-           datetime.datetime.now() - datetime.timedelta(days=CONFIG['repo_requirements']['oldest_aa_data_days'])):
+           datetime.datetime.now() - datetime.timedelta(days=config['repo_requirements']['oldest_aa_data_days'])):
             old_aa_data_services.append(aa_service['serviceName'])
 
     if old_aa_data_services:
@@ -524,7 +511,8 @@ def repo_role(account_number, role_name, commit=False):
         return
 
     permissions = roledata._get_role_permissions(role)
-    repoable_permissions = roledata._get_repoable_permissions(permissions, role.aa_data, role.no_repo_permissions)
+    repoable_permissions = roledata._get_repoable_permissions(permissions, role.aa_data, role.no_repo_permissions,
+                                                              config['filter_config']['AgeFilter']['minimum_age'])
     repoed_policies, deleted_policy_names = roledata._get_repoed_policy(role.policies[-1]['Policy'],
                                                                         repoable_permissions)
 
@@ -541,7 +529,7 @@ def repo_role(account_number, role_name, commit=False):
         return
 
     from cloudaux import CloudAux
-    conn = CONFIG['connection_iam']
+    conn = config['connection_iam']
     conn['account_number'] = account_number
     ca = CloudAux(**conn)
 
@@ -573,25 +561,27 @@ def repo_role(account_number, role_name, commit=False):
                 errors.append(error)
 
     current_policies = get_role_inline_policies(role.as_dict(), **conn) or {}
-    roledata.add_new_policy_version(role, current_policies, 'Repo')
+    roledata.add_new_policy_version(dynamo_table, role, current_policies, 'Repo')
 
     if not errors:
-        roledata.set_repoed(role.role_id)
+        set_role_data(dynamo_table, role.role_id, {'Repoed': datetime.datetime.utcnow().isoformat()})
 
         # update total and repoable permissions and services
         role.total_permissions = len(roledata._get_role_permissions(role))
         role.repoable_permissions = 0
         role.repoable_services = []
-        roledata.update_repoable_data([role])
+        set_role_data(dynamo_table, role.role_id, {'TotalPermissions': role.total_permissions,
+                                                   'RepoablePermissions': 0,
+                                                   'RepoableServices': []})
 
         # update stats
-        roledata.update_stats([role], source='Repo')
+        roledata.update_stats(dynamo_table, [role], source='Repo')
 
         LOGGER.info('Successfully repoed role: {}'.format(role.role_name))
     return errors
 
 
-def rollback_role(account_number, role_name, selection=None, commit=None):
+def rollback_role(account_number, role_name, dynamo_table, config, selection=None, commit=None):
     """
     Display the historical policy versions for a roll as a numbered list.  Restore to a specific version if selected.
     Indicate changes that will be made and then actually make them if commit is selected.
@@ -605,7 +595,7 @@ def rollback_role(account_number, role_name, selection=None, commit=None):
     Returns:
         None
     """
-    role_data = _find_role_in_cache(account_number, role_name)
+    role_data = find_role_in_cache(dynamo_table, account_number, role_name)
     if not role_data:
         LOGGER.warn('Could not find role with name {}'.format(role_name))
         return
@@ -624,7 +614,7 @@ def rollback_role(account_number, role_name, selection=None, commit=None):
         return
 
     from cloudaux import CloudAux
-    conn = CONFIG['connection_iam']
+    conn = config['connection_iam']
     conn['account_number'] = account_number
     ca = CloudAux(**conn)
 
@@ -670,16 +660,16 @@ def rollback_role(account_number, role_name, selection=None, commit=None):
     # TODO: possibly update the total and repoable permissions here, we'd have to get Aardvark and all that
 
     current_policies = get_role_inline_policies(role.as_dict(), **conn) or {}
-    roledata.add_new_policy_version(role, current_policies, 'Restore')
+    roledata.add_new_policy_version(dynamo_table, role, current_policies, 'Restore')
     role.total_permissions = len(roledata._get_role_permissions(role))
 
     # update stats
-    roledata.update_stats([role], source='Restore')
+    roledata.update_stats(dynamo_table, [role], source='Restore')
 
     LOGGER.info('Successfully restored selected version of role policies')
 
 
-def repo_all_roles(account_number, commit=False):
+def repo_all_roles(account_number, dynamo_table, config, commit=False):
     """
     Repo all eligible roles in an account.  Collect any errors and display them at the end.
 
@@ -692,15 +682,17 @@ def repo_all_roles(account_number, commit=False):
     """
     errors = []
 
-    role_ids_in_account = roledata.role_ids_for_account(account_number)
+    role_ids_in_account = role_ids_for_account(dynamo_table, account_number)
     roles = Roles([])
     for role_id in role_ids_in_account:
-        roles.append(Role(roledata.get_role_data(role_id), fields=['Active', 'RoleName']))
+        roles.append(Role(roledata.get_role_data(dynamo_table, role_id, fields=['Active', 'RoleName'])))
 
     roles = roles.filter(active=True)
 
     for role in roles:
-        errors.append(repo_role(account_number, role.role_name, commit=commit))
+        error = repo_role(account_number, role.role_name, dynamo_table, config, commit=commit)
+        if error:
+            errors.append(error)
 
     if errors:
         LOGGER.error('Error(s) during repo: \n{}'.format(errors))
@@ -708,7 +700,7 @@ def repo_all_roles(account_number, commit=False):
         LOGGER.info('Everything successful!')
 
 
-def repo_stats(output_file, account_number=None):
+def repo_stats(output_file, dynamo_table, account_number=None):
     """
     Create a csv file with stats about roles, total permissions, and applicable filters over time
 
@@ -719,12 +711,13 @@ def repo_stats(output_file, account_number=None):
     Returns:
         None
     """
-    roleIDs = roledata.role_ids_for_account(account_number) if account_number else roledata.role_ids_for_all_accounts()
+    roleIDs = (role_ids_for_account(dynamo_table, account_number) if account_number else
+               role_ids_for_all_accounts(dynamo_table))
     headers = ['RoleId', 'Role Name', 'Account', 'Date', 'Source', 'Permissions Count', 'Disqualified By']
     rows = []
 
     for roleID in roleIDs:
-        role_data = roledata.get_role_data(roleID, fields=['RoleId', 'RoleName', 'Account', 'Stats'])
+        role_data = roledata.get_role_data(dynamo_table, roleID, fields=['RoleId', 'RoleName', 'Account', 'Stats'])
         for stats_entry in role_data.get('Stats', []):
             rows.append([role_data['RoleId'], role_data['RoleName'], role_data['Account'], stats_entry['Date'],
                          stats_entry['Source'], stats_entry['PermissionsCount'],
@@ -743,7 +736,6 @@ def repo_stats(output_file, account_number=None):
 
 
 def main():
-    global CONFIG
     args = docopt(__doc__, version='Repokid {version}'.format(version=__version__))
 
     if args.get('config'):
@@ -754,46 +746,45 @@ def main():
     account_number = args.get('<account_number>')
 
     if not CONFIG:
-        CONFIG = _generate_default_config()
+        config = _generate_default_config()
+    else:
+        config = CONFIG
 
-    # Blacklist needs to know the current account
-    CONFIG['filter_config']['BlacklistFilter']['current_account'] = account_number
-
-    roledata.dynamo_get_or_create_table(**CONFIG['dynamo_db'])
+    dynamo_table = dynamo_get_or_create_table(**config['dynamo_db'])
 
     if args.get('update_role_cache'):
-        return update_role_cache(account_number)
+        return update_role_cache(account_number, dynamo_table, config)
 
     if args.get('display_role_cache'):
         inactive = args.get('--inactive')
-        return display_roles(account_number, inactive=inactive)
+        return display_roles(account_number, dynamo_table, inactive=inactive)
 
     if args.get('find_roles_with_permission'):
-        return find_roles_with_permission(args.get('<permission>'))
+        return find_roles_with_permission(args.get('<permission>'), dynamo_table)
 
     if args.get('display_role'):
         role_name = args.get('<role_name>')
-        return display_role(account_number, role_name)
+        return display_role(account_number, role_name, dynamo_table, config)
 
     if args.get('repo_role'):
         role_name = args.get('<role_name>')
         commit = args.get('--commit')
-        return repo_role(account_number, role_name, commit=commit)
+        return repo_role(account_number, role_name, dynamo_table, config, commit=commit)
 
     if args.get('rollback_role'):
         role_name = args.get('<role_name>')
         commit = args.get('--commit')
         selection = args.get('--selection')
-        return rollback_role(account_number, role_name, selection=selection, commit=commit)
+        return rollback_role(account_number, role_name, dynamo_table, config, selection=selection, commit=commit)
 
     if args.get('repo_all_roles'):
         commit = args.get('--commit')
-        return repo_all_roles(account_number, commit=commit)
+        return repo_all_roles(account_number, dynamo_table, config, commit=commit)
 
     if args.get('repo_stats'):
         output_file = args.get('<output_filename>')
         account_number = args.get('--account')
-        return repo_stats(output_file, account_number=account_number)
+        return repo_stats(output_file, dynamo_table, account_number=account_number)
 
 
 if __name__ == '__main__':

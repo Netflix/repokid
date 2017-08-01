@@ -1,5 +1,5 @@
-from repokid.repokid import Filter
-from repokid.repokid import LOGGER
+from repokid.cli.repokid_cli import Filter
+from repokid import LOGGER
 
 
 class BlacklistFilter(Filter):
