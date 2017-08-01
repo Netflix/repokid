@@ -35,7 +35,7 @@ setup(
     long_description=__doc__,
     packages=find_packages(),
     install_requires=[
-        'boto3==1.4.4',
+        'boto3==1.4.5',
         'cloudaux==1.2.0',
         'docopt==0.6.2',
         'import_string==0.1.0',
