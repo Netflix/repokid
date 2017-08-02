@@ -30,6 +30,7 @@ setup(
         'cloudaux==1.2.0',
         'docopt==0.6.2',
         'import_string==0.1.0',
+        'marshmallow==2.13.5',
         'policyuniverse==1.0.6.2',
         'requests==2.13.0',
         'tabulate==0.7.7',
@@ -38,7 +39,8 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            'repokid = repokid.cli.repokid_cli:main'
+            'repokid = repokid.cli.repokid_cli:main',
+            'reactor = repokid.cli.reactor_cli:main'
         ],
     }
 )
