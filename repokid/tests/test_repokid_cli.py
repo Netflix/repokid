@@ -254,3 +254,4 @@ class TestRepokidCLI(object):
         assert all(field in generated_config['dynamo_db'] for field in required_dynamo_config)
         assert all(field in generated_config['connection_iam'] for field in required_iam_config)
         assert all(field in generated_config['repo_requirements'] for field in required_repo_requirements)
+        assert 'warnings' in generated_config

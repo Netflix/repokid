@@ -136,6 +136,10 @@ def _generate_default_config(filename=None):
         "repo_requirements": {
             "oldest_aa_data_days": 5,
             "exclude_new_permissions_for_days": 14
+        },
+
+        "warnings": {
+            "unknown_permissions": False
         }
     }
     if filename:
@@ -388,7 +392,9 @@ def display_role(account_number, role_name, dynamo_table, config):
     Returns:
         None
     """
-    role_data = find_role_in_cache(dynamo_table, account_number, role_name)
+    role_id = find_role_in_cache(dynamo_table, account_number, role_name)
+    role_data = get_role_data(dynamo_table, role_id)
+
     if not role_data:
         LOGGER.warn('Could not find role with name {}'.format(role_name))
         return
@@ -433,8 +439,10 @@ def display_role(account_number, role_name, dynamo_table, config):
         LOGGER.warn('ARN not found in Access Advisor: {}'.format(role.arn))
         return
 
+    warn_unknown_permissions = config.get('warnings', {}).get('unknown_permissions', False)
     repoable_permissions = set([])
-    permissions = roledata._get_role_permissions(role)
+
+    permissions = roledata._get_role_permissions(role, warn_unknown_perms=warn_unknown_permissions)
     if len(role.disqualified_by) == 0:
         repoable_permissions = roledata._get_repoable_permissions(permissions, role.aa_data, role.no_repo_permissions,
                                                                   config['filter_config']['AgeFilter']['minimum_age'])
@@ -480,7 +488,10 @@ def repo_role(account_number, role_name, dynamo_table, config, commit=False):
     """
     errors = []
 
-    role_data = find_role_in_cache(dynamo_table, account_number, role_name)
+    role_id = find_role_in_cache(dynamo_table, account_number, role_name)
+    # only load partial data that we need to determine if we should keep going
+    role_data = get_role_data(dynamo_table, role_id, fields=['DisqualifiedBy', 'AAData', 'RepoablePermissions',
+                                                             'RoleName'])
     if not role_data:
         LOGGER.warn('Could not find role with name {}'.format(role_name))
         return
@@ -499,6 +510,9 @@ def repo_role(account_number, role_name, dynamo_table, config, commit=False):
     if not role.repoable_permissions:
         LOGGER.info('No permissions to repo for role {}'.format(role_name))
         return
+
+    # if we've gotten to this point, load the rest of the role
+    role = Role(get_role_data(dynamo_table, role_id))
 
     old_aa_data_services = []
     for aa_service in role.aa_data:
@@ -595,12 +609,12 @@ def rollback_role(account_number, role_name, dynamo_table, config, selection=Non
     Returns:
         None
     """
-    role_data = find_role_in_cache(dynamo_table, account_number, role_name)
-    if not role_data:
+    role_id = find_role_in_cache(dynamo_table, account_number, role_name)
+    if not role_id:
         LOGGER.warn('Could not find role with name {}'.format(role_name))
         return
     else:
-        role = Role(role_data)
+        role = Role(get_role_data(dynamo_table, role_id))
 
     # no option selected, display a table of options
     if not selection:

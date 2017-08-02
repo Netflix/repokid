@@ -117,20 +117,12 @@ def find_role_in_cache(dynamo_table, account_number, role_name):
         role_name (string)
 
     Returns:
-        dict: A dict with the roledata for the given role in account, else None if not found
+        string: RoleID for active role with name in given account, else None
     """
-    found = False
-
     for roleID in role_ids_for_account(dynamo_table, account_number):
         role_data = get_role_data(dynamo_table, roleID, fields=['RoleName', 'Active'])
         if role_data['RoleName'].lower() == role_name.lower() and role_data['Active']:
-            found = True
-            break
-
-    if found:
-        return get_role_data(dynamo_table, roleID)
-    else:
-        return None
+            return role_data['RoleId']
 
 
 @catch_boto_error

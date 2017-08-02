@@ -356,7 +356,7 @@ def _get_repoed_policy(policies, repoable_permissions):
     return role_policies, empty_policies
 
 
-def _get_role_permissions(role):
+def _get_role_permissions(role, warn_unknown_perms=False):
     """
     Expand the most recent version of policies from a role to produce a list of all the permissions that are allowed
     (permission is included in one or more statements that is allowed).  To perform expansion the policyuniverse
@@ -379,7 +379,7 @@ def _get_role_permissions(role):
                 permissions = permissions.union(get_actions_from_statement(statement))
 
     weird_permissions = permissions.difference(all_permissions)
-    if weird_permissions:
+    if weird_permissions and warn_unknown_perms:
         LOGGER.warn('Unknown permissions found: {}'.format(weird_permissions))
 
     return permissions
