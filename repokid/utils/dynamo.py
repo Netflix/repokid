@@ -120,7 +120,7 @@ def find_role_in_cache(dynamo_table, account_number, role_name):
         string: RoleID for active role with name in given account, else None
     """
     for roleID in role_ids_for_account(dynamo_table, account_number):
-        role_data = get_role_data(dynamo_table, roleID, fields=['RoleName', 'Active'])
+        role_data = get_role_data(dynamo_table, roleID, fields=['RoleName', 'Active', 'RoleId'])
         if role_data['RoleName'].lower() == role_name.lower() and role_data['Active']:
             return role_data['RoleId']
 
