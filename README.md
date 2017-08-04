@@ -127,3 +127,14 @@ Restore a specific version: `repokid rollback_role <ACCOUNT_NUMBER> <ROLE_NAME> 
 ### Stats
 Repokid keeps counts of the total permissions for each role.  Stats are added any time an `update_role_cache` or
 `repo_role` action occur.  To output all stats to a CSV file run: `repokid repo_stats <OUTPUT_FILENAME>`.  An optional account number can be specified to output stats for a specific account only.
+
+## Dispatcher ##
+Repokid Dispatcher is designed to listen for messages on a queue and perform actions.  So far the actions are:
+ - List repoable services from a role
+ - Set or remove an opt-out
+ - List and perform rollbacks for a role
+ 
+Repokid will respond on a configurable SNS topic with information about any success or failures. The Dispatcher
+component exists to help with operationalization of the repo lifecycle across your organization. You may choose
+to expose the queue directly to developers, but more likely this should be guarded because rolling back can be
+a destructive action if not done carefully.

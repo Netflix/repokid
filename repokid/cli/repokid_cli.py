@@ -133,6 +133,16 @@ def _generate_default_config(filename=None):
                 }
             }
         },
+
+        "opt_out_period_days": 90,
+
+        "dispatcher": {
+            "session_name": "repokid",
+            "region": "us-west-2",
+            "to_rr_queue": "COMMAND_QUEUE_TO_REPOKID_URL",
+            "from_rr_sns": "RESPONSES_FROM_REPOKID_SNS_ARN"
+        },
+
         "repo_requirements": {
             "oldest_aa_data_days": 5,
             "exclude_new_permissions_for_days": 14
@@ -607,12 +617,16 @@ def rollback_role(account_number, role_name, dynamo_table, config, selection=Non
         commit (bool): actually make the change
 
     Returns:
-        None
+        errors (list): if any
     """
+    errors = []
+
     role_id = find_role_in_cache(dynamo_table, account_number, role_name)
     if not role_id:
-        LOGGER.warn('Could not find role with name {}'.format(role_name))
-        return
+        message = 'Could not find role with name {}'.format(role_name)
+        errors.append(message)
+        LOGGER.warn(message)
+        return errors
     else:
         role = Role(get_role_data(dynamo_table, role_id))
 
@@ -640,7 +654,7 @@ def rollback_role(account_number, role_name, dynamo_table, config, selection=Non
         pp.pprint(role.policies[int(selection)]['Policy'])
         print "Current policies:"
         pp.pprint(current_policies)
-        return
+        return False
 
     # if we're restoring from a version with fewer policies than we have now, we need to remove them to
     # complete the restore.  To do so we'll store all the policy names we currently have and remove them
@@ -654,7 +668,9 @@ def rollback_role(account_number, role_name, dynamo_table, config, selection=Non
                     PolicyDocument=json.dumps(policy, indent=2, sort_keys=True))
 
         except botocore.excpetion.ClientError as e:
-            LOGGER.error("Unable to push policy {}.  Error: {}".format(policy_name, e.message))
+            message = "Unable to push policy {}.  Error: {}".format(policy_name, e.message)
+            LOGGER.error(message)
+            errors.append(message)
 
         else:
             # remove the policy name if it's in the list
@@ -669,7 +685,9 @@ def rollback_role(account_number, role_name, dynamo_table, config, selection=Non
                 ca.call('iam.client.delete_role_policy', RoleName=role.role_name, PolicyName=policy_name)
 
             except botocore.excpetion.ClientError as e:
-                LOGGER.error("Unable to delete policy {}.  Error: {}".format(policy_name, e.message))
+                message = "Unable to delete policy {}.  Error: {}".format(policy_name, e.message)
+                LOGGER.error(message)
+                errors.append(message)
 
     # TODO: possibly update the total and repoable permissions here, we'd have to get Aardvark and all that
 
@@ -680,7 +698,9 @@ def rollback_role(account_number, role_name, dynamo_table, config, selection=Non
     # update stats
     roledata.update_stats(dynamo_table, [role], source='Restore')
 
-    LOGGER.info('Successfully restored selected version of role policies')
+    if not errors:
+        LOGGER.info('Successfully restored selected version of role policies')
+    return errors
 
 
 def repo_all_roles(account_number, dynamo_table, config, commit=False):

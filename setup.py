@@ -40,7 +40,7 @@ setup(
     entry_points={
         'console_scripts': [
             'repokid = repokid.cli.repokid_cli:main',
-            'reactor = repokid.cli.reactor_cli:main'
+            'dispatcher = repokid.cli.dispatcher_cli:main'
         ],
     }
 )
