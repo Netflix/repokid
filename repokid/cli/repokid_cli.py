@@ -82,7 +82,7 @@ def _generate_default_config(filename=None):
             "repokid.filters.age:AgeFilter",
             "repokid.filters.lambda:LambdaFilter",
             "repokid.filters.blacklist:BlacklistFilter",
-            "repokid.filters.optout.OptOutFilter"
+            "repokid.filters.optout:OptOutFilter"
         ],
 
         "aardvark_api_location": "<AARDVARK_API_LOCATION>",
