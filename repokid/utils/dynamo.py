@@ -1,3 +1,4 @@
+import copy
 import datetime
 import sys
 
@@ -241,7 +242,9 @@ def store_initial_role_data(dynamo_table, arn, create_date, role_id, role_name, 
                  'Account': account_number, 'Policies': [policy_entry],
                  'Refreshed': datetime.datetime.utcnow().isoformat(), 'Active': True, 'Repoed': 'Never'}
 
-    dynamo_table.put_item(Item=role_dict)
+    store_dynamo = copy.copy(role_dict)
+
+    dynamo_table.put_item(Item=_empty_string_to_dynamo_replace(store_dynamo))
     # we want to store CreateDate as a string but keep it as a datetime, so put it back here
     role_dict['CreateDate'] = create_date
     return role_dict
