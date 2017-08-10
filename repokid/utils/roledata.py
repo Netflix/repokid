@@ -24,7 +24,7 @@ from repokid import CONFIG as CONFIG
 from repokid import LOGGER as LOGGER
 from repokid.role import Role
 
-IAM_ACCESS_ADVISOR_UNSUPPORTED_SERVICES = frozenset(['lightsail'])
+IAM_ACCESS_ADVISOR_UNSUPPORTED_SERVICES = frozenset(['lightsail', 'organizations'])
 IAM_ACCESS_ADVISOR_UNSUPPORTED_ACTIONS = frozenset(['iam:passrole'])
 
 
