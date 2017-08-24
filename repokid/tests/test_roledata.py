@@ -140,7 +140,7 @@ class TestRoledata(object):
 
         no_repo_permissions = {'service_4:action_1': time.time()-1, 'service_4:action_2': time.time()+1000}
 
-        repoable_permissions = repokid.utils.roledata._get_repoable_permissions(permissions, aa_data,
+        repoable_permissions = repokid.utils.roledata._get_repoable_permissions('test_name', permissions, aa_data,
                                                                                 no_repo_permissions, minimum_age)
         # service_1:action_3 and action_4 are unsupported actions, service_2 is an unsupported service, service_3
         # was used too recently, service_4 action 2 is in no_repo_permissions and not expired

@@ -66,7 +66,8 @@ RepokidRole:
         "iam:ListInstanceProfilesForRole",
         "iam:ListRolePolicies",
         "iam:ListRoles",
-        "iam:PutRolePolicy"
+        "iam:PutRolePolicy",
+        "iam:UpdateRoleDescription"
       ],
       "Effect": "Allow",
       "Resource": "*"
