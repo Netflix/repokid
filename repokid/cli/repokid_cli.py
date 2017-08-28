@@ -18,9 +18,11 @@ Usage:
     repokid display_role_cache <account_number> [--inactive]
     repokid find_roles_with_permission <permission>
     repokid display_role <account_number> <role_name>
+    repokid schedule_repo <account_number>
     repokid repo_role <account_number> <role_name> [-c]
     repokid rollback_role <account_number> <role_name> [--selection=NUMBER] [-c]
     repokid repo_all_roles <account_number> [-c]
+    repokid repo_scheduled_roles <account_number> [-c]
     repokid repo_stats <output_filename> [--account=ACCOUNT_NUMBER]
 
 
@@ -36,6 +38,7 @@ import pprint
 import re
 import requests
 import sys
+import time
 
 import botocore
 from cloudaux.aws.iam import list_roles, get_role_inline_policies
@@ -76,7 +79,14 @@ def _generate_default_config(filename=None):
             },
             "BlacklistFilter": {
                 "all": [
-                ]
+                ],
+                "blacklist_bucket": {
+                    "bucket": "<BLACKLIST_BUCKET>",
+                    "key": "<PATH/blacklist.json>",
+                    "account_number": "<S3_blacklist_account>",
+                    "region": "<S3_blacklist_region",
+                    "assume_role": "<S3_blacklist_assume_role>"
+                }
             }
         },
 
@@ -149,6 +159,8 @@ def _generate_default_config(filename=None):
             "oldest_aa_data_days": 5,
             "exclude_new_permissions_for_days": 14
         },
+
+        "repo_schedule_period_days": 7,
 
         "warnings": {
             "unknown_permissions": False
@@ -229,7 +241,7 @@ def _update_repoed_description(role_name, client=None):
     else:
         new_description = description + ' ; Repokid repoed {}'.format(date_string)
     # IAM role descriptions have a max length of 1000, if our new length would be longer, skip this
-    if len(new_description < 1000):
+    if len(new_description) < 1000:
         client.update_role_description(RoleName=role_name, Description=new_description)
     else:
         LOGGER.erorr('Unable to set repo description ({}) for role {}, length would be too long'.format(
@@ -556,6 +568,26 @@ def display_role(account_number, role_name, dynamo_table, config):
                        "Please manually minify.".format(role_name))
 
 
+def schedule_repo(account_number, dynamo_table, config):
+    """
+    Schedule a repo for a given account.  Schedule repo for a time in the future (default 7 days) for any roles in
+    the account with repoable permissions.
+    """
+    scheduled_roles = []
+
+    roles = Roles([Role(get_role_data(dynamo_table, roleID))
+                  for roleID in tqdm(role_ids_for_account(dynamo_table, account_number))])
+
+    scheduled_time = int(time.time()) + (86400 * config.get('repo_schedule_period_days', 7))
+    for role in roles:
+        if role.repoable_permissions > 0:
+            set_role_data(dynamo_table, role.role_id, {'RepoScheduled': scheduled_time})
+            scheduled_roles.append(role.role_name)
+
+    LOGGER.info("Scheduled repo for {} days from now for these roles:\n\t{}".format(
+                config.get('repo_schedule_period_days', 7), ', '.join([r for r in scheduled_roles])))
+
+
 def repo_role(account_number, role_name, dynamo_table, config, commit=False):
     """
     Calculate what repoing can be done for a role and then actually do it if commit is set
@@ -662,7 +694,11 @@ def repo_role(account_number, role_name, dynamo_table, config, commit=False):
     current_policies = get_role_inline_policies(role.as_dict(), **conn) or {}
     roledata.add_new_policy_version(dynamo_table, role, current_policies, 'Repo')
 
+    # regardless of whether we're successful we want to unschedule the repo
+    set_role_data(dynamo_table, role.role_id, {'RepoScheduled': 0})
+
     if not errors:
+        # repos will stay scheduled until they are successful
         set_role_data(dynamo_table, role.role_id, {'Repoed': datetime.datetime.utcnow().isoformat()})
         _update_repoed_description(role.role_name, **conn)
         _update_role_data(role, dynamo_table, account_number, config, conn, source='Repo', add_no_repo=False)
@@ -761,13 +797,16 @@ def rollback_role(account_number, role_name, dynamo_table, config, selection=Non
     return errors
 
 
-def repo_all_roles(account_number, dynamo_table, config, commit=False):
+def repo_all_roles(account_number, dynamo_table, config, commit=False, scheduled=True):
     """
-    Repo all eligible roles in an account.  Collect any errors and display them at the end.
+    Repo all scheduled or eligible roles in an account.  Collect any errors and display them at the end.
 
     Args:
         account_number (string)
+        dynamo_table
+        config
         commit (bool): actually make the changes
+        scheduled (bool): if True only repo the scheduled roles, if False repo all the (eligible) roles
 
     Returns:
         None
@@ -777,9 +816,17 @@ def repo_all_roles(account_number, dynamo_table, config, commit=False):
     role_ids_in_account = role_ids_for_account(dynamo_table, account_number)
     roles = Roles([])
     for role_id in role_ids_in_account:
-        roles.append(Role(roledata.get_role_data(dynamo_table, role_id, fields=['Active', 'RoleName'])))
+        roles.append(Role(get_role_data(dynamo_table, role_id, fields=['Active', 'RoleName', 'RepoScheduled'])))
 
     roles = roles.filter(active=True)
+
+    cur_time = int(time.time())
+    if scheduled:
+        roles = [role for role in roles if (role.repo_scheduled and cur_time > role.repo_scheduled)]
+
+    LOGGER.info('Repoing these {}roles from account {}:\n\t{}'.format('scheduled ' if scheduled else '',
+                                                                      account_number,
+                                                                      ', '.join([role.role_name for role in roles])))
 
     for role in roles:
         error = repo_role(account_number, role.role_name, dynamo_table, config, commit=commit)
@@ -809,7 +856,7 @@ def repo_stats(output_file, dynamo_table, account_number=None):
     rows = []
 
     for roleID in roleIDs:
-        role_data = roledata.get_role_data(dynamo_table, roleID, fields=['RoleId', 'RoleName', 'Account', 'Stats'])
+        role_data = get_role_data(dynamo_table, roleID, fields=['RoleId', 'RoleName', 'Account', 'Stats'])
         for stats_entry in role_data.get('Stats', []):
             rows.append([role_data['RoleId'], role_data['RoleName'], role_data['Account'], stats_entry['Date'],
                          stats_entry['Source'], stats_entry['PermissionsCount'],
@@ -858,6 +905,9 @@ def main():
         role_name = args.get('<role_name>')
         return display_role(account_number, role_name, dynamo_table, config)
 
+    if args.get('schedule_repo'):
+        return schedule_repo(account_number, dynamo_table, config)
+
     if args.get('repo_role'):
         role_name = args.get('<role_name>')
         commit = args.get('--commit')
@@ -871,7 +921,11 @@ def main():
 
     if args.get('repo_all_roles'):
         commit = args.get('--commit')
-        return repo_all_roles(account_number, dynamo_table, config, commit=commit)
+        return repo_all_roles(account_number, dynamo_table, config, commit=commit, scheduled=False)
+
+    if args.get('repo_scheduled_roles'):
+        commit = args.get('--commit')
+        return repo_all_roles(account_number, dynamo_table, config, commit=commit, scheduled=True)
 
     if args.get('repo_stats'):
         output_file = args.get('<output_filename>')

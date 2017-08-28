@@ -96,6 +96,14 @@ required.  There are two ways to exclude a role:
 
  - Exclude role name for all accounts: add it to a list in the config `filter_config.BlacklistFilter.all`
  - Exclude role name for specific account: add it to a list in the config `filter_config.BlacklistFilter.<ACCOUNT_NUMBER>`
+ 
+ Blacklists can also be maintained in an S3 blacklist file.  They should be in the following form:
+ ```json
+ {
+   "arns": ["arn1", "arn2"],
+   "names": {"role_name_1": ["all", "account_number_1"], "role_name_2": ["account_number_2", "account_number_3"]}
+ }
+ ```
 
 ### Age Filter
 By default the age filter excludes roles that are younger than 90 days.  To change this edit the config setting:
@@ -116,6 +124,9 @@ Once Repokid is configured, use it as follows:
  - Display information about a specific role: `repokid display_role <ACCOUNT_NUMBER> <ROLE_NAME>`
  - Repo a specific role: `repokid repo_role <ACCOUNT_NUMBER> <ROLE_NAME>`
  - Repo all roles in an account: `repokid repo_all_roles <ACCOUNT_NUMBER> -c`
+
+### Scheduling
+Rather than running a repo right now you can schedule one (`schedule_repo` command). The duration between scheduling and eligibility is configurable, but by default roles can be repoed 7 days after scheduling.  You can then run a command `repo_scheduled_roles` to only repo roles which have already been scheduled.
 
 ### Rolling back
 Repokid stores a copy of each version of inline policies it knows about.  These are added when
