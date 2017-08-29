@@ -137,7 +137,7 @@ def update_opt_out(dynamo_table, role):
         set_role_data(dynamo_table, role.role_id, {'OptOut': {}})
 
 
-def update_role_data(dynamo_table, account_number, role, current_policy):
+def update_role_data(dynamo_table, account_number, role, current_policy, source='Scan', add_no_repo=True):
     """
     Compare the current version of a policy for a role and what has been previously stored in Dynamo.
       - If current and new policy versions are different store the new version in Dynamo. Add any newly added
@@ -147,8 +147,11 @@ def update_role_data(dynamo_table, account_number, role, current_policy):
       - Updates the role with full history of policies, including current version
 
     Args:
+        dynamo_table
+        account_number
         role (Role): current role being updated
         current_policy (dict): representation of the current policy version
+        source: Default 'Scan' but could be Repo, Rollback, etc
 
     Returns:
         None
@@ -165,14 +168,15 @@ def update_role_data(dynamo_table, account_number, role, current_policy):
         # is the policy list the same as the last we had?
         old_policy = stored_role['Policies'][-1]['Policy']
         if current_policy != old_policy:
-            add_new_policy_version(dynamo_table, role, current_policy, 'Scan')
+            add_new_policy_version(dynamo_table, role, current_policy, source)
             LOGGER.info('{} has different inline policies than last time, adding to role store'.format(role.arn))
 
             newly_added_permissions = find_newly_added_permissions(old_policy, current_policy)
         else:
             newly_added_permissions = set()
 
-        update_no_repo_permissions(dynamo_table, role, newly_added_permissions)
+        if add_no_repo:
+            update_no_repo_permissions(dynamo_table, role, newly_added_permissions)
         update_opt_out(dynamo_table, role)
         set_role_data(dynamo_table, role.role_id, {'Refreshed': datetime.datetime.utcnow().isoformat()})
 
@@ -191,11 +195,15 @@ def update_stats(dynamo_table, roles, source='Scan'):
         None
     """
     for role in roles:
-        cur_stats = {'Date': datetime.datetime.utcnow().isoformat(),
+        new_stats = {'Date': datetime.datetime.utcnow().isoformat(),
                      'DisqualifiedBy': role.disqualified_by,
                      'PermissionsCount': role.total_permissions,
                      'Source': source}
-        add_to_end_of_list(dynamo_table, role.role_id, 'Stats', cur_stats)
+        cur_stats = get_role_data(dynamo_table, role.role_id, fields=['Stats'])['Stats'][-1]
+
+        for item in ['DisqualifiedBy', 'PermissionsCount']:
+            if new_stats[item] != cur_stats[item]:
+                add_to_end_of_list(dynamo_table, role.role_id, 'Stats', new_stats)
 
 
 def _calculate_repo_scores(roles, minimum_age):
@@ -228,8 +236,8 @@ def _calculate_repo_scores(roles, minimum_age):
 
         # permissions are only repoable if the role isn't being disqualified by filter(s)
         if len(role.disqualified_by) == 0:
-            repoable_permissions = _get_repoable_permissions(permissions, role.aa_data, role.no_repo_permissions,
-                                                             minimum_age)
+            repoable_permissions = _get_repoable_permissions(role.role_name, permissions, role.aa_data,
+                                                             role.no_repo_permissions, minimum_age)
             repoable_services = set([permission.split(':')[0] for permission in repoable_permissions])
             repoable_services = sorted(repoable_services)
             role.repoable_permissions = len(repoable_permissions)
@@ -239,7 +247,7 @@ def _calculate_repo_scores(roles, minimum_age):
             role.repoable_services = []
 
 
-def _get_repoable_permissions(permissions, aa_data, no_repo_permissions, minimum_age):
+def _get_repoable_permissions(role_name, permissions, aa_data, no_repo_permissions, minimum_age):
     """
     Generate a list of repoable permissions for a role based on the list of all permissions the role's policies
     currently allow and Access Advisor data for the services included in the role's policies.
@@ -250,6 +258,7 @@ def _get_repoable_permissions(permissions, aa_data, no_repo_permissions, minimum
     and aren't being temporarily ignored because they're on the no_repo_permissions list (newly added).
 
     Args:
+        role_name
         permissions (list): The full list of permissions that the role's permissions allow
         aa_data (list): A list of Access Advisor data for a role. Each element is a dictionary with a couple required
                         attributes: lastAuthenticated (epoch time in milliseconds when the service was last used and
@@ -288,7 +297,7 @@ def _get_repoable_permissions(permissions, aa_data, no_repo_permissions, minimum
                 continue
 
             if permission.lower() in no_repo_list:
-                LOGGER.warn('skipping {} because it is in the no repo list'.format(permission))
+                LOGGER.info('skipping {} for role {} because it is in the no repo list'.format(permission, role_name))
                 continue
 
             repoable_permissions.add(permission.lower())

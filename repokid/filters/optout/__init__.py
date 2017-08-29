@@ -1,4 +1,4 @@
-import time.time
+import time
 
 from repokid.cli.repokid_cli import Filter
 

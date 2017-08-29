@@ -69,38 +69,54 @@ def dynamo_get_or_create_table(**dynamo_config):
                 'KeyType': 'HASH'  # Partition key
             }],
             AttributeDefinitions=[{
-                'AttributeName': 'RoleId',
-                'AttributeType': 'S'
-            }],
+                    'AttributeName': 'RoleId',
+                    'AttributeType': 'S'
+                },
+                {
+                    'AttributeName': 'RoleName',
+                    'AttributeType': 'S'
+                },
+                {
+                    'AttributeName': 'Account',
+                    'AttributeType': 'S'
+                }],
             ProvisionedThroughput={
-                'ReadCapacityUnits': 5,
-                'WriteCapacityUnits': 5
-            })
-
-        table.meta.client.get_waiter('table_exists').wait(TableName='repokid_roles')
-
-        # need a global secondary index to list all role IDs for a given account number
-        table.update(
-            AttributeDefinitions=[{
-                'AttributeName': 'Account',
-                'AttributeType': 'S'
-             }],
-            GlobalSecondaryIndexUpdates=[{
-                'Create': {
+                'ReadCapacityUnits': 50,
+                'WriteCapacityUnits': 50
+            },
+            GlobalSecondaryIndexes=[
+                {
                     'IndexName': 'Account',
-                    'KeySchema': [{
-                        'AttributeName': 'Account',
-                        'KeyType': 'HASH'
-                    }],
+                    'KeySchema': [
+                        {
+                            'AttributeName': 'Account',
+                            'KeyType': 'HASH'
+                        }
+                    ],
                     'Projection': {
-                        'NonKeyAttributes': ['RoleId'],
-                        'ProjectionType': 'INCLUDE'
+                        'ProjectionType': 'KEYS_ONLY',
                     },
                     'ProvisionedThroughput': {
-                        'ReadCapacityUnits': 2,
-                        'WriteCapacityUnits': 2
+                        'ReadCapacityUnits': 10,
+                        'WriteCapacityUnits': 10
                     }
-                }}])
+                },
+                {
+                    'IndexName': 'RoleName',
+                    'KeySchema': [
+                        {
+                            'AttributeName': 'RoleName',
+                            'KeyType': 'HASH'
+                        }
+                    ],
+                    'Projection': {
+                        'ProjectionType': 'KEYS_ONLY',
+                    },
+                    'ProvisionedThroughput': {
+                        'ReadCapacityUnits': 10,
+                        'WriteCapacityUnits': 10
+                    }
+                }])
 
     except BotoClientError as e:
         if "ResourceInUseException" in e.message:
@@ -120,10 +136,20 @@ def find_role_in_cache(dynamo_table, account_number, role_name):
     Returns:
         string: RoleID for active role with name in given account, else None
     """
-    for roleID in role_ids_for_account(dynamo_table, account_number):
-        role_data = get_role_data(dynamo_table, roleID, fields=['RoleName', 'Active', 'RoleId'])
-        if role_data['RoleName'].lower() == role_name.lower() and role_data['Active']:
-            return role_data['RoleId']
+    results = dynamo_table.query(IndexName='RoleName',
+                                 KeyConditionExpression='RoleName = :rn',
+                                 ExpressionAttributeValues={':rn': role_name})
+    role_id_candidates = [return_dict['RoleId'] for return_dict in results.get('Items')]
+
+    if len(role_id_candidates) > 1:
+        for role_id in role_id_candidates:
+            role_data = get_role_data(dynamo_table, role_id, fields=['Active'])
+            if role_data['Active']:
+                return role_id
+    elif len(role_id_candidates) == 1:
+        return role_id_candidates[0]
+    else:
+        return None
 
 
 @catch_boto_error
@@ -160,14 +186,12 @@ def role_ids_for_account(dynamo_table, account_number):
     role_ids = set()
 
     results = dynamo_table.query(IndexName='Account',
-                                 ProjectionExpression='RoleId',
                                  KeyConditionExpression='Account = :act',
                                  ExpressionAttributeValues={':act': account_number})
     role_ids.update([return_dict['RoleId'] for return_dict in results.get('Items')])
 
     while 'LastEvaluatedKey' in results:
         results = dynamo_table.query(IndexName='Account',
-                                     ProjectionExpression='RoleId',
                                      KeyConditionExpression='Account = :act',
                                      ExpressionAttributeValues={':act': account_number},
                                      ExclusiveStartKey=results.get('LastEvaluatedKey'))

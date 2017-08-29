@@ -33,11 +33,13 @@ import csv
 import datetime
 import json
 import pprint
+import re
 import requests
 import sys
 
 import botocore
 from cloudaux.aws.iam import list_roles, get_role_inline_policies
+from cloudaux.aws.sts import sts_conn
 from docopt import docopt
 import import_string
 from tabulate import tabulate
@@ -163,15 +165,17 @@ def _generate_default_config(filename=None):
     return config_dict
 
 
-def _get_aardvark_data(account_number, aardvark_api_location):
+def _get_aardvark_data(aardvark_api_location, account_number=None, arn=None):
     """
-    Make a request to the Aardvark server to get all data about a given account.
+    Make a request to the Aardvark server to get all data about a given account or ARN.
     We'll request in groups of PAGE_SIZE and check the current count to see if we're done. Keep requesting as long as
     the total count (reported by the API) is greater than the number of pages we've received times the page size.  As
     we go, keeping building the dict and return it when done.
 
     Args:
+        aardvark_api_location
         account_number (string): Used to form the phrase query for Aardvark so we only get data for the account we want
+        arn (string)
 
     Returns:
         dict: Aardvark data is a dict with the role ARN as the key and a list of services as value
@@ -181,7 +185,12 @@ def _get_aardvark_data(account_number, aardvark_api_location):
     PAGE_SIZE = 1000
     page_num = 1
 
-    payload = {'phrase': '{}'.format(account_number)}
+    if account_number:
+        payload = {'phrase': '{}'.format(account_number)}
+    elif arn:
+        payload = {'arn': [arn]}
+    else:
+        return
     while True:
         params = {'count': PAGE_SIZE, 'page': page_num}
         try:
@@ -204,6 +213,72 @@ def _get_aardvark_data(account_number, aardvark_api_location):
             else:
                 break
     return response_data
+
+
+@sts_conn('iam')
+def _update_repoed_description(role_name, client=None):
+    description = None
+    try:
+        description = client.get_role(RoleName=role_name)['Role'].get('Description', '')
+    except KeyError:
+        return
+    date_string = datetime.datetime.utcnow().strftime('%m/%d/%y')
+    if '; Repokid repoed' in description:
+        new_description = re.sub(r'; Repokid repoed [0-9]{2}\/[0-9]{2}\/[0-9]{2}', '; Repokid repoed {}'.format(
+                                 date_string), description)
+    else:
+        new_description = description + ' ; Repokid repoed {}'.format(date_string)
+    # IAM role descriptions have a max length of 1000, if our new length would be longer, skip this
+    if len(new_description < 1000):
+        client.update_role_description(RoleName=role_name, Description=new_description)
+    else:
+        LOGGER.erorr('Unable to set repo description ({}) for role {}, length would be too long'.format(
+            new_description, role_name))
+
+
+def _update_role_data(role, dynamo_table, account_number, config, conn, source, add_no_repo=True):
+    """
+    Perform a scaled down version of role update, this is used to get an accurate count of repoable permissions after
+    a rollback or repo.
+
+    Does update:
+     - Policies
+     - Aardvark data
+     - Total permissions
+     - Repoable permissions
+     - Repoable services
+     - Stats
+
+    Does not update:
+     - Filters
+     - Active/inactive roles
+
+    Args:
+        role (Role)
+        dynamo_table
+        account_number
+        conn (dict)
+        source: repo, rollback, etc
+        add_no_repo: if set to True newly discovered permissions will be added to no repo list
+
+    Returns:
+        None
+    """
+    current_policies = get_role_inline_policies(role.as_dict(), **conn) or {}
+    roledata.update_role_data(dynamo_table, account_number, role, current_policies, source=source,
+                              add_no_repo=add_no_repo)
+    aardvark_data = _get_aardvark_data(config['aardvark_api_location'], arn=role.arn)
+
+    if not aardvark_data:
+        return
+
+    role.aa_data = aardvark_data[role.arn]
+    roledata._calculate_repo_scores([role], config['filter_config']['AgeFilter']['minimum_age'])
+    set_role_data(dynamo_table, role.role_id, {'AAData': role.aa_data,
+                                               'TotalPermissions': role.total_permissions,
+                                               'RepoablePermissions': role.repoable_permissions,
+                                               'RepoableServices': role.repoable_services})
+    roledata.update_stats(dynamo_table, [role], source=source)
 
 
 # inspiration from https://github.com/slackhq/python-rtmbot/blob/master/rtmbot/core.py
@@ -303,7 +378,7 @@ def update_role_cache(account_number, dynamo_table, config):
         set_role_data(dynamo_table, role.role_id, {'DisqualifiedBy': role.disqualified_by})
 
     LOGGER.info('Getting data from Aardvark')
-    aardvark_data = _get_aardvark_data(account_number, config['aardvark_api_location'])
+    aardvark_data = _get_aardvark_data(config['aardvark_api_location'], account_number=account_number)
 
     LOGGER.info('Updating with Aardvark data')
     for role in roles:
@@ -403,13 +478,11 @@ def display_role(account_number, role_name, dynamo_table, config):
         None
     """
     role_id = find_role_in_cache(dynamo_table, account_number, role_name)
-    role_data = get_role_data(dynamo_table, role_id)
-
-    if not role_data:
+    if not role_id:
         LOGGER.warn('Could not find role with name {}'.format(role_name))
         return
-    else:
-        role = Role(role_data)
+
+    role = Role(get_role_data(dynamo_table, role_id))
 
     print "\n\nRole repo data:"
     headers = ['Name', 'Refreshed', 'Disqualified By', 'Can be repoed', 'Permissions', 'Repoable', 'Repoed', 'Services']
@@ -454,7 +527,8 @@ def display_role(account_number, role_name, dynamo_table, config):
 
     permissions = roledata._get_role_permissions(role, warn_unknown_perms=warn_unknown_permissions)
     if len(role.disqualified_by) == 0:
-        repoable_permissions = roledata._get_repoable_permissions(permissions, role.aa_data, role.no_repo_permissions,
+        repoable_permissions = roledata._get_repoable_permissions(role.role_name, permissions, role.aa_data,
+                                                                  role.no_repo_permissions,
                                                                   config['filter_config']['AgeFilter']['minimum_age'])
 
     print "Repoable services:"
@@ -535,7 +609,8 @@ def repo_role(account_number, role_name, dynamo_table, config, commit=False):
         return
 
     permissions = roledata._get_role_permissions(role)
-    repoable_permissions = roledata._get_repoable_permissions(permissions, role.aa_data, role.no_repo_permissions,
+    repoable_permissions = roledata._get_repoable_permissions(role.role_name, permissions, role.aa_data,
+                                                              role.no_repo_permissions,
                                                               config['filter_config']['AgeFilter']['minimum_age'])
     repoed_policies, deleted_policy_names = roledata._get_repoed_policy(role.policies[-1]['Policy'],
                                                                         repoable_permissions)
@@ -589,18 +664,8 @@ def repo_role(account_number, role_name, dynamo_table, config, commit=False):
 
     if not errors:
         set_role_data(dynamo_table, role.role_id, {'Repoed': datetime.datetime.utcnow().isoformat()})
-
-        # update total and repoable permissions and services
-        role.total_permissions = len(roledata._get_role_permissions(role))
-        role.repoable_permissions = 0
-        role.repoable_services = []
-        set_role_data(dynamo_table, role.role_id, {'TotalPermissions': role.total_permissions,
-                                                   'RepoablePermissions': 0,
-                                                   'RepoableServices': []})
-
-        # update stats
-        roledata.update_stats(dynamo_table, [role], source='Repo')
-
+        _update_repoed_description(role.role_name, **conn)
+        _update_role_data(role, dynamo_table, account_number, config, conn, source='Repo', add_no_repo=False)
         LOGGER.info('Successfully repoed role: {}'.format(role.role_name))
     return errors
 
@@ -689,14 +754,7 @@ def rollback_role(account_number, role_name, dynamo_table, config, selection=Non
                 LOGGER.error(message)
                 errors.append(message)
 
-    # TODO: possibly update the total and repoable permissions here, we'd have to get Aardvark and all that
-
-    current_policies = get_role_inline_policies(role.as_dict(), **conn) or {}
-    roledata.add_new_policy_version(dynamo_table, role, current_policies, 'Restore')
-    role.total_permissions = len(roledata._get_role_permissions(role))
-
-    # update stats
-    roledata.update_stats(dynamo_table, [role], source='Restore')
+    _update_role_data(role, dynamo_table, account_number, config, conn, source='Restore', add_no_repo=False)
 
     if not errors:
         LOGGER.info('Successfully restored selected version of role policies')
