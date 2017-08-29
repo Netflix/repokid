@@ -235,6 +235,53 @@ class TestRepokidCLI(object):
                   ['young_role', "Someday", [], True, 4, 0, 'Never', []],
                   ['unused_ec2', "Someday", [], True, 4, 2, 'Never', ['ec2']]])]
 
+    @patch('repokid.cli.repokid_cli.get_role_data')
+    @patch('repokid.cli.repokid_cli.set_role_data')
+    @patch('repokid.cli.repokid_cli.role_ids_for_account')
+    @patch('time.time')
+    def test_schedule_repo(self, mock_time, mock_role_ids_for_account, mock_set_role_data, mock_get_role_data):
+        mock_role_ids_for_account.return_value = ['AROAABCDEFGHIJKLMNOPA', 'AROAABCDEFGHIJKLMNOPB']
+        # first role is not repoable, second role is repoable
+        ROLES_FOR_DISPLAY[0].update({'RoleId': 'AROAABCDEFGHIJKLMNOPA'})
+        ROLES_FOR_DISPLAY[1].update({'RoleId': 'AROAABCDEFGHIJKLMNOPB'})
+
+        mock_get_role_data.side_effect = [ROLES_FOR_DISPLAY[0], ROLES_FOR_DISPLAY[1]]
+        mock_time.return_value = 1
+
+        config = {'repo_schedule_period_days': 1}
+
+        repokid.cli.repokid_cli.schedule_repo('1234567890', None, config)
+
+        assert mock_set_role_data.mock_calls == [call(None, 'AROAABCDEFGHIJKLMNOPB', {'RepoScheduled': 86401})]
+
+    @patch('repokid.cli.repokid_cli.get_role_data')
+    @patch('repokid.cli.repokid_cli.role_ids_for_account')
+    @patch('repokid.cli.repokid_cli.repo_role')
+    @patch('time.time')
+    def test_repo_all_roles(self, mock_time, mock_repo_role, mock_role_ids_for_account, mock_get_role_data):
+        mock_role_ids_for_account.return_value = ['AROAABCDEFGHIJKLMNOPA', 'AROAABCDEFGHIJKLMNOPB',
+                                                  'AROAABCDEFGHIJKLMNOPC']
+        roles = [{'RoleId': 'AROAABCDEFGHIJKLMNOPA', 'Active': True, 'RoleName': 'ROLE_A', 'RepoScheduled': 100},
+                 {'RoleId': 'AROAABCDEFGHIJKLMNOPB', 'Active': True, 'RoleName': 'ROLE_B', 'RepoScheduled': 0},
+                 {'RoleId': 'AROAABCDEFGHIJKLMNOPC', 'Active': True, 'RoleName': 'ROLE_C', 'RepoScheduled': 5}]
+
+        # time is past ROLE_C but before ROLE_A
+        mock_time.return_value = 10
+
+        # return both roles each time
+        mock_get_role_data.side_effect = [roles[0], roles[1], roles[2], roles[0], roles[1], roles[2]]
+        mock_repo_role.return_value = None
+
+        # repo all roles in the account, should call repo with all roles
+        repokid.cli.repokid_cli.repo_all_roles(None, None, None, scheduled=False)
+        # repo only scheduled, should only call repo role with role A
+        repokid.cli.repokid_cli.repo_all_roles(None, None, None, scheduled=True)
+
+        assert mock_repo_role.mock_calls == [call(None, 'ROLE_A', None, None, commit=False),
+                                             call(None, 'ROLE_B', None, None, commit=False),
+                                             call(None, 'ROLE_C', None, None, commit=False),
+                                             call(None, 'ROLE_C', None, None, commit=False)]
+
     def test_generate_default_config(self):
         generated_config = repokid.cli.repokid_cli._generate_default_config()
 
