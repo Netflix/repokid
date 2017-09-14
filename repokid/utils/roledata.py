@@ -22,6 +22,7 @@ from repokid.utils.dynamo import (add_to_end_of_list, get_role_data, role_ids_fo
                                   store_initial_role_data)
 from repokid import CONFIG as CONFIG
 from repokid import LOGGER as LOGGER
+import repokid.hooks
 from repokid.role import Role
 
 IAM_ACCESS_ADVISOR_UNSUPPORTED_SERVICES = frozenset(['lightsail', 'organizations'])
@@ -199,14 +200,18 @@ def update_stats(dynamo_table, roles, source='Scan'):
                      'DisqualifiedBy': role.disqualified_by,
                      'PermissionsCount': role.total_permissions,
                      'Source': source}
-        cur_stats = get_role_data(dynamo_table, role.role_id, fields=['Stats'])['Stats'][-1]
+        stats_list = get_role_data(dynamo_table, role.role_id, fields=['Stats']).get('Stats', [])
+        try:
+            cur_stats = stats_list[-1]
+        except IndexError:
+            cur_stats = {'DisqualifiedBy': [], 'PermissionsCount': 0}
 
         for item in ['DisqualifiedBy', 'PermissionsCount']:
             if new_stats[item] != cur_stats[item]:
                 add_to_end_of_list(dynamo_table, role.role_id, 'Stats', new_stats)
 
 
-def _calculate_repo_scores(roles, minimum_age):
+def _calculate_repo_scores(roles, minimum_age, hooks):
     """
     Get the total and repoable permissions count and set of repoable services for every role in the account.
     For each role:
@@ -218,6 +223,8 @@ def _calculate_repo_scores(roles, minimum_age):
 
     Args:
         roles (Roles): The set of all roles we're analyzing
+        minimum_age
+        hooks
 
     Returns:
         None
@@ -237,7 +244,7 @@ def _calculate_repo_scores(roles, minimum_age):
         # permissions are only repoable if the role isn't being disqualified by filter(s)
         if len(role.disqualified_by) == 0:
             repoable_permissions = _get_repoable_permissions(role.role_name, permissions, role.aa_data,
-                                                             role.no_repo_permissions, minimum_age)
+                                                             role.no_repo_permissions, minimum_age, hooks)
             repoable_services = set([permission.split(':')[0] for permission in repoable_permissions])
             repoable_services = sorted(repoable_services)
             role.repoable_permissions = len(repoable_permissions)
@@ -247,7 +254,7 @@ def _calculate_repo_scores(roles, minimum_age):
             role.repoable_services = []
 
 
-def _get_repoable_permissions(role_name, permissions, aa_data, no_repo_permissions, minimum_age):
+def _get_repoable_permissions(role_name, permissions, aa_data, no_repo_permissions, minimum_age, hooks):
     """
     Generate a list of repoable permissions for a role based on the list of all permissions the role's policies
     currently allow and Access Advisor data for the services included in the role's policies.
@@ -265,6 +272,7 @@ def _get_repoable_permissions(role_name, permissions, aa_data, no_repo_permissio
                         serviceNamespace (the service used)
         no_repo_permissions (dict): Keys are the name of permissions and values are the time the entry expires
         minimum_age: Minimum age of a role (in days) for it to be repoable
+        hooks: Dict containing hook names and functions to run
 
     Returns:
         set: Permissions that are 'repoable' (not used within the time threshold)
@@ -302,7 +310,12 @@ def _get_repoable_permissions(role_name, permissions, aa_data, no_repo_permissio
 
             repoable_permissions.add(permission.lower())
 
-    return repoable_permissions
+    hooks_output = repokid.hooks.call_hooks(hooks, 'DURING_REPOABLE_CALCULATION',
+                                            {'role_name': role_name, 'permissions': repoable_permissions,
+                                             'aa_data': aa_data, 'no_repo_permissions': no_repo_permissions,
+                                             'minimum_age': minimum_age})
+
+    return hooks_output['permissions']
 
 
 def _get_repoed_policy(policies, repoable_permissions):

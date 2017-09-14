@@ -124,10 +124,13 @@ class TestRoledata(object):
         permissions = repokid.utils.roledata._get_role_permissions(test_role)
         assert permissions == set(ROLE_POLICIES['unused_ec2']['ec2_perms'])
 
-    def test_get_repoable_permissions(self):
+    @patch('repokid.hooks.call_hooks')
+    def test_get_repoable_permissions(self, mock_call_hooks):
         minimum_age = 1
         repokid.utils.roledata.IAM_ACCESS_ADVISOR_UNSUPPORTED_SERVICES = ['service_2']
         repokid.utils.roledata.IAM_ACCESS_ADVISOR_UNSUPPORTED_ACTIONS = ['service_1:action_3', 'service_1:action_4']
+
+        hooks = {}
 
         permissions = ['service_1:action_1', 'service_1:action_2', 'service_1:action_3', 'service_1:action_4',
                        'service_2:action_1', 'service_3:action_1', 'service_3:action_2', 'service_4:action_1',
@@ -140,15 +143,20 @@ class TestRoledata(object):
 
         no_repo_permissions = {'service_4:action_1': time.time()-1, 'service_4:action_2': time.time()+1000}
 
+        mock_call_hooks.return_value = {'permissions': set(['service_1:action_1', 'service_1:action_2',
+                                                            'service_4:action_1'])}
+
         repoable_permissions = repokid.utils.roledata._get_repoable_permissions('test_name', permissions, aa_data,
-                                                                                no_repo_permissions, minimum_age)
+                                                                                no_repo_permissions, minimum_age,
+                                                                                hooks)
         # service_1:action_3 and action_4 are unsupported actions, service_2 is an unsupported service, service_3
         # was used too recently, service_4 action 2 is in no_repo_permissions and not expired
         assert repoable_permissions == set(['service_1:action_1', 'service_1:action_2', 'service_4:action_1'])
 
     @patch('repokid.utils.roledata._get_role_permissions')
     @patch('repokid.utils.roledata._get_repoable_permissions')
-    def test_calculate_repo_scores(self, mock_get_repoable_permissions, mock_get_role_permissions):
+    @patch('repokid.hooks.call_hooks')
+    def test_calculate_repo_scores(self, mock_call_hooks, mock_get_repoable_permissions, mock_get_role_permissions):
         roles = [Role(ROLES[0]), Role(ROLES[1]), Role(ROLES[2])]
         roles[0].disqualified_by = []
         roles[0].aa_data = 'some_aa_data'
@@ -163,15 +171,18 @@ class TestRoledata(object):
         roles[2].disqualified_by = []
         roles[2].aa_data = None
 
+        hooks = {}
+
         mock_get_role_permissions.side_effect = [['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy',
                                                   'ec2:AllocateHosts', 'ec2:AssociateAddress'],
                                                  ['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy'],
                                                  ['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy']]
 
+        mock_call_hooks.return_value = set(['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy'])
         mock_get_repoable_permissions.side_effect = [set(['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy'])]
 
         minimum_age = 90
-        repokid.utils.roledata._calculate_repo_scores(roles, minimum_age)
+        repokid.utils.roledata._calculate_repo_scores(roles, minimum_age, hooks)
 
         assert roles[0].repoable_permissions == 2
         assert roles[0].repoable_services == ['iam']

@@ -141,14 +141,16 @@ class TestRepokidCLI(object):
     @patch('repokid.utils.roledata.update_stats')
     @patch('repokid.utils.roledata.find_and_mark_inactive')
     @patch('repokid.utils.roledata.update_role_data')
+    @patch('repokid.utils.roledata._calculate_repo_scores')
     @patch('repokid.cli.repokid_cli.set_role_data')
     @patch('repokid.cli.repokid_cli._get_aardvark_data')
     @patch('repokid.cli.repokid_cli.get_role_inline_policies')
     @patch('repokid.cli.repokid_cli.list_roles')
-    def test_repokid_update_role_cache(self, mock_list_roles, mock_get_role_inline_policies, mock_get_aardvark_data,
-                                       mock_set_role_data, mock_update_role_data, mock_find_and_mark_inactive,
-                                       mock_update_stats):
+    def test_repokid_update_role_cache(self, mock_list_roles, mock_get_role_inline_policies,
+                                       mock_get_aardvark_data, mock_set_role_data, mock_calculate_repo_scores,
+                                       mock_update_role_data, mock_find_and_mark_inactive, mock_update_stats):
 
+        hooks = {}
         # only active roles
         mock_list_roles.return_value = ROLES[:3]
 
@@ -176,7 +178,11 @@ class TestRepokidCLI(object):
         dynamo_table = None
         account_number = '123456789012'
 
-        repokid.cli.repokid_cli.update_role_cache(account_number, dynamo_table, config)
+        repokid.cli.repokid_cli.update_role_cache(account_number, dynamo_table, config, hooks)
+
+        roles = Roles([Role(ROLES[0]), Role(ROLES[1]), Role(ROLES[2])])
+
+        assert mock_calculate_repo_scores.mock_calls == [call(roles, 90, hooks)]
 
         # validate update data called for each role
         assert mock_update_role_data.mock_calls == [
@@ -187,8 +193,6 @@ class TestRepokidCLI(object):
         # all roles active
         assert mock_find_and_mark_inactive.mock_calls == [call(dynamo_table, account_number,
                                                           [Role(ROLES[0]), Role(ROLES[1]), Role(ROLES[2])])]
-
-        roles = Roles([Role(ROLES[0]), Role(ROLES[1]), Role(ROLES[2])])
 
         # TODO: validate total permission, repoable, etc are getting updated properly
 
@@ -235,11 +239,14 @@ class TestRepokidCLI(object):
                   ['young_role', "Someday", [], True, 4, 0, 'Never', []],
                   ['unused_ec2', "Someday", [], True, 4, 2, 'Never', ['ec2']]])]
 
+    @patch('repokid.hooks.call_hooks')
     @patch('repokid.cli.repokid_cli.get_role_data')
     @patch('repokid.cli.repokid_cli.set_role_data')
     @patch('repokid.cli.repokid_cli.role_ids_for_account')
     @patch('time.time')
-    def test_schedule_repo(self, mock_time, mock_role_ids_for_account, mock_set_role_data, mock_get_role_data):
+    def test_schedule_repo(self, mock_time, mock_role_ids_for_account, mock_set_role_data, mock_get_role_data,
+                           mock_call_hooks):
+        hooks = {}
         mock_role_ids_for_account.return_value = ['AROAABCDEFGHIJKLMNOPA', 'AROAABCDEFGHIJKLMNOPB']
         # first role is not repoable, second role is repoable
         ROLES_FOR_DISPLAY[0].update({'RoleId': 'AROAABCDEFGHIJKLMNOPA'})
@@ -250,9 +257,11 @@ class TestRepokidCLI(object):
 
         config = {'repo_schedule_period_days': 1}
 
-        repokid.cli.repokid_cli.schedule_repo('1234567890', None, config)
+        repokid.cli.repokid_cli.schedule_repo('1234567890', None, config, hooks)
 
         assert mock_set_role_data.mock_calls == [call(None, 'AROAABCDEFGHIJKLMNOPB', {'RepoScheduled': 86401})]
+        assert mock_call_hooks.mock_calls == [call(hooks, 'AFTER_SCHEDULE_REPO',
+                                              {'roles': [Role(ROLES_FOR_DISPLAY[1])]})]
 
     @patch('repokid.cli.repokid_cli.get_role_data')
     @patch('repokid.cli.repokid_cli.role_ids_for_account')
