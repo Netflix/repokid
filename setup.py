@@ -27,15 +27,15 @@ setup(
     packages=find_packages(),
     install_requires=[
         'boto3==1.4.4',
-        'cloudaux==1.2.0',
+        'cloudaux==1.2.7',
         'docopt==0.6.2',
         'import_string==0.1.0',
         'marshmallow==2.13.5',
         'policyuniverse==1.0.6.2',
-        'requests==2.13.0',
+        'requests==2.18.1',
         'tabulate==0.7.7',
         'tabview==1.4.2',
-        'tqdm==4.11.2'
+        'tqdm==4.14.0'
     ],
     entry_points={
         'console_scripts': [
