@@ -845,7 +845,7 @@ def rollback_role(account_number, role_name, dynamo_table, config, hooks, select
     return errors
 
 
-def repo_all_roles(account_number, dynamo_table, config, commit=False, scheduled=True):
+def repo_all_roles(account_number, dynamo_table, config, hooks, commit=False, scheduled=True):
     """
     Repo all scheduled or eligible roles in an account.  Collect any errors and display them at the end.
 
@@ -877,7 +877,7 @@ def repo_all_roles(account_number, dynamo_table, config, commit=False, scheduled
                                                                       ', '.join([role.role_name for role in roles])))
 
     for role in roles:
-        error = repo_role(account_number, role.role_name, dynamo_table, config, commit=commit)
+        error = repo_role(account_number, role.role_name, dynamo_table, config, hooks, commit=commit)
         if error:
             errors.append(error)
 
@@ -969,10 +969,16 @@ def main():
         return rollback_role(account_number, role_name, dynamo_table, config, hooks, selection=selection, commit=commit)
 
     if args.get('repo_all_roles'):
+        LOGGER.info('Updating role data')
+        update_role_cache(account_number, dynamo_table, config, hooks)
+        LOGGER.info('Repoing all roles')
         commit = args.get('--commit')
-        return repo_all_roles(account_number, dynamo_table, config, commit=commit, scheduled=False)
+        return repo_all_roles(account_number, dynamo_table, config, hooks, commit=commit, scheduled=False)
 
     if args.get('repo_scheduled_roles'):
+        LOGGER.info('Updating role data')
+        update_role_cache(account_number, dynamo_table, config, hooks)
+        LOGGER.info('Repoing scheduled roles')
         commit = args.get('--commit')
         return repo_all_roles(account_number, dynamo_table, config, commit=commit, scheduled=True)
 
