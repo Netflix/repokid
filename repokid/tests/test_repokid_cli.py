@@ -282,14 +282,14 @@ class TestRepokidCLI(object):
         mock_repo_role.return_value = None
 
         # repo all roles in the account, should call repo with all roles
-        repokid.cli.repokid_cli.repo_all_roles(None, None, None, scheduled=False)
+        repokid.cli.repokid_cli.repo_all_roles(None, None, None, None, scheduled=False)
         # repo only scheduled, should only call repo role with role A
-        repokid.cli.repokid_cli.repo_all_roles(None, None, None, scheduled=True)
+        repokid.cli.repokid_cli.repo_all_roles(None, None, None, None, scheduled=True)
 
-        assert mock_repo_role.mock_calls == [call(None, 'ROLE_A', None, None, commit=False),
-                                             call(None, 'ROLE_B', None, None, commit=False),
-                                             call(None, 'ROLE_C', None, None, commit=False),
-                                             call(None, 'ROLE_C', None, None, commit=False)]
+        assert mock_repo_role.mock_calls == [call(None, 'ROLE_A', None, None, None, commit=False),
+                                             call(None, 'ROLE_B', None, None, None, commit=False),
+                                             call(None, 'ROLE_C', None, None, None, commit=False),
+                                             call(None, 'ROLE_C', None, None, None, commit=False)]
 
     def test_generate_default_config(self):
         generated_config = repokid.cli.repokid_cli._generate_default_config()
