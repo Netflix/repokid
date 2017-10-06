@@ -181,9 +181,10 @@ def update_role_data(dynamo_table, account_number, role, current_policy, source=
         update_opt_out(dynamo_table, role)
         set_role_data(dynamo_table, role.role_id, {'Refreshed': datetime.datetime.utcnow().isoformat()})
 
-        # Update all data from Dynamo except CreateDate (it's in the wrong format)
+        # Update all data from Dynamo except CreateDate (it's in the wrong format) and DQ_by (we're going to recalc)
         current_role_data = get_role_data(dynamo_table, role.role_id)
         current_role_data.pop('CreateDate')
+        current_role_data.pop('DisqualifiedBy')
         role.set_attributes(current_role_data)
 
 
@@ -203,9 +204,8 @@ def update_stats(dynamo_table, roles, source='Scan'):
                      'DisqualifiedBy': role.disqualified_by,
                      'PermissionsCount': role.total_permissions,
                      'Source': source}
-        stats_list = get_role_data(dynamo_table, role.role_id, fields=['Stats']).get('Stats', [])
         try:
-            cur_stats = stats_list[-1]
+            cur_stats = role.stats[-1]
         except IndexError:
             cur_stats = {'DisqualifiedBy': [], 'PermissionsCount': 0}
 
