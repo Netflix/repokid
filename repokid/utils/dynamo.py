@@ -143,8 +143,8 @@ def find_role_in_cache(dynamo_table, account_number, role_name):
 
     if len(role_id_candidates) > 1:
         for role_id in role_id_candidates:
-            role_data = get_role_data(dynamo_table, role_id, fields=['Active'])
-            if role_data['Active']:
+            role_data = get_role_data(dynamo_table, role_id, fields=['Account', 'Active'])
+            if role_data['Account'] == account_number and role_data['Active']:
                 return role_id
     elif len(role_id_candidates) == 1:
         return role_id_candidates[0]

@@ -445,6 +445,8 @@ def update_role_cache(account_number, dynamo_table, config, hooks):
     LOGGER.info('Calculating repoable permissions and services')
     roledata._calculate_repo_scores(roles, config['filter_config']['AgeFilter']['minimum_age'], hooks)
     for role in roles:
+        if role.role_name == 'Monterey':
+            import pdb; pdb.set_trace()
         set_role_data(dynamo_table, role.role_id, {'TotalPermissions': role.total_permissions,
                                                    'RepoablePermissions': role.repoable_permissions,
                                                    'RepoableServices': role.repoable_services})
