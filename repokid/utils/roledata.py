@@ -181,10 +181,9 @@ def update_role_data(dynamo_table, account_number, role, current_policy, source=
         update_opt_out(dynamo_table, role)
         set_role_data(dynamo_table, role.role_id, {'Refreshed': datetime.datetime.utcnow().isoformat()})
 
-        # Update all data from Dynamo except CreateDate (it's in the wrong format)
-        current_role_data = get_role_data(dynamo_table, role.role_id)
-        current_role_data.pop('CreateDate')
-        role.set_attributes(current_role_data)
+        cur_role_data = get_role_data(dynamo_table, role.role_id, fields=['OptOut', 'Policies'])
+        role.opt_out = cur_role_data.get('OptOut', {})
+        role.policies = cur_role_data.get('Policies', [])
 
 
 def update_stats(dynamo_table, roles, source='Scan'):
