@@ -28,7 +28,9 @@ def add_to_end_of_list(dynamo_table, role_id, field_name, object_to_add):
                              UpdateExpression=("SET #updatelist = list_append(if_not_exists(#updatelist,"
                                                ":empty_list), :object_to_add)"),
                              ExpressionAttributeNames={"#updatelist": field_name},
-                             ExpressionAttributeValues={":empty_list": [], ":object_to_add": [object_to_add]})
+                             ExpressionAttributeValues={":empty_list": [],
+                                                        ":object_to_add": [_empty_string_to_dynamo_replace(
+                                                            object_to_add)]})
 
 
 def dynamo_get_or_create_table(**dynamo_config):
