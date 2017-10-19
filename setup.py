@@ -32,7 +32,7 @@ setup(
         'import_string==0.1.0',
         'marshmallow==2.13.5',
         'policyuniverse==1.0.6.2',
-        'requests==2.13.0',
+        'requests==2.18.2',
         'tabulate==0.7.7',
         'tabview==1.4.2',
         'tqdm==4.11.2'
