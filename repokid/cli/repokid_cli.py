@@ -507,9 +507,9 @@ def find_roles_with_permission(permission, dynamo_table):
         None
     """
     for roleID in role_ids_for_all_accounts(dynamo_table):
-        role = Role(get_role_data(dynamo_table, roleID, fields=['Policies', 'RoleName', 'Arn']))
+        role = Role(get_role_data(dynamo_table, roleID, fields=['Policies', 'RoleName', 'Arn', 'Active']))
         permissions = roledata._get_role_permissions(role)
-        if permission.lower() in permissions:
+        if permission.lower() in permissions and role.active:
             LOGGER.info('ARN {arn} has {permission}'.format(arn=role.arn, permission=permission))
 
 
@@ -550,14 +550,15 @@ def display_role(account_number, role_name, dynamo_table, config, hooks):
     print tabulate(rows, headers=headers) + '\n\n'
 
     print "Policy history:"
-    headers = ['Number', 'Source', 'Discovered', 'Policy Length', 'Policy Contents']
+    headers = ['Number', 'Source', 'Discovered', 'Permissions', 'Services']
     rows = []
     for index, policies_version in enumerate(role.policies):
+        policy_permissions = roledata._get_permissions_in_policy(policies_version['Policy'])
         rows.append([index,
                      policies_version['Source'],
                      policies_version['Discovered'],
-                     len(str(policies_version['Policy'])),
-                     str(policies_version['Policy'])[:50]])
+                     len(policy_permissions),
+                     roledata._get_services_in_permissions(policy_permissions)])
     print tabulate(rows, headers=headers) + '\n\n'
 
     print "Stats:"
@@ -580,8 +581,8 @@ def display_role(account_number, role_name, dynamo_table, config, hooks):
 
     permissions = roledata._get_role_permissions(role, warn_unknown_perms=warn_unknown_permissions)
     if len(role.disqualified_by) == 0:
-        repoable_permissions = roledata._get_repoable_permissions(role.role_name, permissions, role.aa_data,
-                                                                  role.no_repo_permissions,
+        repoable_permissions = roledata._get_repoable_permissions(account_number, role.role_name, permissions,
+                                                                  role.aa_data, role.no_repo_permissions,
                                                                   config['filter_config']['AgeFilter']['minimum_age'],
                                                                   hooks)
 
@@ -685,7 +686,7 @@ def repo_role(account_number, role_name, dynamo_table, config, hooks, commit=Fal
         return
 
     permissions = roledata._get_role_permissions(role)
-    repoable_permissions = roledata._get_repoable_permissions(role.role_name, permissions, role.aa_data,
+    repoable_permissions = roledata._get_repoable_permissions(account_number, role.role_name, permissions, role.aa_data,
                                                               role.no_repo_permissions,
                                                               config['filter_config']['AgeFilter']['minimum_age'],
                                                               hooks)
@@ -781,12 +782,13 @@ def rollback_role(account_number, role_name, dynamo_table, config, hooks, select
 
     # no option selected, display a table of options
     if not selection:
-        headers = ['Number', 'Source', 'Discovered', 'Policy Length', 'Policy Contents']
+        headers = ['Number', 'Source', 'Discovered', 'Permissions', 'Services']
         rows = []
         for index, policies_version in enumerate(role.policies):
+            policy_permissions = roledata._get_permissions_in_policy(policies_version['Policy'])
             rows.append([index, policies_version['Source'], policies_version['Discovered'],
-                        len(str(policies_version['Policy'])),
-                        str(policies_version['Policy'])[:50]])
+                        len(policy_permissions),
+                        roledata._get_services_in_permissions(policy_permissions)])
         print tabulate(rows, headers=headers)
         return
 
@@ -797,12 +799,19 @@ def rollback_role(account_number, role_name, dynamo_table, config, hooks, select
 
     current_policies = get_role_inline_policies(role.as_dict(), **conn)
 
-    if selection and not commit:
+    if selection:
         pp = pprint.PrettyPrinter()
         print "Will restore the following policies:"
         pp.pprint(role.policies[int(selection)]['Policy'])
         print "Current policies:"
         pp.pprint(current_policies)
+        current_permissions = roledata._get_permissions_in_policy(role.policies[-1]['Policy'])
+        selected_permissions = roledata._get_permissions_in_policy(role.policies[int(selection)]['Policy'])
+        restored_permissions = selected_permissions - current_permissions
+        print "\nResore will return these permissions:"
+        print '\n'.join([perm for perm in sorted(restored_permissions)])
+
+    if not commit:
         return False
 
     # if we're restoring from a version with fewer policies than we have now, we need to remove them to
@@ -816,7 +825,7 @@ def rollback_role(account_number, role_name, dynamo_table, config, hooks, select
             ca.call('iam.client.put_role_policy', RoleName=role.role_name, PolicyName=policy_name,
                     PolicyDocument=json.dumps(policy, indent=2, sort_keys=True))
 
-        except botocore.excpetion.ClientError as e:
+        except botocore.exceptions.ClientError as e:
             message = "Unable to push policy {}.  Error: {}".format(policy_name, e.message)
             LOGGER.error(message)
             errors.append(message)
@@ -833,7 +842,7 @@ def rollback_role(account_number, role_name, dynamo_table, config, hooks, select
             try:
                 ca.call('iam.client.delete_role_policy', RoleName=role.role_name, PolicyName=policy_name)
 
-            except botocore.excpetion.ClientError as e:
+            except botocore.excpetions.ClientError as e:
                 message = "Unable to delete policy {}.  Error: {}".format(policy_name, e.message)
                 LOGGER.error(message)
                 errors.append(message)

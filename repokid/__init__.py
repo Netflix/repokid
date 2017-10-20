@@ -15,7 +15,7 @@ import json
 import logging.config
 import os
 
-__version__ = '0.7.6'
+__version__ = '0.7.7'
 
 
 def init_config():

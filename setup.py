@@ -31,7 +31,7 @@ setup(
         'docopt==0.6.2',
         'import_string==0.1.0',
         'marshmallow==2.13.5',
-        'policyuniverse==1.0.6.2',
+        'policyuniverse',
         'requests==2.13.0',
         'tabulate==0.7.7',
         'tabview==1.4.2',
