@@ -13,6 +13,7 @@ install:
 script:
   - coverage run --source repokid -m py.test
   - bandit -r . -ll -ii -x repokid/tests/
+  - flake8 .
 
 after_success:
   - coveralls
