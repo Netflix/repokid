@@ -27,7 +27,8 @@ You will need a [DynamoDB](https://aws.amazon.com/dynamodb/) table called `repok
 
 The table should have the following properties:
  - `RoleId` (string) as a primary partition key, no primary sort key
- - A global secondary index named `account` with a primary partition key of `Account` and `RoleId` as a projected attribute
+ - A global secondary index named `Account` with a primary partition key of `Account` and `RoleId` and `Account` as projected attributes
+ - A global secondary index named `RoleName` with a primary partition key of `RoleName` and `RoleId` and `RoleName` as projected attributes
 
 For development, you can run dynamo [locally](http://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.html).
 
