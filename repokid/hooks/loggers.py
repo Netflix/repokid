@@ -5,7 +5,8 @@ import repokid.hooks as hooks
 @hooks.implements_hook('DURING_REPOABLE_CALCULATION', 1)
 def check_and_log_during_repoable_calculation_hooks(input_dict):
     LOGGER.debug("Calling DURING_REPOABLE_CALCULATION hooks")
-    if not all(['role_name', 'permissions', 'aa_data', 'no_repo_permissions', 'minimum_age'] in input_dict):
+    if not all(['role_name', 'potentially_repoable_permissions', 'minimum_age']
+               in input_dict):
         raise hooks.MissingHookParamaeter
 
 

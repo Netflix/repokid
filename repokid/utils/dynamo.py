@@ -28,7 +28,9 @@ def add_to_end_of_list(dynamo_table, role_id, field_name, object_to_add):
                              UpdateExpression=("SET #updatelist = list_append(if_not_exists(#updatelist,"
                                                ":empty_list), :object_to_add)"),
                              ExpressionAttributeNames={"#updatelist": field_name},
-                             ExpressionAttributeValues={":empty_list": [], ":object_to_add": [object_to_add]})
+                             ExpressionAttributeValues={":empty_list": [],
+                                                        ":object_to_add": [_empty_string_to_dynamo_replace(
+                                                            object_to_add)]})
 
 
 def dynamo_get_or_create_table(**dynamo_config):
@@ -143,8 +145,8 @@ def find_role_in_cache(dynamo_table, account_number, role_name):
 
     if len(role_id_candidates) > 1:
         for role_id in role_id_candidates:
-            role_data = get_role_data(dynamo_table, role_id, fields=['Active'])
-            if role_data['Active']:
+            role_data = get_role_data(dynamo_table, role_id, fields=['Account', 'Active'])
+            if role_data['Account'] == account_number and role_data['Active']:
                 return role_id
     elif len(role_id_candidates) == 1:
         return role_id_candidates[0]
