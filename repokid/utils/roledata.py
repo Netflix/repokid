@@ -193,8 +193,8 @@ def update_role_data(dynamo_table, account_number, role, current_policy, source=
 
         # Update all data from Dynamo except CreateDate (it's in the wrong format) and DQ_by (we're going to recalc)
         current_role_data = get_role_data(dynamo_table, role.role_id)
-        current_role_data.pop('CreateDate')
-        current_role_data.pop('DisqualifiedBy')
+        current_role_data.pop('CreateDate', None)
+        current_role_data.pop('DisqualifiedBy', None)
         role.set_attributes(current_role_data)
 
 
