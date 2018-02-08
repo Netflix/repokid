@@ -25,18 +25,6 @@ setup(
     version=REPOKID_VERSION,
     long_description=__doc__,
     packages=find_packages(),
-    install_requires=[
-        'boto3',
-        'cloudaux==1.2.0',
-        'docopt==0.6.2',
-        'import_string==0.1.0',
-        'marshmallow==2.13.5',
-        'policyuniverse',
-        'requests==2.13.0',
-        'tabulate==0.7.7',
-        'tabview==1.4.2',
-        'tqdm==4.11.2'
-    ],
     entry_points={
         'console_scripts': [
             'repokid = repokid.cli.repokid_cli:main',
