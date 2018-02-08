@@ -15,6 +15,9 @@ import re
 import ast
 from setuptools import setup, find_packages
 
+with open('requirements.txt') as f:
+    REQUIRED = f.read().splitlines()
+
 _version_re = re.compile(r'__version__\s+=\s+(.*)')
 with open('repokid/__init__.py', 'rb') as f:
     REPOKID_VERSION = str(ast.literal_eval(_version_re.search(
@@ -25,6 +28,7 @@ setup(
     version=REPOKID_VERSION,
     long_description=__doc__,
     packages=find_packages(),
+    install_requires=REQUIRED,
     entry_points={
         'console_scripts': [
             'repokid = repokid.cli.repokid_cli:main',
