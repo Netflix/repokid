@@ -24,7 +24,7 @@ marshmallow==2.15.0
 policyuniverse==1.1.0.1
 python-dateutil==2.6.1    # via botocore
 requests==2.18.4
-s3transfer==0.1.12        # via boto3
+s3transfer==0.1.13        # via boto3
 six==1.11.0               # via import-string, python-dateutil
 tabulate==0.8.2
 tabview==1.4.3
