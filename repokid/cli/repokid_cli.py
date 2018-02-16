@@ -22,6 +22,8 @@ Usage:
     repokid repo_role <account_number> <role_name> [-c]
     repokid rollback_role <account_number> <role_name> [--selection=NUMBER] [-c]
     repokid repo_all_roles <account_number> [-c]
+    repokid show_scheduled_roles <account_number>
+    repokid cancel_scheduled_repo <account_number> <role_name>
     repokid repo_scheduled_roles <account_number> [-c]
     repokid repo_stats <output_filename> [--account=ACCOUNT_NUMBER]
 
@@ -35,6 +37,7 @@ Options:
 from collections import defaultdict
 import csv
 import datetime
+from datetime import datetime as dt
 import inspect
 import json
 import pprint
@@ -633,6 +636,49 @@ def schedule_repo(account_number, dynamo_table, config, hooks):
     repokid.hooks.call_hooks(hooks, 'AFTER_SCHEDULE_REPO', {'roles': scheduled_roles})
 
 
+def show_scheduled_roles(account_number, dynamo_table):
+    """
+    Show scheduled repos for a given account.  For each scheduled show whether scheduled time is elapsed or not.
+    """
+    roles = Roles([Role(get_role_data(dynamo_table, roleID))
+                  for roleID in tqdm(role_ids_for_account(dynamo_table, account_number))])
+
+    # filter to show only roles that are scheduled
+    roles = [role for role in roles if (role.repo_scheduled)]
+
+    header = ['Role name', 'Scheduled', 'Scheduled Time Elapsed?']
+    rows = []
+
+    curtime = int(time.time())
+
+    for role in roles:
+        rows.append([role.role_name,
+                     dt.fromtimestamp(role.repo_scheduled).strftime('%Y-%m-%d %H:%M'),
+                     role.repo_scheduled < curtime])
+
+    print tabulate(rows, headers=header)
+
+
+def cancel_scheduled_repo(account_number, role_name, dynamo_table):
+    """
+    Cancel scheduled repo for a role in an account
+    """
+    role_id = find_role_in_cache(dynamo_table, account_number, role_name)
+    if not role_id:
+        LOGGER.warn('Could not find role with name {} in account {}'.format(role_name, account_number))
+        return
+
+    role = Role(get_role_data(dynamo_table, role_id))
+
+    if not role.repo_scheduled:
+        LOGGER.warn('Repo was not scheduled for role {}'.format(role.role_name))
+        return
+
+    set_role_data(dynamo_table, role.role_id, {'RepoScheduled': 0})
+    LOGGER.info('Successfully cancelled scheduled repo for role {} in account {}'.format(role.role_name,
+                role.account))
+
+
 def repo_role(account_number, role_name, dynamo_table, config, hooks, commit=False):
     """
     Calculate what repoing can be done for a role and then actually do it if commit is set
@@ -834,7 +880,7 @@ def rollback_role(account_number, role_name, dynamo_table, config, hooks, select
             # remove the policy name if it's in the list
             try:
                 policies_to_remove.remove(policy_name)
-            except:
+            except Exception:
                 pass
 
     if policies_to_remove:
@@ -963,9 +1009,6 @@ def main():
         role_name = args.get('<role_name>')
         return display_role(account_number, role_name, dynamo_table, config, hooks)
 
-    if args.get('schedule_repo'):
-        return schedule_repo(account_number, dynamo_table, config, hooks)
-
     if args.get('repo_role'):
         role_name = args.get('<role_name>')
         commit = args.get('--commit')
@@ -983,6 +1026,18 @@ def main():
         LOGGER.info('Repoing all roles')
         commit = args.get('--commit')
         return repo_all_roles(account_number, dynamo_table, config, hooks, commit=commit, scheduled=False)
+
+    if args.get('schedule_repo'):
+        return schedule_repo(account_number, dynamo_table, config, hooks)
+
+    if args.get('show_scheduled_roles'):
+        LOGGER.info('Showing scheduled roles')
+        return show_scheduled_roles(account_number, dynamo_table)
+
+    if args.get('cancel_scheduled_repo'):
+        role_name = args.get('<role_name>')
+        LOGGER.info('Cancelling scheduled repo for role: {}'.format(role_name))
+        return cancel_scheduled_repo(account_number, role_name, dynamo_table)
 
     if args.get('repo_scheduled_roles'):
         LOGGER.info('Updating role data')
