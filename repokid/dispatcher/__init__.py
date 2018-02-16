@@ -28,10 +28,18 @@ def list_repoable_services(dynamo_table, message):
                                                                                             message.account))
     else:
         role_data = dynamo.get_role_data(dynamo_table, role_id, fields=['RepoableServices'])
+
+        (repoable_permissions, repoable_services) = roledata._convert_repoed_service_to_sorted_perms_and_services(
+            role_data['RepoableServices'])
+
         repoable_services = role_data['RepoableServices']
         return ResponderReturn(successful=True,
-                               return_message='Repoable services from role {} in account {}: {}'.format(
-                                    message.role_name, message.account, repoable_services))
+                               return_message=('Role {} in account {} has:\n    Repoable Services: \n{}'
+                                               '\n\n    Repoable Permissions: \n{}'.format(
+                                                message.role_name,
+                                                message.account,
+                                                '\n'.join([service for service in repoable_services]),
+                                                '\n'.join([perm for perm in repoable_permissions]))))
 
 
 @implements_command('list_role_rollbacks')
