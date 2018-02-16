@@ -11,6 +11,7 @@
 #     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #     See the License for the specific language governing permissions and
 #     limitations under the License.
+from collections import defaultdict
 import copy
 import datetime
 from dateutil.tz import tzlocal
@@ -258,13 +259,78 @@ def _calculate_repo_scores(roles, minimum_age, hooks):
         if len(role.disqualified_by) == 0:
             repoable_permissions = _get_repoable_permissions(role.account, role.role_name, permissions, role.aa_data,
                                                              role.no_repo_permissions, minimum_age, hooks)
-            repoable_services = set([permission.split(':')[0] for permission in repoable_permissions])
-            repoable_services = sorted(repoable_services)
+            (repoable_permissions_set, repoable_services_set) = _convert_repoable_perms_to_perms_and_services(
+                    permissions, repoable_permissions)
+
             role.repoable_permissions = len(repoable_permissions)
-            role.repoable_services = repoable_services
+
+            # we're going to store both repoable permissions and repoable services in the field "RepoableServices"
+            role.repoable_services = repoable_services_set + repoable_permissions_set
         else:
             role.repoable_permissions = 0
             role.repoable_services = []
+
+
+def _convert_repoable_perms_to_perms_and_services(total_permissions, repoable_permissions):
+    """
+    Take a list of total permissions and repoable permissions and determine whether only a few permissions are being
+    repoed or if the entire service (all permissions from that service) are being removed.
+
+    Args:
+        total_permissions (list): A list of the total permissions a role has
+        repoable_permissions (list): A list of repoable permissions suggested to be removed
+
+    Returns:
+        list: Sorted list of permissions that will be individually removed but other permissions from the service will
+              be kept
+        list: Sorted list of services that will be completely removed
+    """
+    repoed_permissions = set()
+    repoed_services = set()
+
+    total_perms_by_service = defaultdict(list)
+    repoable_perms_by_service = defaultdict(list)
+
+    # group total permissions and repoable permissions by service
+    for perm in total_permissions:
+        total_perms_by_service[perm.split(':')[0]].append(perm)
+
+    for perm in repoable_permissions:
+        repoable_perms_by_service[perm.split(':')[0]].append(perm)
+
+    for service in repoable_perms_by_service:
+        if all(perm in repoable_perms_by_service[service] for perm in total_perms_by_service[service]):
+            repoed_services.add(service)
+        else:
+            repoed_permissions.update(perm for perm in repoable_perms_by_service[service])
+
+    return (sorted(repoed_permissions), sorted(repoed_services))
+
+
+def _convert_repoed_service_to_sorted_perms_and_services(repoed_services):
+    """
+    Repokid stores a field RepoableServices that historically only stored services (when Access Advisor was only data).
+    Now this field is repurposed to store both services and permissions.  We can tell the difference because permissions
+    always have the form <service>:<permission>.  This function splits the contents of the field to sorted sets of
+    repoable services and permissions.
+
+    Args:
+        repoed_services (list): List from Dynamo of repoable services and permissions
+
+    Returns:
+        list: Sorted list of repoable permissions (where there are other permissions that aren't repoed)
+        list: Sorted list of repoable services (where the entire service is removed)
+    """
+    repoable_permissions = set()
+    repoable_services = set()
+
+    for entry in repoed_services:
+        if len(entry.split(':')) == 2:
+            repoable_permissions.add(entry)
+        else:
+            repoable_services.add(entry)
+
+    return (sorted(repoable_permissions), sorted(repoable_services))
 
 
 def _get_repoable_permissions(account_number, role_name, permissions, aa_data, no_repo_permissions, minimum_age,

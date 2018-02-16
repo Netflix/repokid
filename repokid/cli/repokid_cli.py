@@ -586,7 +586,7 @@ def display_role(account_number, role_name, dynamo_table, config, hooks):
                                                                   config['filter_config']['AgeFilter']['minimum_age'],
                                                                   hooks)
 
-    print "Repoable services:"
+    print "Repoable services and permissions"
     headers = ['Service', 'Action', 'Repoable']
     rows = []
     for permission in permissions:

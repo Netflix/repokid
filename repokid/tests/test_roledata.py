@@ -213,3 +213,19 @@ class TestRoledata(object):
 
         new_perms = repokid.utils.roledata.find_newly_added_permissions(old_policy, new_policy)
         assert new_perms == set(['ec2:allocatehosts', 'ec2:associateaddress'])
+
+    def test_convert_repoable_perms_to_perms_and_services(self):
+        all_perms = ['a:j', 'a:k', 'b:l', 'c:m', 'c:n']
+        repoable_perms = ['b:l', 'c:m']
+        expected_repoed_services = ['b']
+        expected_repoed_permissions = ['c:m']
+        assert (repokid.utils.roledata._convert_repoable_perms_to_perms_and_services(all_perms, repoable_perms) ==
+                (expected_repoed_permissions, expected_repoed_services))
+
+    def test_convert_repoed_service_to_sorted_perms_and_services(self):
+        repoed_services = ['route53', 'ec2', 's3:abc', 'dynamodb:def', 'ses:ghi', 'ses:jkl']
+        expected_services = ['ec2', 'route53']
+        expected_permissions = ['dynamodb:def', 's3:abc', 'ses:ghi', 'ses:jkl']
+        assert repokid.utils.roledata._convert_repoed_service_to_sorted_perms_and_services(repoed_services) == (
+            expected_permissions, expected_services
+        )
