@@ -1045,7 +1045,7 @@ def main():
         update_role_cache(account_number, dynamo_table, config, hooks)
         LOGGER.info('Repoing scheduled roles')
         commit = args.get('--commit')
-        return repo_all_roles(account_number, dynamo_table, config, commit=commit, scheduled=True)
+        return repo_all_roles(account_number, dynamo_table, config, hooks, commit=commit, scheduled=True)
 
     if args.get('repo_stats'):
         output_file = args.get('<output_filename>')
