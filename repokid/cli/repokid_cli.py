@@ -1029,6 +1029,8 @@ def main():
         return repo_all_roles(account_number, dynamo_table, config, hooks, commit=commit, scheduled=False)
 
     if args.get('schedule_repo'):
+        LOGGER.info('Updating role data')
+        update_role_cache(account_number, dynamo_table, config, hooks)
         return schedule_repo(account_number, dynamo_table, config, hooks)
 
     if args.get('show_scheduled_roles'):

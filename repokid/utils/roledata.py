@@ -380,13 +380,13 @@ def _get_repoable_permissions(account_number, role_name, permissions, aa_data, n
 
     for permission_name, permission_decision in potentially_repoable_permissions.items():
         if permission_name.split(':')[0] in IAM_ACCESS_ADVISOR_UNSUPPORTED_SERVICES:
-            LOGGER.warn('skipping {}'.format(permission))
+            LOGGER.warn('skipping {}'.format(permission_name))
             continue
 
         # we have an unused service but need to make sure it's repoable
         if permission_name.split(':')[0] not in used_services:
             if permission_name in IAM_ACCESS_ADVISOR_UNSUPPORTED_ACTIONS:
-                LOGGER.warn('skipping {}'.format(permission))
+                LOGGER.warn('skipping {}'.format(permission_name))
                 continue
 
             permission_decision.repoable = True
