@@ -56,8 +56,19 @@ def init_logging():
     """
     if CONFIG:
         logging.config.dictConfig(CONFIG['logging'])
+
+    # these loggers are very noisy
+    suppressed_loggers = [
+        'botocore.vendored.requests.packages.urllib3.connectionpool',
+        'urllib3'
+    ]
+
+    for logger in suppressed_loggers:
+        logging.getLogger(logger).setLevel(logging.ERROR)
+
     return logging.getLogger(__name__)
 
 
 CONFIG = init_config()
 LOGGER = init_logging()
+
