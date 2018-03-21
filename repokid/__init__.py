@@ -71,4 +71,3 @@ def init_logging():
 
 CONFIG = init_config()
 LOGGER = init_logging()
-
