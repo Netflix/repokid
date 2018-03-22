@@ -2,6 +2,7 @@ Repokid
 =======
 [![NetflixOSS Lifecycle](https://img.shields.io/osslifecycle/Netflix/osstracker.svg)]()
 [![Build Status](https://travis-ci.org/Netflix/repokid.svg?branch=master)](https://travis-ci.org/Netflix/repokid)
+[![Coverage Status](https://coveralls.io/repos/github/Netflix/repokid/badge.svg?branch=master)](https://coveralls.io/github/Netflix/repokid?branch=master)
 [![Gitter chat](https://badges.gitter.im/gitterHQ/gitter.png)](https://gitter.im/netflix-repokid)
 
 <img align="center" alt="Repokid Logo" src="docs/images/Repokid.png" width="25%" display="block">
