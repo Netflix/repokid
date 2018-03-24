@@ -22,23 +22,23 @@ Please also verify that the changes you've made work as expected locally.
 Pushing New Versions to Pypi
 ----------------------------
 For the majority of contributors, this will not be a huge factor, however, for those deploying new versions, the instructions are as follows:
-1. Ensure you have `twine` installed, this is part of the requirements file, so if you've installed via the recommended paths, you should be fine..
-2. Edit the version number present in the __`__repokid/___init___.py`:
-        ```
+1. Ensure you have `twine` installed, this is part of the requirements file, so if you've installed via the recommended paths, you should be fine.
+2. Edit the version number present in the __`__repokid/init.py`:
+
         $ vim repokid/__init__.py
-        ``
+
 3. Create a package for your newest version:
-        ```
+
         $ python setup.py sdist
-        ```
+
 4. Upload to Pypi using Twine:
-        ```
-        twine upload dist/*
-        ```
+        
+        $ twine upload dist/*
+
 #### Problems that can be found when creating new versions.
 Pypi has a "known problem" with versions of the same title, for example, reuploading a failed attempt, or trying to patch over the top of a dist that has a file missing. This will result in a failure, and will require you to bump numbers again. As they are immutable, effectively. So version numbers can be used fairly liberally.
 
-### Context around using Twine:
+#### Context around using Twine:
 Please refer to the "Why Should I Use This" section:
 > https://github.com/pypa/twine
 
