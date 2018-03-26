@@ -8,3 +8,5 @@ requests
 tabulate
 tabview
 tqdm
+pip-tools
+twine
