@@ -219,9 +219,9 @@ def update_stats(dynamo_table, roles, source='Scan'):
         try:
             cur_stats = role.stats[-1]
         except IndexError:
-            cur_stats = {'DisqualifiedBy': [], 'PermissionsCount': 0}
+            cur_stats = {'DisqualifiedBy': [], 'PermissionsCount': 0, 'RepoablePermissionsCount': 0}
 
-        for item in ['DisqualifiedBy', 'PermissionsCount']:
+        for item in ['DisqualifiedBy', 'PermissionsCount', 'RepoablePermissionsCount']:
             if new_stats[item] != cur_stats[item]:
                 add_to_end_of_list(dynamo_table, role.role_id, 'Stats', new_stats)
 
