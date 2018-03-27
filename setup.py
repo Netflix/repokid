@@ -26,13 +26,31 @@ with open('repokid/__init__.py', 'rb') as f:
 setup(
     name='repokid',
     version=REPOKID_VERSION,
-    long_description=__doc__,
+    description='AWS Least Privilege for Distributed, High-Velocity Deployment',
+    # removed as I think getting long_desc to work is perhaps outside the scope
+    # of this PR, other long_desc's I've seen have used .rst to display on
+    # Pypi, so I think that may be necessary also.
+    # long_description=open("readme.md").read(),
+    url='https://github.com/Netflix/repokid',
     packages=find_packages(),
     install_requires=REQUIRED,
+    keywords=['aws', 'iam', 'access_advisor'],
     entry_points={
         'console_scripts': [
             'repokid = repokid.cli.repokid_cli:main',
             'dispatcher = repokid.cli.dispatcher_cli:main'
         ],
-    }
+    },
+    classifiers=[
+        'Development Status :: 5 - Production/Stable',
+        'Intended Audience :: Developers',
+        'Intended Audience :: System Administrators',
+        'License :: OSI Approved :: Apache Software License',
+        'Natural Language :: English',
+        'Operating System :: OS Independent',
+        'Programming Language :: Python :: 2.7',
+        'Topic :: Security',
+        'Topic :: System',
+        'Topic :: System :: Systems Administration'
+        ]
 )
