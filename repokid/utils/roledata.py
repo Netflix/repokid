@@ -222,7 +222,7 @@ def update_stats(dynamo_table, roles, source='Scan'):
             cur_stats = {'DisqualifiedBy': [], 'PermissionsCount': 0, 'RepoablePermissionsCount': 0}
 
         for item in ['DisqualifiedBy', 'PermissionsCount', 'RepoablePermissionsCount']:
-            if new_stats[item] != cur_stats[item]:
+            if new_stats.get(item) != cur_stats.get(item):
                 add_to_end_of_list(dynamo_table, role.role_id, 'Stats', new_stats)
 
 
