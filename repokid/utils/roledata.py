@@ -214,6 +214,7 @@ def update_stats(dynamo_table, roles, source='Scan'):
         new_stats = {'Date': datetime.datetime.utcnow().isoformat(),
                      'DisqualifiedBy': role.disqualified_by,
                      'PermissionsCount': role.total_permissions,
+                     'RepoablePermissionsCount': role.repoable_permissions,
                      'Source': source}
         try:
             cur_stats = role.stats[-1]

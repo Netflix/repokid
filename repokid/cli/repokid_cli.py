@@ -961,12 +961,11 @@ def repo_stats(output_file, dynamo_table, account_number=None):
     rows = []
 
     for roleID in roleIDs:
-        role_data = get_role_data(dynamo_table, roleID, fields=['RoleId', 'RoleName', 'Account', 'Stats',
-                                                                'RepoablePermissions'])
+        role_data = get_role_data(dynamo_table, roleID, fields=['RoleId', 'RoleName', 'Account', 'Stats'])
         for stats_entry in role_data.get('Stats', []):
             rows.append([role_data['RoleId'], role_data['RoleName'], role_data['Account'], stats_entry['Date'],
-                         stats_entry['Source'], stats_entry['PermissionsCount'], role_data['RepoablePermissions'],
-                         stats_entry.get('DisqualifiedBy', [])])
+                         stats_entry['Source'], stats_entry['PermissionsCount'],
+                         stats_entry.get('RepoablePermissionsCount'), stats_entry.get('DisqualifiedBy', [])])
 
     try:
         with open(output_file, 'wb') as csvfile:
