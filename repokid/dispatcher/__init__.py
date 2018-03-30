@@ -3,11 +3,17 @@ import datetime
 import time
 
 from repokid import CONFIG
+from repokid import _get_hooks
 import repokid.cli.repokid_cli as cli
 import repokid.utils.dynamo as dynamo
 import repokid.utils.roledata as roledata
 
 ResponderReturn = namedtuple('ResponderReturn', 'successful, return_message')
+
+if CONFIG:
+    hooks = _get_hooks(CONFIG.get('hooks', ['repokid.hooks.loggers']))
+else:
+    hooks = ['repokid.hooks.loggers']
 
 
 def implements_command(command):
@@ -127,8 +133,8 @@ def rollback_role(dynamo_table, message):
     if not message.selection:
         return ResponderReturn(successful=False, return_message='Rollback must contain a selection number')
 
-    errors = cli.rollback_role(message.account, message.role_name, dynamo_table, CONFIG, selection=message.selection,
-                               commit=True)
+    errors = cli.rollback_role(message.account, message.role_name, dynamo_table, CONFIG, hooks,
+                               selection=message.selection, commit=True)
     if errors:
         return ResponderReturn(successful=False, return_message='Errors during rollback: {}'.format(errors))
     else:
