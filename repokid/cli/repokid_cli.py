@@ -34,11 +34,9 @@ Options:
     -c --commit     Actually do things.
 """
 
-from collections import defaultdict
 import csv
 import datetime
 from datetime import datetime as dt
-import inspect
 import json
 import pprint
 import re
@@ -57,6 +55,7 @@ from tqdm import tqdm
 
 from repokid import LOGGER
 from repokid import CONFIG
+from repokid import _get_hooks
 from repokid import __version__ as __version__
 from repokid.role import Role, Roles
 import repokid.hooks
@@ -67,39 +66,6 @@ import repokid.utils.roledata as roledata
 
 # http://docs.aws.amazon.com/IAM/latest/UserGuide/reference_iam-limits.html
 MAX_AWS_POLICY_SIZE = 10240
-
-
-def _get_hooks(hooks_list):
-    """
-    Output should be a dictionary with keys as the names of hooks and values as a list of functions (in order) to call
-
-    Args:
-        hooks_list: A list of paths to load hooks from
-
-    Returns:
-        dict: Keys are hooks by name (AFTER_SCHEDULE_REPO) and values are a list of functions to execute
-    """
-    hooks = defaultdict(list)
-    for hook in hooks_list:
-        module = import_string(hook)
-        # get members retrieves all the functions from a given module
-        all_funcs = inspect.getmembers(module, inspect.isfunction)
-        # first argument is the function name (which we don't need)
-        for (_, func) in all_funcs:
-            # we only look at functions that have been decorated with _implements_hook
-            if hasattr(func, "_implements_hook"):
-                # append to the dictionary in whatever order we see them, we'll sort later. Dictionary value should be
-                # a list of tuples (priority, function)
-                hooks[func._implements_hook['hook_name']].append((func._implements_hook['priority'], func))
-
-    # sort by priority
-    for k in hooks.keys():
-        hooks[k] = sorted(hooks[k], key=lambda priority: priority[0])
-    # get rid of the priority - we don't need it anymore
-    for k in hooks.keys():
-        hooks[k] = [func_tuple[1] for func_tuple in hooks[k]]
-
-    return hooks
 
 
 def _generate_default_config(filename=None):

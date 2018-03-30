@@ -11,11 +11,15 @@
 #     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #     See the License for the specific language governing permissions and
 #     limitations under the License.
+from collections import defaultdict
+import inspect
 import json
 import logging.config
 import os
 
-__version__ = '0.7.11'
+import import_string
+
+__version__ = '0.7.12'
 
 
 def init_config():
@@ -67,6 +71,39 @@ def init_logging():
         logging.getLogger(logger).setLevel(logging.ERROR)
 
     return logging.getLogger(__name__)
+
+
+def _get_hooks(hooks_list):
+    """
+    Output should be a dictionary with keys as the names of hooks and values as a list of functions (in order) to call
+
+    Args:
+        hooks_list: A list of paths to load hooks from
+
+    Returns:
+        dict: Keys are hooks by name (AFTER_SCHEDULE_REPO) and values are a list of functions to execute
+    """
+    hooks = defaultdict(list)
+    for hook in hooks_list:
+        module = import_string(hook)
+        # get members retrieves all the functions from a given module
+        all_funcs = inspect.getmembers(module, inspect.isfunction)
+        # first argument is the function name (which we don't need)
+        for (_, func) in all_funcs:
+            # we only look at functions that have been decorated with _implements_hook
+            if hasattr(func, "_implements_hook"):
+                # append to the dictionary in whatever order we see them, we'll sort later. Dictionary value should be
+                # a list of tuples (priority, function)
+                hooks[func._implements_hook['hook_name']].append((func._implements_hook['priority'], func))
+
+    # sort by priority
+    for k in hooks.keys():
+        hooks[k] = sorted(hooks[k], key=lambda priority: priority[0])
+    # get rid of the priority - we don't need it anymore
+    for k in hooks.keys():
+        hooks[k] = [func_tuple[1] for func_tuple in hooks[k]]
+
+    return hooks
 
 
 CONFIG = init_config()
