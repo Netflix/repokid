@@ -922,15 +922,15 @@ def repo_stats(output_file, dynamo_table, account_number=None):
     """
     roleIDs = (role_ids_for_account(dynamo_table, account_number) if account_number else
                role_ids_for_all_accounts(dynamo_table))
-    headers = ['RoleId', 'Role Name', 'Account', 'Date', 'Source', 'Permissions Count', 'Repoable Permissions Count',
-               'Disqualified By']
+    headers = ['RoleId', 'Role Name', 'Account', 'Active', 'Date', 'Source', 'Permissions Count',
+               'Repoable Permissions Count', 'Disqualified By']
     rows = []
 
     for roleID in roleIDs:
-        role_data = get_role_data(dynamo_table, roleID, fields=['RoleId', 'RoleName', 'Account', 'Stats'])
+        role_data = get_role_data(dynamo_table, roleID, fields=['RoleId', 'RoleName', 'Account', 'Stats', 'Active'])
         for stats_entry in role_data.get('Stats', []):
-            rows.append([role_data['RoleId'], role_data['RoleName'], role_data['Account'], stats_entry['Date'],
-                         stats_entry['Source'], stats_entry['PermissionsCount'],
+            rows.append([role_data['RoleId'], role_data['RoleName'], role_data['Account'], role_data['Active'],
+                         stats_entry['Date'], stats_entry['Source'], stats_entry['PermissionsCount'],
                          stats_entry.get('RepoablePermissionsCount'), stats_entry.get('DisqualifiedBy', [])])
 
     try:
