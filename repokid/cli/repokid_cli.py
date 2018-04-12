@@ -927,7 +927,7 @@ def repo_stats(output_file, dynamo_table, account_number=None):
     rows = []
 
     for roleID in roleIDs:
-        role_data = get_role_data(dynamo_table, roleID, fields=['RoleId', 'RoleName', 'Account', 'Stats', 'Active'])
+        role_data = get_role_data(dynamo_table, roleID, fields=['RoleId', 'RoleName', 'Account', 'Active', 'Stats'])
         for stats_entry in role_data.get('Stats', []):
             rows.append([role_data['RoleId'], role_data['RoleName'], role_data['Account'], role_data['Active'],
                          stats_entry['Date'], stats_entry['Source'], stats_entry['PermissionsCount'],
