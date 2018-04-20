@@ -592,7 +592,7 @@ def schedule_repo(account_number, dynamo_table, config, hooks):
 
     scheduled_time = int(time.time()) + (86400 * config.get('repo_schedule_period_days', 7))
     for role in roles:
-        if role.repoable_permissions > 0:
+        if role.repoable_permissions > 0 and not role.repo_scheduled:
             role.repo_scheduled = scheduled_time
             set_role_data(dynamo_table, role.role_id, {'RepoScheduled': scheduled_time})
             scheduled_roles.append(role)
