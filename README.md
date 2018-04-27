@@ -46,7 +46,7 @@ Repokid needs an IAM Role in each account that will be queried.  Additionally, R
 RepokidInstanceProfile:
 - Only create one.
 - Needs the ability to call `sts:AssumeRole` into all of the RepokidRoles.
-- DyamoDB permissions for the `repokid_roles` table and all indexes (specified in `assume_role` subsection of `dynamo_db` in config)
+- DyamoDB permissions for the `repokid_roles` table and all indexes (specified in `assume_role` subsection of `dynamo_db` in config) and the ability to run `dynamodb:ListTables`
 
 RepokidRole:
 - Must exist in every account to be managed by repokid.
