@@ -49,7 +49,6 @@ def dynamo_get_or_create_table(**dynamo_config):
     Returns:
         dynamo_table object
     """
-    table = None
     if 'localhost' in dynamo_config['endpoint']:
         resource = boto3.resource('dynamodb',
                                   region_name='us-east-1',
@@ -63,6 +62,11 @@ def dynamo_get_or_create_table(**dynamo_config):
             session_name=dynamo_config['session_name'],
             region=dynamo_config['region'])
 
+    for table in resource.tables.all():
+        if table.name == 'repokid_roles':
+            return table
+
+    table = None
     try:
         table = resource.create_table(
             TableName='repokid_roles',
@@ -121,10 +125,7 @@ def dynamo_get_or_create_table(**dynamo_config):
                 }])
 
     except BotoClientError as e:
-        if "ResourceInUseException" in e.message:
-            table = resource.Table('repokid_roles')
-        else:
-            LOGGER.error(e)
+        LOGGER.error(e)
     return table
 
 
