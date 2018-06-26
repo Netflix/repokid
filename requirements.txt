@@ -6,7 +6,7 @@
 #
 boto3==1.5.25
 boto==2.48.0              # via cloudaux
-botocore==1.10.45          # via boto3, cloudaux, s3transfer
+botocore==1.10.46          # via boto3, cloudaux, s3transfer
 certifi==2018.1.18        # via requests
 chardet==3.0.4            # via requests
 cloudaux==1.4.6
