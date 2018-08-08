@@ -4,7 +4,7 @@
 #
 #    pip-compile --output-file requirements.txt requirements.in
 #
-boto3==1.7.72
+boto3==1.7.73
 boto==2.48.0              # via cloudaux
 botocore==1.8.39          # via boto3, cloudaux, s3transfer
 certifi==2018.1.18        # via requests
