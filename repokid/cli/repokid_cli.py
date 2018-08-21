@@ -721,8 +721,11 @@ def repo_role(account_number, role_name, dynamo_table, config, hooks, commit=Fal
     policies_length = len(json.dumps(repoed_policies))
 
     if policies_length > MAX_AWS_POLICY_SIZE:
-        LOGGER.error("Policies would exceed the AWS size limit after repo for role: {} in account {}.  "
-                     "Please manually minify.".format(role_name, account_number))
+        error = ("Policies would exceed the AWS size limit after repo for role: {} in account {}.  "
+                 "Please manually minify.".format(role_name, account_number))
+        LOGGER.error(error)
+        errors.append(error)
+        return
 
     if not commit:
         for name in deleted_policy_names:
@@ -736,7 +739,6 @@ def repo_role(account_number, role_name, dynamo_table, config, hooks, commit=Fal
                 json.dumps(repoed_policies, indent=2, sort_keys=True),
                 account_number))
         return
-        
 
     conn = config['connection_iam']
     conn['account_number'] = account_number

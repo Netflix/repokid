@@ -11,4 +11,4 @@ dist
 *.egg-info/
 .newt.yml
 tox.ini
-
+test-reports/*
