@@ -26,7 +26,7 @@ marshmallow==2.15.0
 pip-tools==1.11.0
 pkginfo==1.4.2            # via twine
 policyuniverse==1.1.0.1
-python-dateutil==2.6.1    # via botocore
+python-dateutil==2.7.3    # via botocore
 requests-toolbelt==0.8.0  # via twine
 requests==2.18.4
 s3transfer==0.1.12        # via boto3
