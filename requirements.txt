@@ -28,7 +28,7 @@ pkginfo==1.4.2            # via twine
 policyuniverse==1.1.0.1
 python-dateutil==2.6.1    # via botocore
 requests-toolbelt==0.8.0  # via twine
-requests==2.18.4
+requests==2.19.1
 s3transfer==0.1.12        # via boto3
 six==1.11.0               # via import-string, pip-tools, python-dateutil
 tabulate==0.8.2
