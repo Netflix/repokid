@@ -9,3 +9,6 @@ dist
 .DS_Store
 .DS_Store?
 *.egg-info/
+.newt.yml
+tox.ini
+test-reports/*
