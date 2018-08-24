@@ -1,0 +1,29 @@
+name: repokid
+description: AWS Least Privilege for Distributed, High-Velocity Deployment.
+repository: git@github.com:lyft/repokid.git
+image_type: library
+languages:
+  - python
+builder:
+  name: s2i
+  params:
+    builder: lyft/s2ipythonlibrary:c421d769bbd8479005c5a72d3c46b1eac64cc89d
+tests:
+  - name: unit2
+    type: jailed
+    command: python2 -3 -m pytest repokid/tests
+  - name: unit3
+    type: jailed
+    command: python3 -m pytest repokid/tests
+deploy:
+  - name: staging
+    legacy: true
+    role: lyftpypi-staging-iad-deploy
+    orca:
+      - region: iad
+  - name: production
+    legacy: true
+    role: lyftpypi-production-iad-deploy
+    automatic: true
+    orca:
+      - region: iad
