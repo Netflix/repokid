@@ -27,7 +27,7 @@ deploy:
     automatic: true
     orca:
       - region: iad
-slack:'#security'
+slack: '#security'
 notification_overrides:
   deploy:
     slack: '#security-deploys'
