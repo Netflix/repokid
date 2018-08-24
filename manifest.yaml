@@ -8,22 +8,14 @@ builder:
   name: s2i
   params:
     builder: lyft/s2ipythonlibrary:c421d769bbd8479005c5a72d3c46b1eac64cc89d
- tests:
-  - name: unit
+tests:
+  - name: unit2
     type: jailed
-    command: make test
-  - name: lint
+    python2 -3 -m pytest repokid/tests
+  - name: unit3
     type: jailed
-    command: flake8 .
- python:
-  mypy:
-    python_versions:
-      - '3.6'
- py3k:
-  linters:
-    - modernize
-    - pylint
- deploy:
+    python3 -m pytest repokid/tests
+deploy:
   - name: staging
     legacy: true
     role: lyftpypi-staging-iad-deploy
