@@ -11,10 +11,10 @@ builder:
 tests:
   - name: unit2
     type: jailed
-    python2 -3 -m pytest repokid/tests
+    command: python2 -3 -m pytest repokid/tests
   - name: unit3
     type: jailed
-    python3 -m pytest repokid/tests
+    command: python3 -m pytest repokid/tests
 deploy:
   - name: staging
     legacy: true
