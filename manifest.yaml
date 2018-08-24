@@ -27,3 +27,10 @@ deploy:
     automatic: true
     orca:
       - region: iad
+slack:'#security'
+notification_overrides:
+  deploy:
+    slack: '#security-deploys'
+  pr_merge:
+    slack: '#security-deploys'
+team_email: security-engineering@lyft.com
