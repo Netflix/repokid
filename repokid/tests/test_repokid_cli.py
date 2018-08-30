@@ -144,24 +144,23 @@ class TestRepokidCLI(object):
     @patch('repokid.utils.roledata._calculate_repo_scores')
     @patch('repokid.cli.repokid_cli.set_role_data')
     @patch('repokid.cli.repokid_cli._get_aardvark_data')
-    @patch('repokid.cli.repokid_cli.get_role_inline_policies')
-    @patch('repokid.cli.repokid_cli.list_roles')
-    def test_repokid_update_role_cache(self, mock_list_roles, mock_get_role_inline_policies,
-                                       mock_get_aardvark_data, mock_set_role_data, mock_calculate_repo_scores,
-                                       mock_update_role_data, mock_find_and_mark_inactive, mock_update_stats):
+    @patch('repokid.cli.repokid_cli.get_account_authorization_details')
+    def test_repokid_update_role_cache(self, mock_get_account_authorization_details, mock_get_aardvark_data,
+                                       mock_set_role_data, mock_calculate_repo_scores, mock_update_role_data,
+                                       mock_find_and_mark_inactive, mock_update_stats):
 
         hooks = {}
-        # only active roles
-        mock_list_roles.return_value = ROLES[:3]
+        
+        role_data = ROLES[:3]
+        role_data[0]['RolePolicyList'] = [{'PolicyName': 'all_services_used', 'PolicyDocument': ROLE_POLICIES['all_services_used'] }]
+        role_data[1]['RolePolicyList'] = [{'PolicyName': 'unused_ec2', 'PolicyDocument': ROLE_POLICIES['unused_ec2'] }]
+        role_data[2]['RolePolicyList'] = [{'PolicyName': 'all_services_used', 'PolicyDocument': ROLE_POLICIES['all_services_used'] }]
 
-        mock_get_role_inline_policies.side_effect = [ROLE_POLICIES['all_services_used'],
-                                                     ROLE_POLICIES['unused_ec2'],
-                                                     ROLE_POLICIES['all_services_used']]
-
+        mock_get_account_authorization_details.side_effect = [role_data]
         mock_get_aardvark_data.return_value = AARDVARK_DATA
 
         def update_role_data(dynamo_table, account_number, role, current_policies):
-            role.policies = role.policies = [{'Policy': current_policies}]
+            role.policies = [{'Policy': current_policies}]
 
         mock_update_role_data.side_effect = update_role_data
 
@@ -186,9 +185,9 @@ class TestRepokidCLI(object):
 
         # validate update data called for each role
         assert mock_update_role_data.mock_calls == [
-            call(dynamo_table, account_number, Role(ROLES[0]), ROLE_POLICIES['all_services_used']),
-            call(dynamo_table, account_number, Role(ROLES[1]), ROLE_POLICIES['unused_ec2']),
-            call(dynamo_table, account_number, Role(ROLES[2]), ROLE_POLICIES['all_services_used'])]
+            call(dynamo_table, account_number, Role(ROLES[0]), {'all_services_used': ROLE_POLICIES['all_services_used']}),
+            call(dynamo_table, account_number, Role(ROLES[1]), {'unused_ec2': ROLE_POLICIES['unused_ec2']}),
+            call(dynamo_table, account_number, Role(ROLES[2]), {'all_services_used': ROLE_POLICIES['all_services_used']})]
 
         # all roles active
         assert mock_find_and_mark_inactive.mock_calls == [call(dynamo_table, account_number,

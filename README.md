@@ -62,6 +62,7 @@ RepokidRole:
         "iam:DeleteInstanceProfile",
         "iam:DeleteRole",
         "iam:DeleteRolePolicy",
+        "iam:GetAccountAuthorizationDetails",
         "iam:GetInstanceProfile",
         "iam:GetRole",
         "iam:GetRolePolicy",
