@@ -45,33 +45,51 @@ AARDVARK_DATA = {
 
 ROLE_POLICIES = {
     'all_services_used': {
-            'iam_perms': {
-                'Version': '2012-10-17',
-                'Statement': [
-                    {'Action': ['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy'],
-                     'Resource': ['*'],
-                     'Effect': 'Allow'}]},
+        'iam_perms': {
+            'Version': '2012-10-17',
+            'Statement': [
+                {
+                    'Action': ['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy'],
+                    'Resource': ['*'],
+                    'Effect': 'Allow'
+                }
+            ]
+        },
 
-            's3_perms': {
-                'Version': '2012-10-17',
-                'Statement': [
-                    {'Action': ['s3:CreateBucket', 's3:DeleteBucket'],
-                     'Resource': ['*'],
-                     'Effect': 'Allow'}]}},
+        's3_perms': {
+            'Version': '2012-10-17',
+            'Statement': [
+                {
+                    'Action': ['s3:CreateBucket', 's3:DeleteBucket'],
+                    'Resource': ['*'],
+                    'Effect': 'Allow'
+                }
+            ]
+        }
+    },
     'unused_ec2': {
-            'iam_perms': {
-                'Version': '2012-10-17',
-                'Statement': [
-                    {'Action': ['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy'],
-                     'Resource': ['*'],
-                     'Effect': 'Allow'}]},
+        'iam_perms': {
+            'Version': '2012-10-17',
+            'Statement': [
+                {
+                    'Action': ['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy'],
+                    'Resource': ['*'],
+                    'Effect': 'Allow'
+                }
+            ]
+        },
 
-            'ec2_perms': {
-                'Version': '2012-10-17',
-                'Statement': [
-                    {'Action': ['ec2:AllocateHosts', 'ec2:AssociateAddress'],
-                     'Resource': ['*'],
-                     'Effect': 'Allow'}]}}
+        'ec2_perms': {
+            'Version': '2012-10-17',
+            'Statement': [
+                {
+                    'Action': ['ec2:AllocateHosts', 'ec2:AssociateAddress'],
+                    'Resource': ['*'],
+                    'Effect': 'Allow'
+                }
+            ]
+        }
+    }
 }
 
 ROLES = [
@@ -150,11 +168,14 @@ class TestRepokidCLI(object):
                                        mock_find_and_mark_inactive, mock_update_stats):
 
         hooks = {}
-        
+
         role_data = ROLES[:3]
-        role_data[0]['RolePolicyList'] = [{'PolicyName': 'all_services_used', 'PolicyDocument': ROLE_POLICIES['all_services_used'] }]
-        role_data[1]['RolePolicyList'] = [{'PolicyName': 'unused_ec2', 'PolicyDocument': ROLE_POLICIES['unused_ec2'] }]
-        role_data[2]['RolePolicyList'] = [{'PolicyName': 'all_services_used', 'PolicyDocument': ROLE_POLICIES['all_services_used'] }]
+        role_data[0]['RolePolicyList'] = [{'PolicyName': 'all_services_used',
+                                           'PolicyDocument': ROLE_POLICIES['all_services_used']}]
+        role_data[1]['RolePolicyList'] = [{'PolicyName': 'unused_ec2',
+                                           'PolicyDocument': ROLE_POLICIES['unused_ec2']}]
+        role_data[2]['RolePolicyList'] = [{'PolicyName': 'all_services_used',
+                                           'PolicyDocument': ROLE_POLICIES['all_services_used']}]
 
         mock_get_account_authorization_details.side_effect = [role_data]
         mock_get_aardvark_data.return_value = AARDVARK_DATA
@@ -185,9 +206,11 @@ class TestRepokidCLI(object):
 
         # validate update data called for each role
         assert mock_update_role_data.mock_calls == [
-            call(dynamo_table, account_number, Role(ROLES[0]), {'all_services_used': ROLE_POLICIES['all_services_used']}),
+            call(dynamo_table, account_number, Role(ROLES[0]), {'all_services_used':
+                                                                ROLE_POLICIES['all_services_used']}),
             call(dynamo_table, account_number, Role(ROLES[1]), {'unused_ec2': ROLE_POLICIES['unused_ec2']}),
-            call(dynamo_table, account_number, Role(ROLES[2]), {'all_services_used': ROLE_POLICIES['all_services_used']})]
+            call(dynamo_table, account_number, Role(ROLES[2]), {'all_services_used':
+                                                                ROLE_POLICIES['all_services_used']})]
 
         # all roles active
         assert mock_find_and_mark_inactive.mock_calls == [call(dynamo_table, account_number,

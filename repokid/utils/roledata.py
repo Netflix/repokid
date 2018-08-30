@@ -114,8 +114,8 @@ def update_no_repo_permissions(dynamo_table, role, newly_added_permissions):
     Returns:
         None
     """
-    current_ignored_permissions = get_role_data(dynamo_table, role.role_id, fields=['NoRepoPermissions']).get(
-                                                'NoRepoPermissions', {})
+    current_ignored_permissions = get_role_data(
+        dynamo_table, role.role_id, fields=['NoRepoPermissions']).get('NoRepoPermissions', {})
     new_ignored_permissions = {}
 
     current_time = int(time.time())
@@ -261,7 +261,7 @@ def _calculate_repo_scores(roles, minimum_age, hooks):
             repoable_permissions = _get_repoable_permissions(role.account, role.role_name, permissions, role.aa_data,
                                                              role.no_repo_permissions, minimum_age, hooks)
             (repoable_permissions_set, repoable_services_set) = _convert_repoable_perms_to_perms_and_services(
-                    permissions, repoable_permissions)
+                permissions, repoable_permissions)
 
             role.repoable_permissions = len(repoable_permissions)
 

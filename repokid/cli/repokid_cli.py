@@ -367,7 +367,8 @@ def update_role_cache(account_number, dynamo_table, config, hooks):
     conn = config['connection_iam']
     conn['account_number'] = account_number
 
-    LOGGER.info('Getting current role data for account {} (this may take a while for large accounts)'.format(account_number))
+    LOGGER.info('Getting current role data for account {} (this may take a while for large accounts)'.format(
+        account_number))
     role_data = get_account_authorization_details(filter='Role', **conn)
     role_data_by_id = {item['RoleId']: item for item in role_data}
 
@@ -375,7 +376,7 @@ def update_role_cache(account_number, dynamo_table, config, hooks):
     for _, data in role_data_by_id.items():
         data['RolePolicyList'] = {item['PolicyName']: item['PolicyDocument'] for item in data['RolePolicyList']}
 
-    roles = Roles([Role(role_data) for role_data in role_data])
+    roles = Roles([Role(rd) for rd in role_data])
 
     active_roles = []
     LOGGER.info('Updating role data for account {}'.format(account_number))
@@ -890,7 +891,7 @@ def rollback_role(account_number, role_name, dynamo_table, config, hooks, select
             # remove the policy name if it's in the list
             try:
                 policies_to_remove.remove(policy_name)
-            except Exception:
+            except Exception:  # nosec
                 pass
 
     if policies_to_remove:

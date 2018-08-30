@@ -69,7 +69,6 @@ RepokidRole:
         "iam:ListInstanceProfiles",
         "iam:ListInstanceProfilesForRole",
         "iam:ListRolePolicies",
-        "iam:ListRoles",
         "iam:PutRolePolicy",
         "iam:UpdateRoleDescription"
       ],

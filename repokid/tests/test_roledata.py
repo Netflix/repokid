@@ -11,14 +11,13 @@
 #     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #     See the License for the specific language governing permissions and
 #     limitations under the License.
-import datetime
 import time
 
-from dateutil.tz import tzlocal
 from mock import patch
 
 import repokid.utils.roledata
 from repokid.role import Role
+from repokid.tests.test_repokid_cli import ROLE_POLICIES, ROLES
 
 
 AARDVARK_DATA = {
@@ -40,68 +39,6 @@ AARDVARK_DATA = {
         {"lastAuthenticated": int(time.time()) * 1000,
          "serviceNamespace": "s3"}]
 }
-
-ROLE_POLICIES = {
-    'all_services_used': {
-            'iam_perms': {
-                'Version': '2012-10-17',
-                'Statement': [
-                    {'Action': ['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy'],
-                     'Resource': ['*'],
-                     'Effect': 'Allow'}]},
-
-            's3_perms': {
-                'Version': '2012-10-17',
-                'Statement': [
-                    {'Action': ['s3:CreateBucket', 's3:DeleteBucket'],
-                     'Resource': ['*'],
-                     'Effect': 'Allow'}]}},
-    'unused_ec2': {
-            'iam_perms': {
-                'Version': '2012-10-17',
-                'Statement': [
-                    {'Action': ['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy'],
-                     'Resource': ['*'],
-                     'Effect': 'Allow'}]},
-
-            'ec2_perms': {
-                'Version': '2012-10-17',
-                'Statement': [
-                    {'Action': ['ec2:AllocateHosts', 'ec2:AssociateAddress'],
-                     'Resource': ['*'],
-                     'Effect': 'Allow'}]}}
-}
-
-ROLES = [
-    {
-        "Arn": "arn:aws:iam::123456789012:role/all_services_used",
-        "CreateDate": datetime.datetime(2017, 1, 31, 12, 0, 0, tzinfo=tzlocal()),
-        "RoleId": "AROAABCDEFGHIJKLMNOPA",
-        "RoleName": "all_services_used",
-        "Active": True
-    },
-    {
-        "Arn": "arn:aws:iam::123456789012:role/unused_ec2",
-        "CreateDate": datetime.datetime(2017, 1, 31, 12, 0, 0, tzinfo=tzlocal()),
-        "RoleId": "AROAABCDEFGHIJKLMNOPB",
-        "RoleName": "unused_ec2",
-        "Active": True,
-    },
-    {
-        "Arn": "arn:aws:iam::123456789012:role/young_role",
-        "CreateDate": datetime.datetime.now(tzlocal()) - datetime.timedelta(5),
-        "RoleId": "AROAABCDEFGHIJKLMNOPC",
-        "RoleName": "young_role",
-        "Active": True,
-    },
-    {
-        "Arn": "arn:aws:iam::123456789012:role/inactive_role",
-        "CreateDate": datetime.datetime.now(tzlocal()) - datetime.timedelta(5),
-        "RoleId": "AROAABCDEFGHIJKLMNOPD",
-        "RoleName": "inactive_role",
-        "Active": False,
-    }
-]
 
 
 class TestRoledata(object):
@@ -141,7 +78,7 @@ class TestRoledata(object):
                    {'serviceNamespace': 'service_2', 'lastAuthenticated': (time.time() - 90000) * 1000},
                    {'serviceNamespace': 'service_3', 'lastAuthenticated': time.time() * 1000}]
 
-        no_repo_permissions = {'service_4:action_1': time.time()-1, 'service_4:action_2': time.time()+1000}
+        no_repo_permissions = {'service_4:action_1': time.time() - 1, 'service_4:action_2': time.time() + 1000}
 
         repoable_decision = repokid.utils.roledata.RepoablePermissionDecision()
         repoable_decision.repoable = True

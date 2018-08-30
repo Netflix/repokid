@@ -52,5 +52,5 @@ setup(
         'Topic :: Security',
         'Topic :: System',
         'Topic :: System :: Systems Administration'
-        ]
+    ]
 )
