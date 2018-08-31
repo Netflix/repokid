@@ -70,11 +70,14 @@ def dynamo_get_or_create_table(**dynamo_config):
     try:
         table = resource.create_table(
             TableName='repokid_roles',
-            KeySchema=[{
-                'AttributeName': 'RoleId',
-                'KeyType': 'HASH'  # Partition key
-            }],
-            AttributeDefinitions=[{
+            KeySchema=[
+                {
+                    'AttributeName': 'RoleId',
+                    'KeyType': 'HASH'  # Partition key
+                }
+            ],
+            AttributeDefinitions=[
+                {
                     'AttributeName': 'RoleId',
                     'AttributeType': 'S'
                 },
@@ -85,7 +88,8 @@ def dynamo_get_or_create_table(**dynamo_config):
                 {
                     'AttributeName': 'Account',
                     'AttributeType': 'S'
-                }],
+                }
+            ],
             ProvisionedThroughput={
                 'ReadCapacityUnits': 50,
                 'WriteCapacityUnits': 50
@@ -115,7 +119,8 @@ def dynamo_get_or_create_table(**dynamo_config):
                             'KeyType': 'HASH'
                         }
                     ],
-                    'Projection': {
+                    'Projection':
+                    {
                         'ProjectionType': 'KEYS_ONLY',
                     },
                     'ProvisionedThroughput': {

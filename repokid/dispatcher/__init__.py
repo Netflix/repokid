@@ -39,13 +39,15 @@ def list_repoable_services(dynamo_table, message):
             role_data['RepoableServices'])
 
         repoable_services = role_data['RepoableServices']
-        return ResponderReturn(successful=True,
-                               return_message=('Role {} in account {} has:\n    Repoable Services: \n{}'
-                                               '\n\n    Repoable Permissions: \n{}'.format(
-                                                message.role_name,
-                                                message.account,
-                                                '\n'.join([service for service in repoable_services]),
-                                                '\n'.join([perm for perm in repoable_permissions]))))
+        return ResponderReturn(
+            successful=True,
+            return_message=(
+                'Role {} in account {} has:\n    Repoable Services: \n{}\n\n    Repoable Permissions: \n{}'.format(
+                    message.role_name, message.account, '\n'.join([service for service in repoable_services]),
+                    '\n'.join([perm for perm in repoable_permissions])
+                )
+            )
+        )
 
 
 @implements_command('list_role_rollbacks')
@@ -101,9 +103,11 @@ def opt_out(dynamo_table, message):
         expire_epoch = int((expire_dt - datetime.datetime(1970, 1, 1)).total_seconds())
         new_opt_out = {'owner': message.requestor, 'reason': message.reason, 'expire': expire_epoch}
         dynamo.set_role_data(dynamo_table, role_id, {'OptOut': new_opt_out})
-        return ResponderReturn(successful=True,
-                               return_message='Role {} in account {} opted-out until {}'.format(
-                                    message.role_name, message.account, expire_dt.strftime('%m/%d/%y')))
+        return ResponderReturn(
+            successful=True,
+            return_message='Role {} in account {} opted-out until {}'.format(
+                message.role_name, message.account, expire_dt.strftime('%m/%d/%y'))
+        )
 
 
 @implements_command('remove_opt_out')
@@ -138,6 +142,8 @@ def rollback_role(dynamo_table, message):
     if errors:
         return ResponderReturn(successful=False, return_message='Errors during rollback: {}'.format(errors))
     else:
-        return ResponderReturn(successful=True,
-                               return_message='Successfully rolled back role {} in account {}'.format(
-                                                message.role_name, message.account))
+        return ResponderReturn(
+            successful=True,
+            return_message='Successfully rolled back role {} in account {}'.format(
+                message.role_name, message.account)
+        )

@@ -4,13 +4,13 @@
 #
 #    pip-compile --output-file requirements.txt requirements.in
 #
-boto3==1.7.83
+boto3==1.8.4
 boto==2.49.0              # via cloudaux
-botocore==1.10.83         # via boto3, cloudaux, s3transfer
-certifi==2018.8.13        # via requests
+botocore==1.11.4          # via boto3, cloudaux, s3transfer
+certifi==2018.8.24        # via requests
 chardet==3.0.4            # via requests
 click==6.7                # via pip-tools
-cloudaux==1.5.0
+cloudaux==1.5.1
 defusedxml==0.5.0         # via cloudaux
 docopt==0.6.2
 docutils==0.14            # via botocore
@@ -21,7 +21,7 @@ idna==2.7                 # via requests
 import-string==0.1.0
 inflection==0.3.1         # via cloudaux
 jmespath==0.9.3           # via boto3, botocore
-joblib==0.12.2            # via cloudaux
+joblib==0.12.3            # via cloudaux
 marshmallow==2.15.4
 pip-tools==2.0.2
 pkginfo==1.4.2            # via twine
@@ -35,4 +35,4 @@ tabulate==0.8.2
 tabview==1.4.3
 tqdm==4.25.0
 twine==1.11.0
-urllib3==1.23             # via requests
+urllib3==1.23             # via botocore, requests
