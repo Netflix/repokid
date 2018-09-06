@@ -317,6 +317,9 @@ def _empty_string_to_dynamo_replace(obj):
     elif isinstance(obj, list):
         return [_empty_string_to_dynamo_replace(elem) for elem in obj]
     else:
-        if str(obj) == '':
+        try:
+            if str(obj) == '':
+                obj = DYNAMO_EMPTY_STRING
+        except UnicodeEncodeError:
             obj = DYNAMO_EMPTY_STRING
         return obj
