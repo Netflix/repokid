@@ -63,7 +63,13 @@ import repokid.hooks
 from repokid.utils.dynamo import (dynamo_get_or_create_table, find_role_in_cache, get_role_data, role_ids_for_account,
                                   role_ids_for_all_accounts, set_role_data)
 import repokid.utils.roledata as roledata
+from lyft.api_client import EnvoyClient
+from lyft_requests.response import BadResponse
 
+aardvark_client = EnvoyClient(service='aardvark',
+                              auth_type=EnvoyClient.AUTH_TYPE_BASIC,
+                              user='laser',
+                              key=settings.AARDVARK_API_KEY)
 
 # http://docs.aws.amazon.com/IAM/latest/UserGuide/reference_iam-limits.html
 MAX_AWS_POLICY_SIZE = 10240
@@ -217,8 +223,8 @@ def _get_aardvark_data(aardvark_api_location, account_number=None, arn=None):
     while True:
         params = {'count': PAGE_SIZE, 'page': page_num}
         try:
-            r_aardvark = requests.post(aardvark_api_location, params=params, json=payload)
-        except requests.exceptions.RequestException as e:
+            r_aardvark = aardvark_client.post('/api/v1/advisor', params=params, data=payload)
+        except BadResponse as e:
             LOGGER.error('Unable to get Aardvark data: {}'.format(e))
             sys.exit(1)
         else:
