@@ -6,7 +6,7 @@
 #
 boto3==1.8.4
 boto==2.49.0              # via cloudaux
-botocore==1.12.7          # via boto3, cloudaux, s3transfer
+botocore==1.12.8          # via boto3, cloudaux, s3transfer
 certifi==2018.8.24        # via requests
 chardet==3.0.4            # via requests
 click==6.7                # via pip-tools
