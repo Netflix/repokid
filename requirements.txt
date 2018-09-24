@@ -34,5 +34,5 @@ six==1.11.0               # via cloudaux, import-string, pip-tools, python-dateu
 tabulate==0.8.2
 tabview==1.4.3
 tqdm==4.25.0
-twine==1.11.0
+twine==1.12.0
 urllib3==1.23             # via botocore, requests
