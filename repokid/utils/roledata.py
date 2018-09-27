@@ -26,7 +26,7 @@ from repokid import LOGGER as LOGGER
 import repokid.hooks
 from repokid.role import Role
 
-IAM_ACCESS_ADVISOR_UNSUPPORTED_SERVICES = frozenset(['lightsail', 'organizations'])
+IAM_ACCESS_ADVISOR_UNSUPPORTED_SERVICES = frozenset(['lightsail', 'organizations', 'tag'])
 IAM_ACCESS_ADVISOR_UNSUPPORTED_ACTIONS = frozenset(['iam:passrole'])
 
 
