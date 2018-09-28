@@ -45,8 +45,8 @@ import sys
 import time
 
 import botocore
-from cloudaux import CloudAux
-from cloudaux.aws.iam import get_account_authorization_details, get_role_inline_policies
+from cloudaux.aws.iam import (delete_role_policy, get_account_authorization_details, get_role_inline_policies,
+                              put_role_policy)
 from cloudaux.aws.sts import sts_conn
 from docopt import docopt
 import import_string
@@ -751,12 +751,11 @@ def repo_role(account_number, role_name, dynamo_table, config, hooks, commit=Fal
 
     conn = config['connection_iam']
     conn['account_number'] = account_number
-    ca = CloudAux(**conn)
 
     for name in deleted_policy_names:
         LOGGER.info('Deleting policy with name {} from {} in account {}'.format(name, role.role_name, account_number))
         try:
-            ca.call('iam.client.delete_role_policy', RoleName=role.role_name, PolicyName=name)
+            delete_role_policy(RoleName=role.role_name, PolicyName=name, **conn)
         except botocore.exceptions.ClientError as e:
             error = 'Error deleting policy: {} from role: {} in account {}.  Exception: {}'.format(
                 name,
@@ -774,8 +773,9 @@ def repo_role(account_number, role_name, dynamo_table, config, hooks, commit=Fal
 
         for policy_name, policy in repoed_policies.items():
             try:
-                ca.call('iam.client.put_role_policy', RoleName=role.role_name, PolicyName=policy_name,
-                        PolicyDocument=json.dumps(policy, indent=2, sort_keys=True))
+                put_role_policy(RoleName=role.role_name, PolicyName=policy_name,
+                                PolicyDocument=json.dumps(policy, indent=2, sort_keys=True),
+                                **conn)
 
             except botocore.exceptions.ClientError as e:
                 error = 'Exception calling PutRolePolicy on {role}/{policy} in account {account}\n{e}\n'.format(
@@ -837,10 +837,8 @@ def rollback_role(account_number, role_name, dynamo_table, config, hooks, select
         print tabulate(rows, headers=headers)
         return
 
-    from cloudaux import CloudAux
     conn = config['connection_iam']
     conn['account_number'] = account_number
-    ca = CloudAux(**conn)
 
     current_policies = get_role_inline_policies(role.as_dict(), **conn)
 
@@ -875,8 +873,9 @@ def rollback_role(account_number, role_name, dynamo_table, config, hooks, select
                 role.role_name,
                 account_number))
 
-            ca.call('iam.client.put_role_policy', RoleName=role.role_name, PolicyName=policy_name,
-                    PolicyDocument=json.dumps(policy, indent=2, sort_keys=True))
+            put_role_policy(RoleName=role.role_name, PolicyName=policy_name,
+                            PolicyDocument=json.dumps(policy, indent=2, sort_keys=True),
+                            **conn)
 
         except botocore.exceptions.ClientError as e:
             message = "Unable to push policy {}.  Error: {} (role: {} account {})".format(
@@ -897,7 +896,7 @@ def rollback_role(account_number, role_name, dynamo_table, config, hooks, select
     if policies_to_remove:
         for policy_name in policies_to_remove:
             try:
-                ca.call('iam.client.delete_role_policy', RoleName=role.role_name, PolicyName=policy_name)
+                delete_role_policy(RoleName=role.role_name, PolicyName=policy_name, **conn)
 
             except botocore.excpetions.ClientError as e:
                 message = "Unable to delete policy {}.  Error: {} (role: {} account {})".format(
