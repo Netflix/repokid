@@ -166,3 +166,11 @@ class TestRoledata(object):
         assert repokid.utils.roledata._convert_repoed_service_to_sorted_perms_and_services(repoed_services) == (
             expected_permissions, expected_services
         )
+
+    def test_filter_scheduled_repoable_perms(self):
+        assert repokid.utils.roledata._filter_scheduled_repoable_perms(
+            ['a:b', 'a:c', 'b:a'], ['a:c', 'b']) == ['a:c', 'b:a']
+        assert repokid.utils.roledata._filter_scheduled_repoable_perms(
+            ['a:b', 'a:c', 'b:a'], ['a', 'b']) == ['a:b', 'a:c', 'b:a']
+        assert repokid.utils.roledata._filter_scheduled_repoable_perms(
+            ['a:b', 'a:c', 'b:a'], ['a:b', 'a:c']) == ['a:b', 'a:c']

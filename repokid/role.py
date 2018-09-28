@@ -25,11 +25,12 @@ dict_to_attr = {'AAData': {'attribute': 'aa_data', 'default': dict()},
                 'Policies': {'attribute': 'policies', 'default': list()},
                 'Refreshed': {'attribute': 'refreshed', 'default': str()},
                 'RepoablePermissions': {'attribute': 'repoable_permissions', 'default': int()},
-                'RepoableServices': {'attribute': 'repoable_services', 'default': int()},
+                'RepoableServices': {'attribute': 'repoable_services', 'default': list()},
                 'Repoed': {'attribute': 'repoed', 'default': str()},
                 'RepoScheduled': {'attribute': 'repo_scheduled', 'default': int()},
                 'RoleId': {'attribute': 'role_id', 'default': None},
                 'RoleName': {'attribute': 'role_name', 'default': None},
+                'ScheduledPerms': {'attribute': 'scheduled_perms', 'default': dict()},
                 'Stats': {'attribute': 'stats', 'default': list()},
                 'TotalPermissions': {'attribute': 'total_permissions', 'default': int()}}
 

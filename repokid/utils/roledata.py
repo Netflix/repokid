@@ -334,6 +334,21 @@ def _convert_repoed_service_to_sorted_perms_and_services(repoed_services):
     return (sorted(repoable_permissions), sorted(repoable_services))
 
 
+def _filter_scheduled_repoable_perms(repoable_permissions, scheduled_perms):
+    """
+    Take a list of current repoable permissions and filter out any that weren't in the list of scheduled permissions
+
+    Args:
+        repoable_permissions (list): List of expanded permissions that are currently believed repoable
+        scheduled_permissions (list): List of scheduled permissions and services (stored in Dynamo at schedule time)
+    Returns:
+        list: New (filtered) repoable permissions
+    """
+    (scheduled_permissions, scheduled_services) = _convert_repoed_service_to_sorted_perms_and_services(scheduled_perms)
+    return([perm for perm in repoable_permissions
+           if(perm in scheduled_permissions or perm.split(':')[0] in scheduled_services)])
+
+
 def _get_repoable_permissions(account_number, role_name, permissions, aa_data, no_repo_permissions, minimum_age,
                               hooks):
     """
