@@ -10,7 +10,7 @@ botocore==1.10.83         # via boto3, cloudaux, s3transfer
 certifi==2018.8.13        # via requests
 chardet==3.0.4            # via requests
 click==6.7                # via pip-tools
-cloudaux==1.5.2
+cloudaux==1.5.3
 defusedxml==0.5.0         # via cloudaux
 docopt==0.6.2
 docutils==0.14            # via botocore
