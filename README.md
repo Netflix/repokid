@@ -83,6 +83,8 @@ RepokidRole:
 
 So if you are monitoring `n` accounts, you will always need `n+1` roles. (`n` RepokidRoles and `1` RepokidInstanceProfile).
 
+Note: For locally running repokid, you don't have to take care of the RepokidInstanceProfile. Instead, just attach a policy which contains "sts:AssumeRole" to the user you are using on the AWS CLI to assume Repokid Role. Also, the same user should be mentioned in the trust policy of RepokidRole for proper assignment of the privileges.
+
 #### Editing config.json
 
 Running `repokid config config.json` creates a file that you will need to edit.  Find and update these fields:
