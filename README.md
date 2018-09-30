@@ -71,6 +71,8 @@ RepokidRole:
         "iam:ListRolePolicies",
         "iam:PutRolePolicy",
         "iam:UpdateRoleDescription"
+        "athena:StartQueryExecution"
+        "athena:GetQueryResults"
       ],
       "Effect": "Allow",
       "Resource": "*"
