@@ -23,7 +23,7 @@ Usage:
     repokid rollback_role <account_number> <role_name> [--selection=NUMBER] [-c]
     repokid repo_all_roles <account_number> [-c]
     repokid show_scheduled_roles <account_number>
-    repokid cancel_scheduled_repo <account_number> <role_name>
+    repokid cancel_scheduled_repo <account_number> [--role=ROLE_NAME] [--all]
     repokid repo_scheduled_roles <account_number> [-c]
     repokid repo_stats <output_filename> [--account=ACCOUNT_NUMBER]
 
@@ -607,7 +607,10 @@ def schedule_repo(account_number, dynamo_table, config, hooks):
     for role in roles:
         if role.repoable_permissions > 0 and not role.repo_scheduled:
             role.repo_scheduled = scheduled_time
-            set_role_data(dynamo_table, role.role_id, {'RepoScheduled': scheduled_time})
+            # freeze the scheduled perms to whatever is repoable right now
+            set_role_data(dynamo_table, role.role_id,
+                          {'RepoScheduled': scheduled_time, 'ScheduledPerms': role.repoable_services})
+
             scheduled_roles.append(role)
 
     LOGGER.info("Scheduled repo for {} days from now for account {} and these roles:\n\t{}".format(
@@ -641,10 +644,27 @@ def show_scheduled_roles(account_number, dynamo_table):
     print tabulate(rows, headers=header)
 
 
-def cancel_scheduled_repo(account_number, role_name, dynamo_table):
+def cancel_scheduled_repo(account_number, dynamo_table, role_name=None, is_all=None):
     """
     Cancel scheduled repo for a role in an account
     """
+    if not is_all and not role_name:
+        LOGGER.error('Either a specific role to cancel or all must be provided')
+        return
+
+    if is_all:
+        roles = Roles([Role(get_role_data(dynamo_table, roleID))
+                      for roleID in role_ids_for_account(dynamo_table, account_number)])
+
+        # filter to show only roles that are scheduled
+        roles = [role for role in roles if (role.repo_scheduled)]
+
+        for role in roles:
+            set_role_data(dynamo_table, role.role_id, {'RepoScheduled': 0, 'ScheduledPerms': []})
+
+        LOGGER.info('Canceled scheduled repo for roles: {}'.format(', '.join([role.role_name for role in roles])))
+        return
+
     role_id = find_role_in_cache(dynamo_table, account_number, role_name)
     if not role_id:
         LOGGER.warn('Could not find role with name {} in account {}'.format(role_name, account_number))
@@ -656,12 +676,12 @@ def cancel_scheduled_repo(account_number, role_name, dynamo_table):
         LOGGER.warn('Repo was not scheduled for role {} in account {}'.format(role.role_name, account_number))
         return
 
-    set_role_data(dynamo_table, role.role_id, {'RepoScheduled': 0})
+    set_role_data(dynamo_table, role.role_id, {'RepoScheduled': 0, 'ScheduledPerms': []})
     LOGGER.info('Successfully cancelled scheduled repo for role {} in account {}'.format(role.role_name,
                 role.account))
 
 
-def repo_role(account_number, role_name, dynamo_table, config, hooks, commit=False):
+def repo_role(account_number, role_name, dynamo_table, config, hooks, commit=False, scheduled=False):
     """
     Calculate what repoing can be done for a role and then actually do it if commit is set
       1) Check that a role exists, it isn't being disqualified by a filter, and that is has fresh AA data
@@ -723,6 +743,10 @@ def repo_role(account_number, role_name, dynamo_table, config, hooks, commit=Fal
                                                               role.no_repo_permissions,
                                                               config['filter_config']['AgeFilter']['minimum_age'],
                                                               hooks)
+
+    # if this is a scheduled repo we need to filter out permissions that weren't previously scheduled
+    if scheduled:
+        repoable_permissions = roledata._filter_scheduled_repoable_perms(repoable_permissions, role.scheduled_perms)
 
     repoed_policies, deleted_policy_names = roledata._get_repoed_policy(role.policies[-1]['Policy'],
                                                                         repoable_permissions)
@@ -787,7 +811,7 @@ def repo_role(account_number, role_name, dynamo_table, config, hooks, commit=Fal
     roledata.add_new_policy_version(dynamo_table, role, current_policies, 'Repo')
 
     # regardless of whether we're successful we want to unschedule the repo
-    set_role_data(dynamo_table, role.role_id, {'RepoScheduled': 0})
+    set_role_data(dynamo_table, role.role_id, {'RepoScheduled': 0, 'ScheduledPerms': []})
 
     repokid.hooks.call_hooks(hooks, 'AFTER_REPO', {'role': role})
 
@@ -940,6 +964,7 @@ def repo_all_roles(account_number, dynamo_table, config, hooks, commit=False, sc
     roles = roles.filter(active=True)
 
     cur_time = int(time.time())
+
     if scheduled:
         roles = [role for role in roles if (role.repo_scheduled and cur_time > role.repo_scheduled)]
 
@@ -948,7 +973,8 @@ def repo_all_roles(account_number, dynamo_table, config, hooks, commit=False, sc
                                                                       ', '.join([role.role_name for role in roles])))
 
     for role in roles:
-        error = repo_role(account_number, role.role_name, dynamo_table, config, hooks, commit=commit)
+        error = repo_role(account_number, role.role_name, dynamo_table, config, hooks, commit=commit,
+                          scheduled=scheduled)
         if error:
             errors.append(error)
 
@@ -1056,9 +1082,13 @@ def main():
         return show_scheduled_roles(account_number, dynamo_table)
 
     if args.get('cancel_scheduled_repo'):
-        role_name = args.get('<role_name>')
-        LOGGER.info('Cancelling scheduled repo for role: {} in account {}'.format(role_name, account_number))
-        return cancel_scheduled_repo(account_number, role_name, dynamo_table)
+        role_name = args.get('--role')
+        is_all = args.get('--all')
+        if not is_all:
+            LOGGER.info('Cancelling scheduled repo for role: {} in account {}'.format(role_name, account_number))
+        else:
+            LOGGER.info('Cancelling scheduled repo for all roles in account {}'.format(account_number))
+        return cancel_scheduled_repo(account_number, dynamo_table, role_name=role_name, is_all=is_all)
 
     if args.get('repo_scheduled_roles'):
         update_role_cache(account_number, dynamo_table, config, hooks)
