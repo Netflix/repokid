@@ -4,6 +4,10 @@ matrix:
   include:
     - python: "2.7"
 
+# horrible thing to fix cloudaux/boto/google issue
+before_install:
+  - sudo rm -f /etc/boto.cfg
+
 install:
   - pip install coveralls
   - pip install bandit
