@@ -26,7 +26,7 @@ import-string==0.1.0
 inflection==0.3.1         # via cloudaux
 jmespath==0.9.3           # via boto3, botocore
 joblib==0.12.5            # via cloudaux
-marshmallow==2.15.6
+marshmallow==2.16.0
 pip-tools==3.0.0
 pkginfo==1.4.2            # via twine
 policyuniverse==1.1.0.1
