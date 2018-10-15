@@ -40,7 +40,7 @@ s3transfer==0.1.13        # via boto3
 six==1.11.0               # via bleach, cloudaux, html5lib, import-string, pip-tools, python-dateutil, readme-renderer
 tabulate==0.8.2
 tabview==1.4.3
-tqdm==4.26.0
+tqdm==4.27.0
 twine==1.12.1
 urllib3==1.23             # via botocore, requests
 webencodings==0.5.1       # via html5lib
