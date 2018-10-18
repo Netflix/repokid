@@ -35,7 +35,7 @@ pygments==2.2.0           # via readme-renderer
 python-dateutil==2.7.3    # via botocore
 readme-renderer==22.0     # via twine
 requests-toolbelt==0.8.0  # via twine
-requests==2.19.1
+requests==2.20.0
 s3transfer==0.1.13        # via boto3
 six==1.11.0               # via bleach, cloudaux, html5lib, import-string, pip-tools, python-dateutil, readme-renderer
 tabulate==0.8.2
