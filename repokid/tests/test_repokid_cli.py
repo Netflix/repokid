@@ -286,11 +286,14 @@ class TestRepokidCLI(object):
         assert mock_call_hooks.mock_calls == [call(hooks, 'AFTER_SCHEDULE_REPO',
                                               {'roles': [Role(ROLES_FOR_DISPLAY[1])]})]
 
+    @patch('repokid.hooks.call_hooks')
     @patch('repokid.cli.repokid_cli.get_role_data')
     @patch('repokid.cli.repokid_cli.role_ids_for_account')
     @patch('repokid.cli.repokid_cli.repo_role')
     @patch('time.time')
-    def test_repo_all_roles(self, mock_time, mock_repo_role, mock_role_ids_for_account, mock_get_role_data):
+    def test_repo_all_roles(self, mock_time, mock_repo_role, mock_role_ids_for_account, mock_get_role_data,
+                            mock_call_hooks):
+        hooks = {}
         mock_role_ids_for_account.return_value = ['AROAABCDEFGHIJKLMNOPA', 'AROAABCDEFGHIJKLMNOPB',
                                                   'AROAABCDEFGHIJKLMNOPC']
         roles = [{'RoleId': 'AROAABCDEFGHIJKLMNOPA', 'Active': True, 'RoleName': 'ROLE_A', 'RepoScheduled': 100},
@@ -305,14 +308,21 @@ class TestRepokidCLI(object):
         mock_repo_role.return_value = None
 
         # repo all roles in the account, should call repo with all roles
-        repokid.cli.repokid_cli.repo_all_roles(None, None, None, None, scheduled=False)
+        repokid.cli.repokid_cli.repo_all_roles(None, None, None, hooks, scheduled=False)
         # repo only scheduled, should only call repo role with role C
-        repokid.cli.repokid_cli.repo_all_roles(None, None, None, None, scheduled=True)
+        repokid.cli.repokid_cli.repo_all_roles(None, None, None, hooks, scheduled=True)
 
-        assert mock_repo_role.mock_calls == [call(None, 'ROLE_A', None, None, None, commit=False, scheduled=False),
-                                             call(None, 'ROLE_B', None, None, None, commit=False, scheduled=False),
-                                             call(None, 'ROLE_C', None, None, None, commit=False, scheduled=False),
-                                             call(None, 'ROLE_C', None, None, None, commit=False, scheduled=True)]
+        assert mock_repo_role.mock_calls == [call(None, 'ROLE_A', None, None, hooks, commit=False, scheduled=False),
+                                             call(None, 'ROLE_B', None, None, hooks, commit=False, scheduled=False),
+                                             call(None, 'ROLE_C', None, None, hooks, commit=False, scheduled=False),
+                                             call(None, 'ROLE_C', None, None, hooks, commit=False, scheduled=True)]
+
+        roles_items = [Role(roles[0]), Role(roles[1]), Role(roles[2])]
+
+        assert mock_call_hooks.mock_calls == [
+            call(hooks, 'BEFORE_REPO_ROLES', {'account_number': None, 'roles': roles_items}),
+            call(hooks, 'BEFORE_REPO_ROLES', {'account_number': None, 'roles': [roles_items[2]]}),
+        ]
 
     @patch('repokid.cli.repokid_cli.find_role_in_cache')
     @patch('repokid.cli.repokid_cli.get_role_data')
