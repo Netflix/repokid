@@ -972,6 +972,8 @@ def repo_all_roles(account_number, dynamo_table, config, hooks, commit=False, sc
                                                                       account_number,
                                                                       ', '.join([role.role_name for role in roles])))
 
+    repokid.hooks.call_hooks(hooks, 'BEFORE_REPO_ROLES', {'account_number': account_number, 'roles': roles})
+
     for role in roles:
         error = repo_role(account_number, role.role_name, dynamo_table, config, hooks, commit=commit,
                           scheduled=scheduled)

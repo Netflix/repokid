@@ -2,6 +2,14 @@ from repokid import LOGGER
 import repokid.hooks as hooks
 
 
+@hooks.implements_hook('BEFORE_REPO_ROLES', 1)
+def log_before_repo_roles(input_dict):
+    LOGGER.debug("Calling DURING_REPOABLE_CALCULATION hooks")
+    if not all(required in input_dict for required in ['account_number', 'roles']):
+        raise hooks.MissingHookParamaeter("Did not get all required parameters for BEFORE_REPO_ROLES hook")
+    return input_dict
+
+
 @hooks.implements_hook('DURING_REPOABLE_CALCULATION', 1)
 def log_during_repoable_calculation_hooks(input_dict):
     LOGGER.debug("Calling DURING_REPOABLE_CALCULATION hooks")
