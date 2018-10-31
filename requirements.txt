@@ -18,7 +18,7 @@ defusedxml==0.5.0         # via cloudaux
 docopt==0.6.2
 docutils==0.14            # via botocore, readme-renderer
 flagpole==1.0.1           # via cloudaux
-future==0.17.0            # via readme-renderer
+future==0.17.1            # via readme-renderer
 futures==3.2.0            # via s3transfer
 html5lib==1.0.1           # via bleach
 idna==2.7                 # via requests
