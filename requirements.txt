@@ -25,7 +25,7 @@ idna==2.7                 # via requests
 import-string==0.1.0
 inflection==0.3.1         # via cloudaux
 jmespath==0.9.3           # via boto3, botocore
-joblib==0.12.5            # via cloudaux
+joblib==0.13.0            # via cloudaux
 marshmallow==2.15.6
 pip-tools==3.0.0
 pkginfo==1.4.2            # via twine
