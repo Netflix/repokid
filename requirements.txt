@@ -31,7 +31,7 @@ pip-tools==3.0.0
 pkginfo==1.4.2            # via twine
 policyuniverse==1.1.0.1
 pycparser==2.19           # via cffi
-pygments==2.2.0           # via readme-renderer
+pygments==2.3.0           # via readme-renderer
 python-dateutil==2.7.3    # via botocore
 readme-renderer==22.0     # via twine
 requests-toolbelt==0.8.0  # via twine
