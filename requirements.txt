@@ -5,7 +5,7 @@
 #    pip-compile --output-file requirements.txt requirements.in
 #
 bleach==2.1.4             # via readme-renderer
-boto3==1.9.58
+boto3==1.9.59
 boto==2.49.0              # via cloudaux
 botocore==1.12.13         # via boto3, cloudaux, s3transfer
 certifi==2018.8.24        # via requests
