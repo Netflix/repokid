@@ -21,7 +21,7 @@ flagpole==1.0.1           # via cloudaux
 future==0.16.0            # via readme-renderer
 futures==3.2.0            # via s3transfer
 html5lib==1.0.1           # via bleach
-idna==2.7                 # via requests
+idna==2.8                 # via requests
 import-string==0.1.0
 inflection==0.3.1         # via cloudaux
 jmespath==0.9.3           # via boto3, botocore
