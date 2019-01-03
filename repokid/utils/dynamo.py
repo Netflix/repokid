@@ -257,7 +257,7 @@ def set_role_data(dynamo_table, role_id, update_keys):
                              ExpressionAttributeValues=expression_attribute_values)
 
 
-def store_initial_role_data(dynamo_table, arn, create_date, role_id, role_name, account_number, current_policy):
+def store_initial_role_data(dynamo_table, arn, create_date, role_id, role_name, account_number, current_policy, tags):
     """
     Store the initial version of a role in Dynamo
 
@@ -272,7 +272,7 @@ def store_initial_role_data(dynamo_table, arn, create_date, role_id, role_name, 
 
     role_dict = {'Arn': arn, 'CreateDate': create_date.isoformat(), 'RoleId': role_id, 'RoleName': role_name,
                  'Account': account_number, 'Policies': [policy_entry],
-                 'Refreshed': datetime.datetime.utcnow().isoformat(), 'Active': True, 'Repoed': 'Never'}
+                 'Refreshed': datetime.datetime.utcnow().isoformat(), 'Active': True, 'Repoed': 'Never', 'Tags': tags}
 
     store_dynamo = copy.copy(role_dict)
 
