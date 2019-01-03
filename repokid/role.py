@@ -32,6 +32,7 @@ dict_to_attr = {'AAData': {'attribute': 'aa_data', 'default': dict()},
                 'RoleName': {'attribute': 'role_name', 'default': None},
                 'ScheduledPerms': {'attribute': 'scheduled_perms', 'default': dict()},
                 'Stats': {'attribute': 'stats', 'default': list()},
+                'Tags': {'attribute': 'tags', 'default': list()},
                 'TotalPermissions': {'attribute': 'total_permissions', 'default': int()}}
 
 

@@ -170,10 +170,10 @@ def update_role_data(dynamo_table, account_number, role, current_policy, source=
     """
 
     # policy_entry: source, discovered, policy
-    stored_role = get_role_data(dynamo_table, role.role_id, fields=['OptOut', 'Policies'])
+    stored_role = get_role_data(dynamo_table, role.role_id, fields=['OptOut', 'Policies', 'Tags'])
     if not stored_role:
         role_dict = store_initial_role_data(dynamo_table, role.arn, role.create_date, role.role_id, role.role_name,
-                                            account_number, current_policy)
+                                            account_number, current_policy, role.tags)
         role.set_attributes(role_dict)
         LOGGER.info('Added new role ({}): {}'.format(role.role_id, role.arn))
     else:
@@ -186,6 +186,10 @@ def update_role_data(dynamo_table, account_number, role, current_policy, source=
             newly_added_permissions = find_newly_added_permissions(old_policy, current_policy)
         else:
             newly_added_permissions = set()
+
+        # update tags if needed
+        if role.tags != stored_role.get('Tags', []):
+            set_role_data(dynamo_table, role.role_id, {'Tags': role.tags})
 
         if add_no_repo:
             update_no_repo_permissions(dynamo_table, role, newly_added_permissions)
