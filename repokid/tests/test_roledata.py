@@ -167,6 +167,11 @@ class TestRoledata(object):
             expected_permissions, expected_services
         )
 
+    def test_get_epoch_authenticated(self):
+        assert(repokid.utils.roledata._get_epoch_authenticated(1545787620000) == (1545787620, True))
+        assert(repokid.utils.roledata._get_epoch_authenticated(1545787620) == (1545787620, True))
+        assert(repokid.utils.roledata._get_epoch_authenticated(154578762) == (None, False))
+
     def test_filter_scheduled_repoable_perms(self):
         assert repokid.utils.roledata._filter_scheduled_repoable_perms(
             ['a:b', 'a:c', 'b:a'], ['a:c', 'b']) == ['a:c', 'b:a']

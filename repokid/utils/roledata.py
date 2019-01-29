@@ -26,6 +26,7 @@ from repokid import LOGGER as LOGGER
 import repokid.hooks
 from repokid.role import Role
 
+BEGINNING_OF_2015_MILLI_EPOCH = 1420113600000
 IAM_ACCESS_ADVISOR_UNSUPPORTED_SERVICES = frozenset([''])
 IAM_ACCESS_ADVISOR_UNSUPPORTED_ACTIONS = frozenset(['iam:passrole'])
 
@@ -353,6 +354,32 @@ def _filter_scheduled_repoable_perms(repoable_permissions, scheduled_perms):
            if(perm in scheduled_permissions or perm.split(':')[0] in scheduled_services)])
 
 
+def _get_epoch_authenticated(service_authenticated):
+    """
+    Ensure service authenticated from Access Advisor is in seconds epoch
+
+    Args:
+        service_authenticated (int): The service authenticated time from Access Advisor
+
+    Returns:
+        int: The epoch time in seconds that the service was last authenticated
+        bool: Whether the service authenticated was valid
+    """
+    current_time = int(time.time())
+    if service_authenticated == 0:
+        return (0, True)
+
+    # we have an odd timestamp, try to check
+    elif BEGINNING_OF_2015_MILLI_EPOCH < service_authenticated < (current_time * 1000):
+        return (service_authenticated/1000, True)
+
+    elif (BEGINNING_OF_2015_MILLI_EPOCH / 1000) < service_authenticated < current_time:
+        return (service_authenticated, True)
+
+    else:
+        return (None, False)
+
+
 def _get_repoable_permissions(account_number, role_name, permissions, aa_data, no_repo_permissions, minimum_age,
                               hooks):
     """
@@ -391,10 +418,21 @@ def _get_repoable_permissions(account_number, role_name, permissions, aa_data, n
 
     used_services = set()
     for service in aa_data:
-        accessed = service['lastAuthenticated']
+        (accessed, valid_authenticated) = _get_epoch_authenticated(service['lastAuthenticated'])
+
         if not accessed:
             continue
-        accessed = datetime.datetime.fromtimestamp(accessed / 1000, tzlocal())
+
+        if not valid_authenticated:
+            LOGGER.error("Got malformed Access Advisor data for {role_name} in {account_number} for service {service}"
+                         ": {last_authenticated}".format(
+                             role_name=role_name,
+                             account_number=account_number,
+                             service=service.get('serviceNamespace'),
+                             last_authenticated=service['lastAuthenticated']))
+            used_services.add(service['serviceNamespace'])
+
+        accessed = datetime.datetime.fromtimestamp(accessed, tzlocal())
         if accessed > now - ago:
             used_services.add(service['serviceNamespace'])
 
@@ -418,7 +456,11 @@ def _get_repoable_permissions(account_number, role_name, permissions, aa_data, n
                                              'potentially_repoable_permissions': potentially_repoable_permissions,
                                              'minimum_age': minimum_age})
 
-    # TODO: make option to show source of repoable?
+    LOGGER.debug('Repoable permissions for role {role_name} in {account_number}:\n{repoable}'.format(
+        role_name=role_name,
+        account_number=account_number,
+        repoable=''.join('{}: {}\n'.format(perm, decision.decider)
+                         for perm, decision in hooks_output['potentially_repoable_permissions'].items())))
 
     return set([permission_name for permission_name, permission_value in
                 hooks_output['potentially_repoable_permissions'].items() if permission_value.repoable])
