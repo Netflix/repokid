@@ -8,7 +8,7 @@ bleach==2.1.4             # via readme-renderer
 boto3==1.9.13
 boto==2.49.0              # via cloudaux
 botocore==1.12.13         # via boto3, cloudaux, s3transfer
-certifi==2018.11.29        # via requests
+certifi==2019.3.9       # via requests
 cffi==1.11.5              # via cmarkgfm
 chardet==3.0.4            # via requests
 click==7.0                # via pip-tools
