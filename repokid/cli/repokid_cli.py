@@ -48,7 +48,7 @@ import botocore
 from cloudaux.aws.iam import (delete_role_policy, get_account_authorization_details, get_role_inline_policies,
                               put_role_policy)
 from cloudaux.aws.sts import sts_conn
-from policyuniverse import ARN
+from policyuniverse.arn import ARN
 from docopt import docopt
 import import_string
 from repokid import __version__ as __version__
