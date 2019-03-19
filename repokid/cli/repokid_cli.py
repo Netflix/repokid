@@ -706,6 +706,7 @@ def _check_inline_policies_size(policies):
         return True
     return False
 
+
 def _logprint_deleted_and_repoed_policies(deleted_policy_names, repoed_policies, role_name, account_number):
     for name in deleted_policy_names:
         LOGGER.info('Would delete policy from {} with name {} in account {}'.format(
@@ -719,6 +720,7 @@ def _logprint_deleted_and_repoed_policies(deleted_policy_names, repoed_policies,
             json.dumps(repoed_policies, indent=2, sort_keys=True),
             account_number))
 
+
 def _delete_policy(name, role, account_number, conn):
     LOGGER.info('Deleting policy with name {} from {} in account {}'.format(name, role.role_name, account_number))
     try:
@@ -729,6 +731,7 @@ def _delete_policy(name, role, account_number, conn):
             role.role_name,
             account_number,
             e)
+
 
 def _replace_policies(repoed_policies, role, account_number, conn):
         LOGGER.info('Replacing Policies With: \n{} (role: {} account: {})'.format(
@@ -749,7 +752,7 @@ def _replace_policies(repoed_policies, role, account_number, conn):
 
 
 def remove_permissions_from_roles(permissions, roles_file, dynamo_table, config, hooks, commit=False):
-    """Reads list of ARNs from roles_file and calls _remove_permissions_from_role to remove the specified permissions."""
+    """Reads list of ARNs from roles_file and calls _remove_permissions_from_role()."""
     roles = list()
     with open(roles_file, 'r') as fd:
         roles = json.load(fd)
@@ -764,10 +767,12 @@ def remove_permissions_from_roles(permissions, roles_file, dynamo_table, config,
         role_name = arn.name.split('/')[-1]
 
         role_id = find_role_in_cache(dynamo_table, account_number, role_name)
-        _remove_permissions_from_role(account_number, permissions, role_name, role_id, dynamo_table, config, hooks, commit=commit)
+        _remove_permissions_from_role(account_number, permissions, role_name, role_id, dynamo_table, config, hooks,
+                                      commit=commit)
 
 
-def _remove_permissions_from_role(account_number, permissions, role_name, role_id, dynamo_table, config, hooks, commit=False):
+def _remove_permissions_from_role(account_number, permissions, role_name, role_id, dynamo_table, config, hooks,
+                                  commit=False):
     """Remove the given permissions from the given role.
 
     Determines which policies will be modified or deleted when the selected permission is gone.
@@ -788,7 +793,7 @@ def _remove_permissions_from_role(account_number, permissions, role_name, role_i
 
     if _check_inline_policies_size(repoed_policies):
         LOGGER.error("Policies would exceed the AWS size limit after repo for role: {} in account {}.  "
-                 "Please manually minify.".format(role_name, account_number))
+                     "Please manually minify.".format(role_name, account_number))
         return
 
     if not commit:
@@ -815,7 +820,8 @@ def _remove_permissions_from_role(account_number, permissions, role_name, role_i
 
     set_role_data(dynamo_table, role.role_id, {'Repoed': datetime.datetime.utcnow().isoformat()})
     _update_repoed_description(role.role_name, **conn)
-    _update_role_data(role, dynamo_table, account_number, config, conn, hooks, source='ManualPermissionRepo', add_no_repo=False)
+    _update_role_data(role, dynamo_table, account_number, config, conn, hooks, source='ManualPermissionRepo',
+                      add_no_repo=False)
     LOGGER.info('Successfully removed {permissions} from role: {role} in account {account_number}'.format(
         permissions=permissions, role=role.role_name, account_number=account_number))
 
@@ -865,12 +871,13 @@ def repo_role(account_number, role_name, dynamo_table, config, hooks, commit=Fal
     role = Role(get_role_data(dynamo_table, role_id))
 
     if not _check_access_advisor_age(
-            role, 
+            role,
             role_name,
             account_number,
             max_days_old=config['repo_requirements']['oldest_aa_data_days']):
         return
 
+    permissions = roledata._get_role_permissions(role)
     repoable_permissions = roledata._get_repoable_permissions(account_number, role.role_name, permissions, role.aa_data,
                                                               role.no_repo_permissions,
                                                               config['filter_config']['AgeFilter']['minimum_age'],
