@@ -3,8 +3,7 @@ import inspect
 import json
 
 from cloudaux.aws.sts import sts_conn
-from marshmallow import Schema, fields, post_load
-
+from marshmallow import fields, post_load, Schema
 from repokid import CONFIG
 import repokid.dispatcher
 import repokid.utils.dynamo as dynamo

@@ -14,17 +14,17 @@
 from collections import defaultdict
 import copy
 import datetime
-from dateutil.tz import tzlocal
 import time
 
-from policyuniverse import expand_policy, get_actions_from_statement, all_permissions
 
-from repokid.utils.dynamo import (add_to_end_of_list, get_role_data, role_ids_for_account, set_role_data,
-                                  store_initial_role_data)
+from dateutil.tz import tzlocal
+from policyuniverse import all_permissions, expand_policy, get_actions_from_statement
 from repokid import CONFIG as CONFIG
 from repokid import LOGGER as LOGGER
 import repokid.hooks
 from repokid.role import Role
+from repokid.utils.dynamo import (add_to_end_of_list, get_role_data, role_ids_for_account, set_role_data,
+                                  store_initial_role_data)
 
 BEGINNING_OF_2015_MILLI_EPOCH = 1420113600000
 IAM_ACCESS_ADVISOR_UNSUPPORTED_SERVICES = frozenset([''])
@@ -371,7 +371,7 @@ def _get_epoch_authenticated(service_authenticated):
 
     # we have an odd timestamp, try to check
     elif BEGINNING_OF_2015_MILLI_EPOCH < service_authenticated < (current_time * 1000):
-        return (service_authenticated/1000, True)
+        return (service_authenticated / 1000, True)
 
     elif (BEGINNING_OF_2015_MILLI_EPOCH / 1000) < service_authenticated < current_time:
         return (service_authenticated, True)

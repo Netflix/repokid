@@ -40,7 +40,6 @@ from datetime import datetime as dt
 import json
 import pprint
 import re
-import requests
 import sys
 import time
 
@@ -50,19 +49,19 @@ from cloudaux.aws.iam import (delete_role_policy, get_account_authorization_deta
 from cloudaux.aws.sts import sts_conn
 from docopt import docopt
 import import_string
-from tabulate import tabulate
-import tabview as t
-from tqdm import tqdm
-
-from repokid import LOGGER
-from repokid import CONFIG
-from repokid import _get_hooks
 from repokid import __version__ as __version__
-from repokid.role import Role, Roles
+from repokid import _get_hooks
+from repokid import CONFIG
+from repokid import LOGGER
 import repokid.hooks
+from repokid.role import Role, Roles
 from repokid.utils.dynamo import (dynamo_get_or_create_table, find_role_in_cache, get_role_data, role_ids_for_account,
                                   role_ids_for_all_accounts, set_role_data)
 import repokid.utils.roledata as roledata
+import requests
+from tabulate import tabulate
+import tabview as t
+from tqdm import tqdm
 
 
 # http://docs.aws.amazon.com/IAM/latest/UserGuide/reference_iam-limits.html

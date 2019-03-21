@@ -11,9 +11,11 @@
 #     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #     See the License for the specific language governing permissions and
 #     limitations under the License.
-import re
+
 import ast
-from setuptools import setup, find_packages
+import re
+
+from setuptools import find_packages, setup
 
 with open('requirements.txt') as f:
     REQUIRED = f.read().splitlines()
