@@ -5,7 +5,6 @@ import sys
 import boto3
 from botocore.exceptions import ClientError as BotoClientError
 from cloudaux.aws.sts import boto3_cached_conn as boto3_cached_conn
-
 from repokid import LOGGER as LOGGER
 
 # used as a placeholder for empty SID to work around this: https://github.com/aws/aws-sdk-js/issues/833

@@ -1,9 +1,9 @@
 import copy
 import datetime
-from mock import call, patch
 
-import repokid.dispatcher as dispatcher
+from mock import call, patch
 import repokid.cli.dispatcher_cli as dispatcher_cli
+import repokid.dispatcher as dispatcher
 
 
 DYNAMO_TABLE = None

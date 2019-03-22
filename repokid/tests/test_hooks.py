@@ -1,7 +1,6 @@
 import pytest
-
-import repokid.hooks
 import repokid.cli.repokid_cli
+import repokid.hooks
 from repokid.tests.artifacts.hook import function_1, function_2
 
 

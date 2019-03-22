@@ -14,10 +14,9 @@
 import datetime
 import logging
 import time
-from mock import call, patch
 
 from dateutil.tz import tzlocal
-
+from mock import call, patch
 import repokid.cli.repokid_cli
 from repokid.role import Role, Roles
 import repokid.utils.roledata

@@ -2,8 +2,8 @@ from collections import namedtuple
 import datetime
 import time
 
-from repokid import CONFIG
 from repokid import _get_hooks
+from repokid import CONFIG
 import repokid.cli.repokid_cli as cli
 import repokid.utils.dynamo as dynamo
 import repokid.utils.roledata as roledata

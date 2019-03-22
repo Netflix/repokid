@@ -1,8 +1,8 @@
 import datetime
-from dateutil.tz import tzlocal
 
-from repokid.cli.repokid_cli import Filter
+from dateutil.tz import tzlocal
 from repokid import LOGGER
+from repokid.cli.repokid_cli import Filter
 
 
 class AgeFilter(Filter):
