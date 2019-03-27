@@ -131,6 +131,22 @@ Once Repokid is configured, use it as follows:
 ### Scheduling
 Rather than running a repo right now you can schedule one (`schedule_repo` command). The duration between scheduling and eligibility is configurable, but by default roles can be repoed 7 days after scheduling.  You can then run a command `repo_scheduled_roles` to only repo roles which have already been scheduled.
 
+### Targeting a specific permission
+
+Say that you find a given permission especially dangerous in your environment.  Here I'll use `s3:PutObjectACL` as an example. You can use Repokid to find all roles that have this permission (even those hidden in a wildcard), and then remove just that single permission.
+
+Find & Remove:
+ - Ensure the role cache is updated before beginning.
+ - Find roles with a given permission: `repokid find_roles_with_permission <permission> [--output=ROLE_FILE]`
+ - Remove permission from roles: `repokid remove_permissions_from_roles --role-file=ROLE_FILE <permission>... [-c]`
+
+Example:
+```
+$ repokid find_roles_with_permission "s3:putobjectacl" --output=putobjectacl.json
+...
+$ repokid remove_permissions_from_roles --role-file=putobjectacl.json "s3:putobjectacl" -c
+```
+
 ### Rolling back
 Repokid stores a copy of each version of inline policies it knows about.  These are added when
 a different version of a policy is found during `update_role_cache` and any time a repo action
