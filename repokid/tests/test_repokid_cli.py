@@ -186,7 +186,7 @@ class TestRepokidCLI(object):
 
         config = {"aardvark_api_location": "", "connection_iam": {},
                   "active_filters": ["repokid.filters.age:AgeFilter"], "filter_config":
-                  {"AgeFilter": {"minimum_age": 90}, "BlacklistFilter": {}}}
+                  {"AgeFilter": {"minimum_age": 90}, "BlocklistFilter": {}}}
 
         console_logger = logging.StreamHandler()
         console_logger.setLevel(logging.WARNING)
@@ -357,7 +357,7 @@ class TestRepokidCLI(object):
         required_config_fields = ['filter_config', 'active_filters', 'aardvark_api_location', 'connection_iam',
                                   'dynamo_db', 'logging', 'repo_requirements']
 
-        required_filter_configs = ['AgeFilter', 'BlacklistFilter']
+        required_filter_configs = ['AgeFilter', 'BlocklistFilter']
 
         required_dynamo_config = ['account_number', 'endpoint', 'region', 'session_name']
 
