@@ -16,7 +16,7 @@ Usage:
     repokid config <config_filename>
     repokid update_role_cache <account_number>
     repokid display_role_cache <account_number> [--inactive]
-    repokid find_roles_with_permission <permission>
+    repokid find_roles_with_permission <permission> [--output=ROLE_FILE]
     repokid remove_permissions_from_roles --role-file=ROLE_FILE <permission>... [-c]
     repokid display_role <account_number> <role_name>
     repokid schedule_repo <account_number>
@@ -48,9 +48,9 @@ import botocore
 from cloudaux.aws.iam import (delete_role_policy, get_account_authorization_details, get_role_inline_policies,
                               put_role_policy)
 from cloudaux.aws.sts import sts_conn
-from policyuniverse.arn import ARN
 from docopt import docopt
 import import_string
+from policyuniverse.arn import ARN
 from repokid import __version__ as __version__
 from repokid import _get_hooks
 from repokid import CONFIG
@@ -479,21 +479,32 @@ def display_roles(account_number, dynamo_table, inactive=False):
             csv_writer.writerow(row)
 
 
-def find_roles_with_permission(permission, dynamo_table):
+def find_roles_with_permission(permission, dynamo_table, output_file):
     """
     Search roles in all accounts for a policy with a given permission, log the ARN of each role with this permission
 
     Args:
         permission (string): The name of the permission to find
+        output_file (string): filename to write the output
 
     Returns:
         None
     """
+    arns = list()
     for roleID in role_ids_for_all_accounts(dynamo_table):
         role = Role(get_role_data(dynamo_table, roleID, fields=['Policies', 'RoleName', 'Arn', 'Active']))
         permissions = roledata._get_role_permissions(role)
         if permission.lower() in permissions and role.active:
+            arns.append(role.arn)
             LOGGER.info('ARN {arn} has {permission}'.format(arn=role.arn, permission=permission))
+
+    if not output_file:
+        return
+
+    with open(output_file, 'wb') as fd:
+        json.dump(arns, fd)
+
+    LOGGER.info('Ouput written to file "{output_file}"'.format(output_file=output_file))
 
 
 def display_role(account_number, role_name, dynamo_table, config, hooks):
@@ -589,7 +600,7 @@ def display_role(account_number, role_name, dynamo_table, config, hooks):
         print('All Policies Removed')
 
     # need to check if all policies would be too large
-    if _check_inline_policies_size(repoed_policies):
+    if _inline_policies_size_exceeds_maximum(repoed_policies):
         LOGGER.warning("Policies would exceed the AWS size limit after repo for role: {}.  "
                        "Please manually minify.".format(role_name))
 
@@ -682,25 +693,14 @@ def cancel_scheduled_repo(account_number, dynamo_table, role_name=None, is_all=N
                 role.account))
 
 
-def _check_access_advisor_age(role, role_name, account_number, max_days_old):
-    """Ensure access advisor data has been recently refreshed."""
-    old_aa_data_services = []
-    for aa_service in role.aa_data:
-        if(datetime.datetime.strptime(aa_service['lastUpdated'], '%a, %d %b %Y %H:%M:%S %Z') <
-           datetime.datetime.now() - datetime.timedelta(days=max_days_old)):
-            old_aa_data_services.append(aa_service['serviceName'])
+def _inline_policies_size_exceeds_maximum(policies):
+    """Validate the policies, when converted to JSON without whitespace, remain under the size limit.
 
-    if old_aa_data_services:
-        LOGGER.error('AAData older than threshold for these services: {} (role: {}, account {})'.format(
-            old_aa_data_services,
-            role_name,
-            account_number))
-        return False
-    return True
-
-
-def _check_inline_policies_size(policies):
-    """Validate the policies, when converted to JSON without whitespace, remain under the size limit."""
+    Args:
+        policies (list<dict>)
+    Returns:
+        bool
+    """
     exported_no_whitespace = json.dumps(policies, separators=(',', ':'))
     if len(exported_no_whitespace) > MAX_AWS_POLICY_SIZE:
         return True
@@ -708,6 +708,17 @@ def _check_inline_policies_size(policies):
 
 
 def _logprint_deleted_and_repoed_policies(deleted_policy_names, repoed_policies, role_name, account_number):
+    """Logs data on policies that would otherwise be modified or deleted if the commit flag were set.
+
+    Args:
+        deleted_policy_names (list<string>)
+        repoed_policies (list<dict>)
+        role_name (string)
+        account_number (string)
+
+    Returns:
+        None
+    """
     for name in deleted_policy_names:
         LOGGER.info('Would delete policy from {} with name {} in account {}'.format(
             role_name,
@@ -722,6 +733,17 @@ def _logprint_deleted_and_repoed_policies(deleted_policy_names, repoed_policies,
 
 
 def _delete_policy(name, role, account_number, conn):
+    """Deletes the specified IAM Role inline policy.
+
+    Args:
+        name (string)
+        role (Role object)
+        account_number (string)
+        conn (dict)
+
+    Returns:
+        error (string) or None
+    """
     LOGGER.info('Deleting policy with name {} from {} in account {}'.format(name, role.role_name, account_number))
     try:
         delete_role_policy(RoleName=role.role_name, PolicyName=name, **conn)
@@ -734,27 +756,47 @@ def _delete_policy(name, role, account_number, conn):
 
 
 def _replace_policies(repoed_policies, role, account_number, conn):
-        LOGGER.info('Replacing Policies With: \n{} (role: {} account: {})'.format(
-            json.dumps(repoed_policies, indent=2, sort_keys=True),
-            role.role_name,
-            account_number))
+    """Overwrite IAM Role inline policies with those supplied.
 
-        for policy_name, policy in repoed_policies.items():
-            try:
-                put_role_policy(RoleName=role.role_name, PolicyName=policy_name,
-                                PolicyDocument=json.dumps(policy, indent=2, sort_keys=True),
-                                **conn)
+    Args:
+        repoed_policies (dict)
+        role (Role object)
+        account_number (string)
+        conn (dict)
 
-            except botocore.exceptions.ClientError as e:
-                error = 'Exception calling PutRolePolicy on {role}/{policy} in account {account}\n{e}\n'.format(
-                    role=role.role_name, policy=policy_name, account=account_number, e=str(e))
-                return error
+    Returns:
+        error (string) or None
+    """
+    LOGGER.info('Replacing Policies With: \n{} (role: {} account: {})'.format(
+        json.dumps(repoed_policies, indent=2, sort_keys=True),
+        role.role_name,
+        account_number))
+
+    for policy_name, policy in repoed_policies.items():
+        try:
+            put_role_policy(RoleName=role.role_name, PolicyName=policy_name,
+                            PolicyDocument=json.dumps(policy, indent=2, sort_keys=True),
+                            **conn)
+
+        except botocore.exceptions.ClientError as e:
+            error = 'Exception calling PutRolePolicy on {role}/{policy} in account {account}\n{e}\n'.format(
+                role=role.role_name, policy=policy_name, account=account_number, e=str(e))
+            return error
 
 
-def remove_permissions_from_roles(permissions, roles_file, dynamo_table, config, hooks, commit=False):
-    """Reads list of ARNs from roles_file and calls _remove_permissions_from_role()."""
+def remove_permissions_from_roles(permissions, role_filename, dynamo_table, config, hooks, commit=False):
+    """Loads roles specified in file and calls _remove_permissions_from_role() for each one.
+
+    Args:
+        permissions (list<string>)
+        role_filename (string)
+        commit (bool)
+
+    Returns:
+        None
+    """
     roles = list()
-    with open(roles_file, 'r') as fd:
+    with open(role_filename, 'r') as fd:
         roles = json.load(fd)
 
     for role_arn in tqdm(roles):
@@ -767,37 +809,37 @@ def remove_permissions_from_roles(permissions, roles_file, dynamo_table, config,
         role_name = arn.name.split('/')[-1]
 
         role_id = find_role_in_cache(dynamo_table, account_number, role_name)
-        _remove_permissions_from_role(account_number, permissions, role_name, role_id, dynamo_table, config, hooks,
+        role = Role(get_role_data(dynamo_table, role_id))
+
+        _remove_permissions_from_role(account_number, permissions, role, role_id, dynamo_table, config, hooks,
                                       commit=commit)
 
+        repokid.hooks.call_hooks(hooks, 'AFTER_REPO', {'role': role})
 
-def _remove_permissions_from_role(account_number, permissions, role_name, role_id, dynamo_table, config, hooks,
+
+def _remove_permissions_from_role(account_number, permissions, role, role_id, dynamo_table, config, hooks,
                                   commit=False):
-    """Remove the given permissions from the given role.
+    """Remove the list of permissions from the provided role.
 
-    Determines which policies will be modified or deleted when the selected permission is gone.
-    Checks the size of the new inline policies.
-    if commit is not set, prints proposed actions and exits.
-    Deletes each policy that is marked for deletion.
-    Updates each policy that needs to be modified.
+    Args:
+        account_number (string)
+        permissions (list<string>)
+        role (Role object)
+        role_id (string)
+        commit (bool)
 
-    Pulls new role inline policies from AWS and saves a new version to the dynamodb table.
-    Calls AFTER_REPO hooks.
-    Mark role as Repo'd in Dynamo
-    Update Role Description.
-    Log Success!
+    Returns:
+        None
     """
-
-    role = Role(get_role_data(dynamo_table, role_id))
     repoed_policies, deleted_policy_names = roledata._get_repoed_policy(role.policies[-1]['Policy'], permissions)
 
-    if _check_inline_policies_size(repoed_policies):
+    if _inline_policies_size_exceeds_maximum(repoed_policies):
         LOGGER.error("Policies would exceed the AWS size limit after repo for role: {} in account {}.  "
-                     "Please manually minify.".format(role_name, account_number))
+                     "Please manually minify.".format(role.role_name, account_number))
         return
 
     if not commit:
-        _logprint_deleted_and_repoed_policies(deleted_policy_names, repoed_policies, role_name, account_number)
+        _logprint_deleted_and_repoed_policies(deleted_policy_names, repoed_policies, role.role_name, account_number)
         return
 
     conn = config['connection_iam']
@@ -815,8 +857,6 @@ def _remove_permissions_from_role(account_number, permissions, role_name, role_i
 
     current_policies = get_role_inline_policies(role.as_dict(), **conn) or {}
     roledata.add_new_policy_version(dynamo_table, role, current_policies, 'Repo')
-
-    repokid.hooks.call_hooks(hooks, 'AFTER_REPO', {'role': role})
 
     set_role_data(dynamo_table, role.role_id, {'Repoed': datetime.datetime.utcnow().isoformat()})
     _update_repoed_description(role.role_name, **conn)
@@ -870,11 +910,17 @@ def repo_role(account_number, role_name, dynamo_table, config, hooks, commit=Fal
     # if we've gotten to this point, load the rest of the role
     role = Role(get_role_data(dynamo_table, role_id))
 
-    if not _check_access_advisor_age(
-            role,
+    old_aa_data_services = []
+    for aa_service in role.aa_data:
+        if(datetime.datetime.strptime(aa_service['lastUpdated'], '%a, %d %b %Y %H:%M:%S %Z') <
+           datetime.datetime.now() - datetime.timedelta(days=config['repo_requirements']['oldest_aa_data_days'])):
+            old_aa_data_services.append(aa_service['serviceName'])
+
+    if old_aa_data_services:
+        LOGGER.error('AAData older than threshold for these services: {} (role: {}, account {})'.format(
+            old_aa_data_services,
             role_name,
-            account_number,
-            max_days_old=config['repo_requirements']['oldest_aa_data_days']):
+            account_number))
         return
 
     permissions = roledata._get_role_permissions(role)
@@ -890,7 +936,7 @@ def repo_role(account_number, role_name, dynamo_table, config, hooks, commit=Fal
     repoed_policies, deleted_policy_names = roledata._get_repoed_policy(role.policies[-1]['Policy'],
                                                                         repoable_permissions)
 
-    if _check_inline_policies_size(repoed_policies):
+    if _inline_policies_size_exceeds_maximum(repoed_policies):
         error = ("Policies would exceed the AWS size limit after repo for role: {} in account {}.  "
                  "Please manually minify.".format(role_name, account_number))
         LOGGER.error(error)
@@ -1159,13 +1205,14 @@ def main():
         return display_roles(account_number, dynamo_table, inactive=inactive)
 
     if args.get('find_roles_with_permission'):
-        return find_roles_with_permission(args.get('<permission>'), dynamo_table)
+        output_file = args.get('--output')
+        return find_roles_with_permission(args.get('<permission>'), dynamo_table, output_file)
 
     if args.get('remove_permissions_from_roles'):
         permissions = args.get('--permissions')
-        roles = args.get('--role-filename')
+        role_filename = args.get('--role-filename')
         commit = args.get('--commit')
-        return remove_permissions_from_roles(permissions, roles, dynamo_table, config, hooks, commit=commit)
+        return remove_permissions_from_roles(permissions, role_filename, dynamo_table, config, hooks, commit=commit)
 
     if args.get('display_role'):
         role_name = args.get('<role_name>')
