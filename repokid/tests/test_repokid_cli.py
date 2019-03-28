@@ -16,7 +16,7 @@ import logging
 import time
 
 from dateutil.tz import tzlocal
-from mock import call, patch
+from mock import call, MagicMock, mock_open, patch
 import repokid.cli.repokid_cli
 from repokid.role import Role, Roles
 import repokid.utils.roledata
@@ -371,3 +371,146 @@ class TestRepokidCLI(object):
         assert all(field in generated_config['connection_iam'] for field in required_iam_config)
         assert all(field in generated_config['repo_requirements'] for field in required_repo_requirements)
         assert 'warnings' in generated_config
+
+    def test_inline_policies_size_exceeds_maximum(self):
+        cli = repokid.cli.repokid_cli
+
+        small_policy = dict()
+        assert not cli._inline_policies_size_exceeds_maximum(small_policy)
+
+        backup_size = cli.MAX_AWS_POLICY_SIZE
+        cli.MAX_AWS_POLICY_SIZE = 10
+        assert cli._inline_policies_size_exceeds_maximum(ROLE_POLICIES['all_services_used'])
+        cli.MAX_AWS_POLICY_SIZE = backup_size
+
+    def test_logprint_deleted_and_repoed_policies(self):
+        cli = repokid.cli.repokid_cli
+
+        # TODO: When moving to python >= 3.4, Replace this with assertLogs
+        # https://stackoverflow.com/questions/899067/how-should-i-verify-a-log-message-when-testing-python-code-under-nose
+        class MockLoggingHandler(logging.Handler):
+            """Mock logging handler to check for expected logs."""
+
+            def __init__(self, *args, **kwargs):
+                self.reset()
+                logging.Handler.__init__(self, *args, **kwargs)
+
+            def emit(self, record):
+                self.messages[record.levelname.lower()].append(record.getMessage())
+
+            def reset(self):
+                self.messages = {
+                    'debug': [],
+                    'info': [],
+                    'warning': [],
+                    'error': [],
+                    'critical': [],
+                }
+
+        cli.LOGGER = logging.getLogger('test')
+        mock_logger = MockLoggingHandler()
+        cli.LOGGER.addHandler(mock_logger)
+
+        policy_names = ['policy1', 'policy2']
+        repoed_policies = [ROLE_POLICIES]
+        cli._logprint_deleted_and_repoed_policies(policy_names, repoed_policies, 'MyRoleName', '123456789012')
+        assert len(mock_logger.messages['info']) == 3
+        assert 'policy1' in mock_logger.messages['info'][0]
+        assert 'policy2' in mock_logger.messages['info'][1]
+        assert 'all_services_used' in mock_logger.messages['info'][2]
+
+    def test_delete_policy(self):
+        cli = repokid.cli.repokid_cli
+
+        def mock_delete_role_policy(RoleName, PolicyName, **conn):
+            import botocore
+            raise botocore.exceptions.ClientError(dict(Error=dict(Code='TESTING')), 'TESTING')
+
+        class MockRole:
+            role_name = "role_name"
+
+        cli.delete_role_policy = mock_delete_role_policy
+        mock_role = MockRole()
+
+        error = cli._delete_policy('PolicyName', mock_role, '123456789012', dict())
+        assert 'Error deleting policy:' in error
+
+    def test_replace_policies(self):
+        cli = repokid.cli.repokid_cli
+
+        def mock_put_role_policy(RoleName, PolicyName, PolicyDocument, **conn):
+            import botocore
+            raise botocore.exceptions.ClientError(dict(Error=dict(Code='TESTING')), 'TESTING')
+
+        class MockRole:
+            role_name = "role_name"
+
+        cli.put_role_policy = mock_put_role_policy
+        mock_role = MockRole()
+
+        error = cli._replace_policies(ROLE_POLICIES, mock_role, '123456789012', {})
+        assert 'Exception calling PutRolePolicy' in error
+
+    @patch('repokid.cli.repokid_cli._delete_policy', MagicMock(return_value=None))
+    @patch('repokid.cli.repokid_cli._replace_policies', MagicMock(return_value=None))
+    @patch('repokid.cli.repokid_cli.get_role_inline_policies', MagicMock(return_value=None))
+    @patch('repokid.cli.repokid_cli.roledata.add_new_policy_version', MagicMock(return_value=None))
+    @patch('repokid.cli.repokid_cli.set_role_data', MagicMock(return_value=None))
+    @patch('repokid.cli.repokid_cli._update_repoed_description', MagicMock(return_value=None))
+    @patch('repokid.cli.repokid_cli._update_role_data', MagicMock(return_value=None))
+    def test_remove_permissions_from_role(self):
+        cli = repokid.cli.repokid_cli
+
+        class MockRole:
+            role_name = "role_name"
+            role_id = '12345-roleid'
+            policies = [dict(Policy=policy) for _, policy in ROLE_POLICIES.items()]
+
+            def as_dict(self):
+                return dict(role_name=self.role_name, policies=self.policies)
+
+        mock_role = MockRole()
+
+        cli._remove_permissions_from_role(
+            '123456789012',
+            ['s3:putobjectacl'],
+            mock_role,
+            '12345-roleid',
+            None,
+            None,
+            None,
+            commit=False)
+
+        cli._remove_permissions_from_role(
+            '123456789012',
+            ['s3:putobjectacl'],
+            mock_role,
+            '12345-roleid',
+            None,
+            {"connection_iam": dict()},
+            None,
+            commit=True)
+
+    @patch('repokid.cli.repokid_cli.find_role_in_cache', MagicMock(return_value='12345-roleid'))
+    @patch('repokid.cli.repokid_cli.get_role_data', MagicMock(return_value=None))
+    @patch('repokid.cli.repokid_cli.Role', MagicMock(return_value='IAMROLE'))
+    @patch('repokid.cli.repokid_cli._remove_permissions_from_role', MagicMock(return_value=None))
+    @patch('repokid.cli.repokid_cli.repokid.hooks')
+    def test_remove_permissions_from_roles(self, mock_hooks):
+        import json
+        cli = repokid.cli.repokid_cli
+
+        arns = [role['Arn'] for role in ROLES]
+        arns = json.dumps(arns)
+
+        class Hooks:
+            def call_hooks(hooks, tag, role_dict):
+                assert tag == 'AFTER_REPO'
+
+        mock_hooks = Hooks()
+
+        with patch("__builtin__.open", mock_open(read_data=arns)) as mock_file:
+            assert open("somefile.json").read() == arns
+            mock_file.assert_called_with("somefile.json")
+            cli.remove_permissions_from_roles(['s3:putobjectacl'], 'somefile.json', None, None, mock_hooks,
+                                              commit=False)
