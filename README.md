@@ -92,15 +92,15 @@ Running `repokid config config.json` creates a file that you will need to edit. 
 Repokid uses filters to decide which roles are candidates to be repoed.  Filters may be configured to suit your
 environment as described below.
 
-### Blacklist Filter
-Roles may be excluded by adding them to the Blacklist filter.  One common reason to exclude a role is if
+### Blocklist Filter
+Roles may be excluded by adding them to the Blocklist filter.  One common reason to exclude a role is if
 the corresponding workload performs occasional actions that may not have been observed but are known to be
 required.  There are two ways to exclude a role:
 
- - Exclude role name for all accounts: add it to a list in the config `filter_config.BlacklistFilter.all`
- - Exclude role name for specific account: add it to a list in the config `filter_config.BlacklistFilter.<ACCOUNT_NUMBER>`
+ - Exclude role name for all accounts: add it to a list in the config `filter_config.BlocklistFilter.all`
+ - Exclude role name for specific account: add it to a list in the config `filter_config.BlocklistFilter.<ACCOUNT_NUMBER>`
  
- Blacklists can also be maintained in an S3 blacklist file.  They should be in the following form:
+ Blocklists can also be maintained in an S3 blocklist file.  They should be in the following form:
  ```json
  {
    "arns": ["arn1", "arn2"],

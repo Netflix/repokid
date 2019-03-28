@@ -154,7 +154,7 @@ def update_role_data(dynamo_table, account_number, role, current_policy, source=
     """
     Compare the current version of a policy for a role and what has been previously stored in Dynamo.
       - If current and new policy versions are different store the new version in Dynamo. Add any newly added
-          permissions to temporary permission blacklist. Purge any old entries from permission blacklist.
+          permissions to temporary permission blocklist. Purge any old entries from permission blocklist.
       - Refresh the updated time on the role policy
       - If the role is completely new, store the first version in Dynamo
       - Updates the role with full history of policies, including current version

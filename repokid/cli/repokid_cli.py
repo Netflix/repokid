@@ -85,15 +85,15 @@ def _generate_default_config(filename=None):
             "AgeFilter": {
                 "minimum_age": 90
             },
-            "BlacklistFilter": {
+            "BlocklistFilter": {
                 "all": [
                 ],
-                "blacklist_bucket": {
-                    "bucket": "<BLACKLIST_BUCKET>",
-                    "key": "<PATH/blacklist.json>",
-                    "account_number": "<S3_blacklist_account>",
-                    "region": "<S3_blacklist_region",
-                    "assume_role": "<S3_blacklist_assume_role>"
+                "blocklist_bucket": {
+                    "bucket": "<BLOCKLIST_BUCKET>",
+                    "key": "<PATH/blocklist.json>",
+                    "account_number": "<S3_blocklist_account>",
+                    "region": "<S3_blocklist_region",
+                    "assume_role": "<S3_blocklist_assume_role>"
                 }
             }
         },
@@ -101,7 +101,7 @@ def _generate_default_config(filename=None):
         "active_filters": [
             "repokid.filters.age:AgeFilter",
             "repokid.filters.lambda:LambdaFilter",
-            "repokid.filters.blacklist:BlacklistFilter",
+            "repokid.filters.blocklist:BlocklistFilter",
             "repokid.filters.optout:OptOutFilter"
         ],
 
@@ -393,8 +393,10 @@ def update_role_cache(account_number, dynamo_table, config, hooks):
     LOGGER.info('Filtering roles')
     plugins = FilterPlugins()
 
-    # Blacklist needs to know the current account
-    config['filter_config']['BlacklistFilter']['current_account'] = account_number
+    # Blocklist needs to know the current account
+    filter_config = config['filter_config']
+    blocklist_filter_config = filter_config.get('BlocklistFilter', filter_config.get('BlacklistFilter'))
+    blocklist_filter_config['current_account'] = account_number
 
     for plugin_path in config.get('active_filters'):
         plugin_name = plugin_path.split(':')[1]

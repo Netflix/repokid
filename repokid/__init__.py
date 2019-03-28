@@ -28,7 +28,7 @@ def init_config():
 
     Args:
         account_number (string): The current account number Repokid is being run against. This is needed to provide
-                                 the right config to the blacklist filter.
+                                 the right config to the blocklist filter.
 
     Returns:
         None
