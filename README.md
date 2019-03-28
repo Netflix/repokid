@@ -137,14 +137,14 @@ Say that you find a given permission especially dangerous in your environment.  
 
 Find & Remove:
  - Ensure the role cache is updated before beginning.
- - Find roles with a given permission: `repokid find_roles_with_permission <permission> [--output=ROLE_FILE]`
+ - Find roles with a given permission: `repokid find_roles_with_permissions <permission>... [--output=ROLE_FILE]`
  - Remove permission from roles: `repokid remove_permissions_from_roles --role-file=ROLE_FILE <permission>... [-c]`
 
 Example:
 ```
-$ repokid find_roles_with_permission "s3:putobjectacl" --output=putobjectacl.json
+$ repokid find_roles_with_permissions "s3:putobjectacl" "sts:assumerole" --output=myroles.json
 ...
-$ repokid remove_permissions_from_roles --role-file=putobjectacl.json "s3:putobjectacl" -c
+$ repokid remove_permissions_from_roles --role-file=myroles.json "s3:putobjectacl" "sts:assumerole" -c
 ```
 
 ### Rolling back

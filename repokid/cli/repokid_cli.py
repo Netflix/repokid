@@ -16,7 +16,7 @@ Usage:
     repokid config <config_filename>
     repokid update_role_cache <account_number>
     repokid display_role_cache <account_number> [--inactive]
-    repokid find_roles_with_permission <permission> [--output=ROLE_FILE]
+    repokid find_roles_with_permissions <permission>... [--output=ROLE_FILE]
     repokid remove_permissions_from_roles --role-file=ROLE_FILE <permission>... [-c]
     repokid display_role <account_number> <role_name>
     repokid schedule_repo <account_number>
@@ -479,12 +479,12 @@ def display_roles(account_number, dynamo_table, inactive=False):
             csv_writer.writerow(row)
 
 
-def find_roles_with_permission(permission, dynamo_table, output_file):
+def find_roles_with_permissions(permissions, dynamo_table, output_file):
     """
-    Search roles in all accounts for a policy with a given permission, log the ARN of each role with this permission
+    Search roles in all accounts for a policy with any of the provided permissions, log the ARN of each role.
 
     Args:
-        permission (string): The name of the permission to find
+        permissions (list[string]): The name of the permissions to find
         output_file (string): filename to write the output
 
     Returns:
@@ -493,10 +493,14 @@ def find_roles_with_permission(permission, dynamo_table, output_file):
     arns = list()
     for roleID in role_ids_for_all_accounts(dynamo_table):
         role = Role(get_role_data(dynamo_table, roleID, fields=['Policies', 'RoleName', 'Arn', 'Active']))
-        permissions = roledata._get_role_permissions(role)
-        if permission.lower() in permissions and role.active:
+        role_permissions = roledata._get_role_permissions(role)
+
+        permissions = set([p.lower() for p in permissions])
+        found_permissions = permissions.intersection(role_permissions)
+
+        if found_permissions and role.active:
             arns.append(role.arn)
-            LOGGER.info('ARN {arn} has {permission}'.format(arn=role.arn, permission=permission))
+            LOGGER.info('ARN {arn} has {permissions}'.format(arn=role.arn, permissions=list(found_permissions)))
 
     if not output_file:
         return
@@ -1204,13 +1208,14 @@ def main():
         inactive = args.get('--inactive')
         return display_roles(account_number, dynamo_table, inactive=inactive)
 
-    if args.get('find_roles_with_permission'):
+    if args.get('find_roles_with_permissions'):
+        permissions = args.get('<permission>')
         output_file = args.get('--output')
-        return find_roles_with_permission(args.get('<permission>'), dynamo_table, output_file)
+        return find_roles_with_permissions(permissions, dynamo_table, output_file)
 
     if args.get('remove_permissions_from_roles'):
-        permissions = args.get('--permissions')
-        role_filename = args.get('--role-filename')
+        permissions = args.get('<permission>')
+        role_filename = args.get('--role-file')
         commit = args.get('--commit')
         return remove_permissions_from_roles(permissions, role_filename, dynamo_table, config, hooks, commit=commit)
 
