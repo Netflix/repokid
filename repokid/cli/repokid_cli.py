@@ -647,6 +647,7 @@ def show_scheduled_roles(account_number, dynamo_table):
                   for roleID in tqdm(role_ids_for_account(dynamo_table, account_number))])
 
     # filter to show only roles that are scheduled
+    roles = roles.filter(active=True)
     roles = [role for role in roles if (role.repo_scheduled)]
 
     header = ['Role name', 'Scheduled', 'Scheduled Time Elapsed?']
@@ -898,20 +899,22 @@ def repo_role(account_number, role_name, dynamo_table, config, hooks, commit=Fal
     else:
         role = Role(role_data)
 
+    continuing = True
+
     if len(role.disqualified_by) > 0:
         LOGGER.info('Cannot repo role {} in account {} because it is being disqualified by: {}'.format(
             role_name,
             account_number,
             role.disqualified_by))
-        return
+        continuing = False
 
     if not role.aa_data:
         LOGGER.warning('ARN not found in Access Advisor: {}'.format(role.arn))
-        return
+        continuing = False
 
     if not role.repoable_permissions:
         LOGGER.info('No permissions to repo for role {} in account {}'.format(role_name, account_number))
-        return
+        continuing = False
 
     # if we've gotten to this point, load the rest of the role
     role = Role(get_role_data(dynamo_table, role_id))
@@ -927,7 +930,7 @@ def repo_role(account_number, role_name, dynamo_table, config, hooks, commit=Fal
             old_aa_data_services,
             role_name,
             account_number))
-        return
+        continuing = False
 
     permissions = roledata._get_role_permissions(role)
     repoable_permissions = roledata._get_repoable_permissions(account_number, role.role_name, permissions, role.aa_data,
@@ -947,6 +950,11 @@ def repo_role(account_number, role_name, dynamo_table, config, hooks, commit=Fal
                  "Please manually minify.".format(role_name, account_number))
         LOGGER.error(error)
         errors.append(error)
+        continuing = False
+
+    # if we aren't repoing for some reason, unschedule the role
+    if not continuing:
+        set_role_data(dynamo_table, role.role_id, {'RepoScheduled': 0, 'ScheduledPerms': []})
         return
 
     if not commit:
