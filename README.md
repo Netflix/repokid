@@ -15,31 +15,42 @@ an AWS account.
 
 ### Install
 
-```bash
-mkvirtualenv repokid
-git clone git@github.com:Netflix/repokid.git
-cd repokid
-python setup.py develop
-repokid config config.json
-```
+There are multiple methods of install for `Repokid`:
+
+For users intending to only operate and not develop:
+
+        pip install repokid
+
+Otherwise, contributors/developers can use:
+
+        mkvirtualenv repokid
+        git clone git@github.com:Netflix/repokid.git
+        cd repokid
+        python setup.py develop
+        repokid config config.json
+
+---
 
 #### DynamoDB
 
 You will need a [DynamoDB](https://aws.amazon.com/dynamodb/) table called `repokid_roles` (specify account and endpoint in `dynamo_db` in config file).
 
 The table should have the following properties:
- - `RoleId` (string) as a primary partition key, no primary sort key
- - A global secondary index named `Account` with a primary partition key of `Account` and `RoleId` and `Account` as projected attributes
- - A global secondary index named `RoleName` with a primary partition key of `RoleName` and `RoleId` and `RoleName` as projected attributes
+ - `RoleId` (string) as a primary partition key, with no primary sort key.
+ - A global secondary index named `Account` with a primary partition key of `Account`, combined with `RoleId` and `Account` as projected attributes.
+ - A global secondary index named `RoleName` with a primary partition key of `RoleName`, combined with `RoleId` and `RoleName` as projected attributes.
 
-For development, you can run dynamo [locally](http://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.html).
+##### Local Development with DynamoDB
 
-To run locally:
-  `java -Djava.library.path=./DynamoDBLocal_lib -jar DynamoDBLocal.jar -sharedDb -inMemory -port 8010`
-  
+To run [locally](http://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.html):
+
+        java -Djava.library.path=./DynamoDBLocal_lib -jar DynamoDBLocal.jar -sharedDb -inMemory -port 8010
+
 If you run the development version the table and index will be created for you automatically.
- 
- #### IAM Permissions:
+
+---
+
+#### IAM Permissions:
 
 Repokid needs an IAM Role in each account that will be queried.  Additionally, Repokid needs to be launched with a role or user which can `sts:AssumeRole` into the different account roles.
 
