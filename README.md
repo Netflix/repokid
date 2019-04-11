@@ -146,6 +146,14 @@ $ repokid find_roles_with_permissions "s3:putobjectacl" "sts:assumerole" --outpu
 ...
 $ repokid remove_permissions_from_roles --role-file=myroles.json "s3:putobjectacl" "sts:assumerole" -c
 ```
+### Makefile rules
+
+The Makefile at the root of the directory contains some commands that can be used to manage the repository and perform some useful actions that may assist operators/developers.
+
+| command | description |
+| ------- | ----------- |
+| check_host_system_installs | Runs `which` against `binary` targets to check the host level |
+| check_aws_region | Runs an `aws` command that checks the default region set in the local environment. |
 
 ### Rolling back
 Repokid stores a copy of each version of inline policies it knows about.  These are added when
