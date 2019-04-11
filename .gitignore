@@ -1,5 +1,5 @@
 *.pyc
-*.json
+config.json
 *.log
 *.csv
 build
