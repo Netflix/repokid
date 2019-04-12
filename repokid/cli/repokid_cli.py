@@ -495,7 +495,7 @@ def find_roles_with_permissions(permissions, dynamo_table, output_file):
     arns = list()
     for roleID in role_ids_for_all_accounts(dynamo_table):
         role = Role(get_role_data(dynamo_table, roleID, fields=['Policies', 'RoleName', 'Arn', 'Active']))
-        role_permissions = roledata._get_role_permissions(role)
+        role_permissions, _ = roledata._get_role_permissions(role)
 
         permissions = set([p.lower() for p in permissions])
         found_permissions = permissions.intersection(role_permissions)
@@ -553,7 +553,7 @@ def display_role(account_number, role_name, dynamo_table, config, hooks):
     headers = ['Number', 'Source', 'Discovered', 'Permissions', 'Services']
     rows = []
     for index, policies_version in enumerate(role.policies):
-        policy_permissions = roledata._get_permissions_in_policy(policies_version['Policy'])
+        policy_permissions, _ = roledata._get_permissions_in_policy(policies_version['Policy'])
         rows.append([index,
                      policies_version['Source'],
                      policies_version['Discovered'],
@@ -579,9 +579,10 @@ def display_role(account_number, role_name, dynamo_table, config, hooks):
     warn_unknown_permissions = config.get('warnings', {}).get('unknown_permissions', False)
     repoable_permissions = set([])
 
-    permissions = roledata._get_role_permissions(role, warn_unknown_perms=warn_unknown_permissions)
+    permissions, eligible_permissions = roledata._get_role_permissions(role,
+                                                                       warn_unknown_perms=warn_unknown_permissions)
     if len(role.disqualified_by) == 0:
-        repoable_permissions = roledata._get_repoable_permissions(account_number, role.role_name, permissions,
+        repoable_permissions = roledata._get_repoable_permissions(account_number, role.role_name, eligible_permissions,
                                                                   role.aa_data, role.no_repo_permissions,
                                                                   config['filter_config']['AgeFilter']['minimum_age'],
                                                                   hooks)
@@ -932,9 +933,9 @@ def repo_role(account_number, role_name, dynamo_table, config, hooks, commit=Fal
             account_number))
         continuing = False
 
-    permissions = roledata._get_role_permissions(role)
-    repoable_permissions = roledata._get_repoable_permissions(account_number, role.role_name, permissions, role.aa_data,
-                                                              role.no_repo_permissions,
+    total_permissions, eligible_permissions = roledata._get_role_permissions(role)
+    repoable_permissions = roledata._get_repoable_permissions(account_number, role.role_name, eligible_permissions,
+                                                              role.aa_data, role.no_repo_permissions,
                                                               config['filter_config']['AgeFilter']['minimum_age'],
                                                               hooks)
 
@@ -1023,7 +1024,7 @@ def rollback_role(account_number, role_name, dynamo_table, config, hooks, select
         headers = ['Number', 'Source', 'Discovered', 'Permissions', 'Services']
         rows = []
         for index, policies_version in enumerate(role.policies):
-            policy_permissions = roledata._get_permissions_in_policy(policies_version['Policy'])
+            policy_permissions, _ = roledata._get_permissions_in_policy(policies_version['Policy'])
             rows.append([index, policies_version['Source'], policies_version['Discovered'],
                         len(policy_permissions),
                         roledata._get_services_in_permissions(policy_permissions)])
@@ -1044,8 +1045,8 @@ def rollback_role(account_number, role_name, dynamo_table, config, hooks, select
         print "Current policies:"
         pp.pprint(current_policies)
 
-        current_permissions = roledata._get_permissions_in_policy(role.policies[-1]['Policy'])
-        selected_permissions = roledata._get_permissions_in_policy(role.policies[int(selection)]['Policy'])
+        current_permissions, _ = roledata._get_permissions_in_policy(role.policies[-1]['Policy'])
+        selected_permissions, _ = roledata._get_permissions_in_policy(role.policies[int(selection)]['Policy'])
         restored_permissions = selected_permissions - current_permissions
 
         print "\nResore will return these permissions:"

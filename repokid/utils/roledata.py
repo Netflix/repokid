@@ -30,6 +30,8 @@ BEGINNING_OF_2015_MILLI_EPOCH = 1420113600000
 IAM_ACCESS_ADVISOR_UNSUPPORTED_SERVICES = frozenset([''])
 IAM_ACCESS_ADVISOR_UNSUPPORTED_ACTIONS = frozenset(['iam:passrole'])
 
+STATEMENT_SKIP_SID = 'NOREPO'
+
 
 # permission decisions have the form repoable - boolean, and decider - string
 class RepoablePermissionDecision(object):
@@ -97,8 +99,8 @@ def find_newly_added_permissions(old_policy, new_policy):
     Returns:
         set: Exapnded set of permissions that are in the new policy and not the old one
     """
-    old_permissions = _get_role_permissions(Role({'Policies': [{'Policy': old_policy}]}))
-    new_permissions = _get_role_permissions(Role({'Policies': [{'Policy': new_policy}]}))
+    old_permissions, _ = _get_role_permissions(Role({'Policies': [{'Policy': old_policy}]}))
+    new_permissions, _ = _get_role_permissions(Role({'Policies': [{'Policy': new_policy}]}))
     return new_permissions - old_permissions
 
 
@@ -250,9 +252,9 @@ def _calculate_repo_scores(roles, minimum_age, hooks):
         None
     """
     for role in roles:
-        permissions = _get_role_permissions(role)
+        total_permissions, eligible_permissions = _get_role_permissions(role)
 
-        role.total_permissions = len(permissions)
+        role.total_permissions = len(total_permissions)
 
         # if we don't have any access advisor data for a service than nothing is repoable
         if not role.aa_data:
@@ -263,10 +265,10 @@ def _calculate_repo_scores(roles, minimum_age, hooks):
 
         # permissions are only repoable if the role isn't being disqualified by filter(s)
         if len(role.disqualified_by) == 0:
-            repoable_permissions = _get_repoable_permissions(role.account, role.role_name, permissions, role.aa_data,
-                                                             role.no_repo_permissions, minimum_age, hooks)
+            repoable_permissions = _get_repoable_permissions(role.account, role.role_name, eligible_permissions,
+                                                             role.aa_data, role.no_repo_permissions, minimum_age, hooks)
             (repoable_permissions_set, repoable_services_set) = _convert_repoable_perms_to_perms_and_services(
-                permissions, repoable_permissions)
+                eligible_permissions, repoable_permissions)
 
             role.repoable_permissions = len(repoable_permissions)
 
@@ -497,7 +499,15 @@ def _get_repoed_policy(policies, repoable_permissions):
 
         for idx, statement in enumerate(policy['Statement']):
             if statement['Effect'].lower() == 'allow':
+                if 'Sid' in statement and statement['Sid'].startswith(STATEMENT_SKIP_SID):
+                    continue
+
                 statement_actions = get_actions_from_statement(statement)
+
+                if not statement_actions.intersection(repoable_permissions):
+                    # No permissions are being taken away; let's not modify this statement at all.
+                    continue
+
                 statement_actions = statement_actions.difference(repoable_permissions)
 
                 # get_actions_from_statement has already inverted this so our new statement should be 'Action'
@@ -535,21 +545,28 @@ def _get_permissions_in_policy(policy_dict, warn_unknown_perms=False):
         warn_unknown_perms
 
     Returns
+        tuple
         set - all permissions allowed by the policies
+        set - all permisisons allowed by the policies not marked with STATEMENT_SKIP_SID
     """
-    permissions = set()
+    total_permissions = set()
+    eligible_permissions = set()
 
     for policy_name, policy in policy_dict.items():
         policy = expand_policy(policy=policy, expand_deny=False)
         for statement in policy.get('Statement'):
             if statement['Effect'].lower() == 'allow':
-                permissions = permissions.union(get_actions_from_statement(statement))
+                total_permissions = total_permissions.union(get_actions_from_statement(statement))
+                if not ('Sid' in statement and statement['Sid'].startswith(STATEMENT_SKIP_SID)):
+                    # No Sid
+                    # Sid exists, but doesn't start with STATEMENT_SKIP_SID
+                    eligible_permissions = eligible_permissions.union(get_actions_from_statement(statement))
 
-    weird_permissions = permissions.difference(all_permissions)
+    weird_permissions = total_permissions.difference(all_permissions)
     if weird_permissions and warn_unknown_perms:
         LOGGER.warn('Unknown permissions found: {}'.format(weird_permissions))
 
-    return permissions
+    return total_permissions, eligible_permissions
 
 
 def _get_role_permissions(role, warn_unknown_perms=False):
@@ -564,7 +581,9 @@ def _get_role_permissions(role, warn_unknown_perms=False):
         role (Role): The role object that we're getting a list of permissions for
 
     Returns:
-        set: A set of permissions that the role has policies that allow
+        tuple
+        set - all permissions allowed by the policies
+        set - all permisisons allowed by the policies not marked with STATEMENT_SKIP_SID
     """
     return _get_permissions_in_policy(role.policies[-1]['Policy'])
 
