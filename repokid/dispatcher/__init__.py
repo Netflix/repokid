@@ -62,8 +62,8 @@ def list_role_rollbacks(dynamo_table, message):
         role_data = dynamo.get_role_data(dynamo_table, role_id, fields=['Policies'])
         return_val = 'Restorable versions for role {} in account {}\n'.format(message.role_name, message.account)
         for index, policy_version in enumerate(role_data['Policies']):
-            policy_permissions = roledata._get_permissions_in_policy(policy_version['Policy'])
-            return_val += '({:>3}):  {:<5}     {:<15}  {}\n'.format(index, len(policy_permissions),
+            total_permissions, _ = roledata._get_permissions_in_policy(policy_version['Policy'])
+            return_val += '({:>3}):  {:<5}     {:<15}  {}\n'.format(index, len(total_permissions),
                                                                     policy_version['Discovered'],
                                                                     policy_version['Source'])
         return ResponderReturn(successful=True, return_message=return_val)

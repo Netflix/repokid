@@ -57,8 +57,9 @@ class TestRoledata(object):
         mock_get_actions_from_statement.return_value = ROLE_POLICIES['unused_ec2']['ec2_perms']
         mock_expand_policy.return_value = ROLE_POLICIES['unused_ec2']['ec2_perms']
 
-        permissions = repokid.utils.roledata._get_role_permissions(test_role)
-        assert permissions == set(ROLE_POLICIES['unused_ec2']['ec2_perms'])
+        total_permissions, eligible_permissions = repokid.utils.roledata._get_role_permissions(test_role)
+        assert total_permissions == set(ROLE_POLICIES['unused_ec2']['ec2_perms'])
+        assert eligible_permissions == set(ROLE_POLICIES['unused_ec2']['ec2_perms'])
 
     @patch('repokid.hooks.call_hooks')
     def test_get_repoable_permissions(self, mock_call_hooks):
@@ -113,10 +114,13 @@ class TestRoledata(object):
 
         hooks = {}
 
-        mock_get_role_permissions.side_effect = [['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy',
-                                                  'ec2:AllocateHosts', 'ec2:AssociateAddress'],
-                                                 ['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy'],
-                                                 ['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy']]
+        mock_get_role_permissions.side_effect = [(['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy',
+                                                   'ec2:AllocateHosts', 'ec2:AssociateAddress'],
+                                                  ['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy']),
+                                                 (['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy'],
+                                                  ['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy']),
+                                                 (['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy'],
+                                                  ['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy'])]
 
         mock_call_hooks.return_value = set(['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy'])
         mock_get_repoable_permissions.side_effect = [set(['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy'])]
@@ -178,3 +182,104 @@ class TestRoledata(object):
             ['a:b', 'a:c', 'b:a'], ['a', 'b']) == ['a:b', 'a:c', 'b:a']
         assert repokid.utils.roledata._filter_scheduled_repoable_perms(
             ['a:b', 'a:c', 'b:a'], ['a:b', 'a:c']) == ['a:b', 'a:c']
+
+    def test_get_repoed_policy_sid(self):
+        """ roledata._get_repoed_policy(policies, repoable_permissions)
+
+        Cases to consider:
+
+        Ensure statements with Sid's starting with STATEMENT_SKIP_SID are properly ignored.
+        Ensure statements with no repoable permissions are not modified (expanded/inverted/etc)
+
+        Other statements may be modified.
+        """
+        import json
+
+        class TestPolicy:
+            def __init__(self, sid=None, actions=None):
+                self.sid = sid
+                self.actions = actions
+
+            def to_dict(self):
+                policy = {
+                    'Version': '2012-10-17',
+                    'Statement': [
+                        {
+                            'Action': self.actions,
+                            'Resource': ['*'],
+                            'Effect': 'Allow',
+                        }
+                    ]
+                }
+
+                if self.sid:
+                    policy['Statement'][0]['Sid'] = self.sid
+                return policy
+
+        sid = "{}-jira1234".format(repokid.utils.roledata.STATEMENT_SKIP_SID)
+        policies = {
+            'norepo_sid': TestPolicy(sid=sid, actions=['s3:getobject', 'iam:get*', 'sqs:createqueue']).to_dict(),
+            'norepo_used_permissions': TestPolicy(actions=['iam:get*']).to_dict(),
+            'repo_some': TestPolicy(actions=['iam:getaccesskeylastused', 'sqs:createqueue']).to_dict(),
+            'repo_all': TestPolicy(actions=['sqs:createqueue']).to_dict()
+        }
+        repoable_permissions = ['sqs:createqueue']
+        repoed_policies, empty_policies = repokid.utils.roledata._get_repoed_policy(policies, repoable_permissions)
+
+        expected_repo_some = TestPolicy(actions=['iam:getaccesskeylastused']).to_dict()
+        assert ['repo_all'] == empty_policies
+        assert json.dumps(repoed_policies['norepo_sid']) == json.dumps(policies['norepo_sid'])
+        assert json.dumps(repoed_policies['norepo_used_permissions']) == json.dumps(policies['norepo_used_permissions'])
+        assert json.dumps(repoed_policies['repo_some']) == json.dumps(expected_repo_some)
+
+    def test_get_permissions_in_policy_sid(self):
+        """ roledata._get_permissions_in_policy(policy_dict, warn_unkown_perms=False)
+
+        returns total_permissions, eligible_permissions
+
+        Cases to consider:
+
+        Eligible Permissions:
+            no sid
+            sid exists, but doesn't begin with STATEMENT_SKIP_SID
+
+        Not Eligible Permissions:
+            sid beginning with STATEMENT_SKIP_SID
+
+        Eligible should always be a subset of total
+        """
+        class TestPolicy:
+            def __init__(self, sid=None, actions=None):
+                self.sid = sid
+                self.actions = actions
+
+            def to_dict(self):
+                policy = {
+                    'Version': '2012-10-17',
+                    'Statement': [
+                        {
+                            'Action': self.actions,
+                            'Resource': ['*'],
+                            'Effect': 'Allow',
+                        }
+                    ]
+                }
+
+                if self.sid:
+                    policy['Statement'][0]['Sid'] = self.sid
+                return policy
+
+        sid = "{}-jira1234".format(repokid.utils.roledata.STATEMENT_SKIP_SID)
+        policies = {
+            'no_sid': TestPolicy(actions=['ec2:getregions']).to_dict(),
+            'other_sid': TestPolicy(sid='jira-1234', actions=['sqs:createqueue']).to_dict(),
+            'norepo_sid': TestPolicy(sid=sid, actions=['sns:createtopic']).to_dict()
+        }
+
+        total, eligible = repokid.utils.roledata._get_permissions_in_policy(policies)
+
+        # eligible is a subset of total
+        assert eligible < total
+        assert 'ec2:getregions' in eligible
+        assert 'sqs:createqueue' in eligible
+        assert 'sns:createtopic' not in eligible
