@@ -95,6 +95,14 @@ def _generate_default_config(filename=None):
                     "region": "<S3_blocklist_region",
                     "assume_role": "<S3_blocklist_assume_role>"
                 }
+            },
+            "ExclusiveFilter": {
+                "all": [
+                    "<GLOB_PATTERN>"
+                ],
+                "<ACCOUNT_NUMBER>": [
+                    "<GLOB_PATTERN>"
+                ]
             }
         },
 
@@ -370,6 +378,7 @@ def update_role_cache(account_number, dynamo_table, config, hooks):
 
     LOGGER.info('Getting current role data for account {} (this may take a while for large accounts)'.format(
         account_number))
+
     role_data = get_account_authorization_details(filter='Role', **conn)
     role_data_by_id = {item['RoleId']: item for item in role_data}
 
@@ -400,6 +409,10 @@ def update_role_cache(account_number, dynamo_table, config, hooks):
 
     for plugin_path in config.get('active_filters'):
         plugin_name = plugin_path.split(':')[1]
+        if plugin_name == 'ExclusiveFilter':
+            # ExclusiveFilter plugin active; try loading its config. Also, it requires the current account, so add it.
+            exclusive_filter_config = filter_config.get('ExclusiveFilter', {})
+            exclusive_filter_config['current_account'] = account_number
         plugins.load_plugin(plugin_path, config=config['filter_config'].get(plugin_name, None))
 
     for plugin in plugins.filter_plugins:
