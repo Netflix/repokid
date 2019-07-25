@@ -233,7 +233,16 @@ def update_stats(dynamo_table, roles, source='Scan'):
                 add_to_end_of_list(dynamo_table, role.role_id, 'Stats', new_stats)
 
 
-def _calculate_repo_scores(roles, minimum_age, hooks):
+def _update_repoable_services(role, repoable_permissions, eligible_permissions):
+    (repoable_permissions_set, repoable_services_set) = _convert_repoable_perms_to_perms_and_services(
+        eligible_permissions, repoable_permissions)
+
+    # we're going to store both repoable permissions and repoable services in the field "RepoableServices"
+    role.repoable_services = repoable_services_set + repoable_permissions_set
+    role.repoable_permissions = len(repoable_permissions)
+
+
+def _calculate_repo_scores(roles, minimum_age, hooks, batch=False, batch_size=100):
     """
     Get the total and repoable permissions count and set of repoable services for every role in the account.
     For each role:
@@ -251,9 +260,10 @@ def _calculate_repo_scores(roles, minimum_age, hooks):
     Returns:
         None
     """
+    repo_able_roles = []
+    eligible_permissions_dict = {}
     for role in roles:
         total_permissions, eligible_permissions = _get_role_permissions(role)
-
         role.total_permissions = len(total_permissions)
 
         # if we don't have any access advisor data for a service than nothing is repoable
@@ -265,18 +275,25 @@ def _calculate_repo_scores(roles, minimum_age, hooks):
 
         # permissions are only repoable if the role isn't being disqualified by filter(s)
         if len(role.disqualified_by) == 0:
-            repoable_permissions = _get_repoable_permissions(role.account, role.role_name, eligible_permissions,
-                                                             role.aa_data, role.no_repo_permissions, minimum_age, hooks)
-            (repoable_permissions_set, repoable_services_set) = _convert_repoable_perms_to_perms_and_services(
-                eligible_permissions, repoable_permissions)
-
-            role.repoable_permissions = len(repoable_permissions)
-
-            # we're going to store both repoable permissions and repoable services in the field "RepoableServices"
-            role.repoable_services = repoable_services_set + repoable_permissions_set
+            repo_able_roles.append(role)
+            eligible_permissions_dict[role.arn] = eligible_permissions
         else:
             role.repoable_permissions = 0
             role.repoable_services = []
+
+    repoable_permissions_dict = {}
+    if batch:
+        repoable_permissions_dict = _get_repoable_permissions_batch(repo_able_roles, eligible_permissions_dict, minimum_age, hooks, batch_size)
+    else:
+        for role in repo_able_roles:
+            repoable_permissions_dict[role.arn] = _get_repoable_permissions(role.account, role.role_name, eligible_permissions_dict[role.arn],
+                                                             role.aa_data, role.no_repo_permissions, minimum_age, hooks)
+
+    for role in repo_able_roles:
+        eligible_permissions = eligible_permissions_dict[role.arn]
+        repoable_permissions = repoable_permissions_dict[role.arn]
+        _update_repoable_services(role, repoable_permissions, eligible_permissions)
+
 
 
 def _convert_repoable_perms_to_perms_and_services(total_permissions, repoable_permissions):
@@ -382,6 +399,55 @@ def _get_epoch_authenticated(service_authenticated):
         return (None, False)
 
 
+def _get_potentially_repoable_permissions(role_name, account_number, aa_data, permissions, no_repo_permissions, minimum_age):
+    ago = datetime.timedelta(minimum_age)
+    now = datetime.datetime.now(tzlocal())
+
+    current_time = time.time()
+    no_repo_list = [perm.lower() for perm in no_repo_permissions if no_repo_permissions[perm] > current_time]
+
+    # cast all permissions to lowercase
+    permissions = [permission.lower() for permission in permissions]
+    potentially_repoable_permissions = {permission: RepoablePermissionDecision()
+                                        for permission in permissions if permission not in no_repo_list}
+
+    used_services = set()
+    for service in aa_data:
+        (accessed, valid_authenticated) = _get_epoch_authenticated(service['lastAuthenticated'])
+
+        if not accessed:
+            continue
+
+        if not valid_authenticated:
+            LOGGER.error("Got malformed Access Advisor data for {role_name} in {account_number} for service {service}"
+                         ": {last_authenticated}".format(
+                role_name=role_name,
+                account_number=account_number,
+                service=service.get('serviceNamespace'),
+                last_authenticated=service['lastAuthenticated']))
+            used_services.add(service['serviceNamespace'])
+
+        accessed = datetime.datetime.fromtimestamp(accessed, tzlocal())
+        if accessed > now - ago:
+            used_services.add(service['serviceNamespace'])
+
+    for permission_name, permission_decision in potentially_repoable_permissions.items():
+        if permission_name.split(':')[0] in IAM_ACCESS_ADVISOR_UNSUPPORTED_SERVICES:
+            LOGGER.warn('skipping {}'.format(permission_name))
+            continue
+
+        # we have an unused service but need to make sure it's repoable
+        if permission_name.split(':')[0] not in used_services:
+            if permission_name in IAM_ACCESS_ADVISOR_UNSUPPORTED_ACTIONS:
+                LOGGER.warn('skipping {}'.format(permission_name))
+                continue
+
+            permission_decision.repoable = True
+            permission_decision.decider = 'Access Advisor'
+
+    return potentially_repoable_permissions
+
+
 def _get_repoable_permissions(account_number, role_name, permissions, aa_data, no_repo_permissions, minimum_age,
                               hooks):
     """
@@ -407,50 +473,7 @@ def _get_repoable_permissions(account_number, role_name, permissions, aa_data, n
     Returns:
         set: Permissions that are 'repoable' (not used within the time threshold)
     """
-    ago = datetime.timedelta(minimum_age)
-    now = datetime.datetime.now(tzlocal())
-
-    current_time = time.time()
-    no_repo_list = [perm.lower() for perm in no_repo_permissions if no_repo_permissions[perm] > current_time]
-
-    # cast all permissions to lowercase
-    permissions = [permission.lower() for permission in permissions]
-    potentially_repoable_permissions = {permission: RepoablePermissionDecision()
-                                        for permission in permissions if permission not in no_repo_list}
-
-    used_services = set()
-    for service in aa_data:
-        (accessed, valid_authenticated) = _get_epoch_authenticated(service['lastAuthenticated'])
-
-        if not accessed:
-            continue
-
-        if not valid_authenticated:
-            LOGGER.error("Got malformed Access Advisor data for {role_name} in {account_number} for service {service}"
-                         ": {last_authenticated}".format(
-                             role_name=role_name,
-                             account_number=account_number,
-                             service=service.get('serviceNamespace'),
-                             last_authenticated=service['lastAuthenticated']))
-            used_services.add(service['serviceNamespace'])
-
-        accessed = datetime.datetime.fromtimestamp(accessed, tzlocal())
-        if accessed > now - ago:
-            used_services.add(service['serviceNamespace'])
-
-    for permission_name, permission_decision in potentially_repoable_permissions.items():
-        if permission_name.split(':')[0] in IAM_ACCESS_ADVISOR_UNSUPPORTED_SERVICES:
-            LOGGER.warn('skipping {}'.format(permission_name))
-            continue
-
-        # we have an unused service but need to make sure it's repoable
-        if permission_name.split(':')[0] not in used_services:
-            if permission_name in IAM_ACCESS_ADVISOR_UNSUPPORTED_ACTIONS:
-                LOGGER.warn('skipping {}'.format(permission_name))
-                continue
-
-            permission_decision.repoable = True
-            permission_decision.decider = 'Access Advisor'
+    potentially_repoable_permissions = _get_potentially_repoable_permissions(role_name, account_number, aa_data, permissions, no_repo_permissions, minimum_age)
 
     hooks_output = repokid.hooks.call_hooks(hooks, 'DURING_REPOABLE_CALCULATION',
                                             {'account_number': account_number,
@@ -466,6 +489,63 @@ def _get_repoable_permissions(account_number, role_name, permissions, aa_data, n
 
     return set([permission_name for permission_name, permission_value in
                 hooks_output['potentially_repoable_permissions'].items() if permission_value.repoable])
+
+
+
+def _get_repoable_permissions_batch(repo_able_roles, permissions_dict, minimum_age, hooks, batch_size):
+    """
+    Generate a dictionary mapping of role arns to their repoable permissions based on the list of all permissions the role's policies
+    currently allow and Access Advisor data for the services included in the role's policies.
+
+    The first step is to come up with a list of services that were used within the time threshold (the same defined)
+    in the age filter config. Permissions are repoable if they aren't in the used list, aren't in the constant list
+    of unsupported services/actions (IAM_ACCESS_ADVISOR_UNSUPPORTED_SERVICES, IAM_ACCESS_ADVISOR_UNSUPPORTED_ACTIONS),
+    and aren't being temporarily ignored because they're on the no_repo_permissions list (newly added).
+
+    Args:
+    repo_able_roles: (list): List of the roles that can be checked for repoing
+    permissions_dict (dict): Mapping role arns to their full list of permissions that the role's permissions allow
+    minimum_age: Minimum age of a role (in days) for it to be repoable
+    hooks: Dict containing hook names and functions to run
+
+    Returns:
+        dict: Mapping role arns to set of permissions that are 'repoable' (not used within the time threshold)
+    """
+
+    if len(repo_able_roles) == 0:
+        return {}
+
+    repo_able_roles_batches = copy.deepcopy(repo_able_roles)
+    potentially_repoable_permissions_dict = {}
+    repoable_set_dict = {}
+    repoable_log_dict = {}
+
+    for role in repo_able_roles:
+        potentially_repoable_permissions_dict[role.arn] = _get_potentially_repoable_permissions(role.role_name, role.account, role.aa_data, permissions_dict[role.arn], role.no_repo_permissions, minimum_age)
+
+    while len(repo_able_roles_batches) > 0:
+        role_batch = repo_able_roles_batches[:batch_size]
+        repo_able_roles_batches = repo_able_roles_batches[batch_size:]
+
+
+        hooks_output = repokid.hooks.call_hooks(hooks, 'DURING_REPOABLE_CALCULATION_BATCH',
+                                                {'role_batch': role_batch,
+                                                 'potentially_repoable_permissions': potentially_repoable_permissions_dict,
+                                                 'minimum_age': minimum_age})
+        for role_arn, output in hooks_output.items():
+            repoable_set = set([permission_name for permission_name, permission_value in
+                                output['potentially_repoable_permissions'].items() if permission_value.repoable])
+            repoable_set_dict[role_arn] = repoable_set
+            repoable_log_dict[role_arn] = ''.join('{}: {}\n'.format(perm, decision.decider)
+                             for perm, decision in output['potentially_repoable_permissions'].items())
+
+    for role in repo_able_roles:
+        LOGGER.debug('Repoable permissions for role {role_name} in {account_number}:\n{repoable}'.format(
+            role_name=role.role_name,
+            account_number=role.account,
+            repoable=repoable_log_dict[role.arn]))
+    return repoable_set_dict
+
 
 
 def _get_repoed_policy(policies, repoable_permissions):
