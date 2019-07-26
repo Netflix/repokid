@@ -12,7 +12,7 @@ def check_and_log_during_repoable_calculation_hooks(input_dict):
 
 
 @hooks.implements_hook('DURING_REPOABLE_CALCULATION_BATCH', 1)
-def log_during_repoable_calculation_hooks(input_dict):
+def log_during_repoable_calculation_batch_hooks(input_dict):
     LOGGER.debug("Calling DURING_REPOABLE_CALCULATION_BATCH hooks")
 
     if not all(required in input_dict for required in['role_batch', 'potentially_repoable_permissions', 'minimum_age']):

@@ -119,6 +119,7 @@ class TestRoledata(object):
         false_repoable_decision = repokid.utils.roledata.RepoablePermissionDecision()
         false_repoable_decision.repoable = False
 
+        # The new hook should return a dict mapping role arn's to a json of their repoable permissions with decisions
         mock_call_hooks.return_value = {
             "arn:aws:iam::123456789012:role/all_services_used": {
                     'potentially_repoable_permissions': {
