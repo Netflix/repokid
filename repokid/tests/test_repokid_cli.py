@@ -39,7 +39,24 @@ AARDVARK_DATA = {
         {"lastAuthenticated": int(time.time()) * 1000,
          "serviceNamespace": "iam"},
         {"lastAuthenticated": int(time.time()) * 1000,
-         "serviceNamespace": "s3"}]
+         "serviceNamespace": "s3"}],
+
+    "arn:aws:iam::123456789012:role/additional_unused_ec2": [
+        {"lastAuthenticated": int(time.time()) * 1000,
+         "serviceNamespace": "iam"},
+        {"lastAuthenticated": 0,
+         "serviceNamespace": "ec2"},
+        {"lastAuthenticated": 0,
+         "serviceNamespace": "unsupported_service"},
+        {"lastAuthenticated": 0,
+         "serviceNamespace": "supported_service"},
+    ],
+
+    "arn:aws:iam::123456789012:role/unused_iam": [
+        {"lastAuthenticated": 0,
+         "serviceNamespace": "iam"},
+        {"lastAuthenticated": int(time.time()) * 1000,
+         "serviceNamespace": "ec2"}],
 }
 
 ROLE_POLICIES = {
@@ -67,6 +84,52 @@ ROLE_POLICIES = {
         }
     },
     'unused_ec2': {
+        'iam_perms': {
+            'Version': '2012-10-17',
+            'Statement': [
+                {
+                    'Action': ['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy'],
+                    'Resource': ['*'],
+                    'Effect': 'Allow'
+                }
+            ]
+        },
+
+        'ec2_perms': {
+            'Version': '2012-10-17',
+            'Statement': [
+                {
+                    'Action': ['ec2:AllocateHosts', 'ec2:AssociateAddress'],
+                    'Resource': ['*'],
+                    'Effect': 'Allow'
+                }
+            ]
+        }
+    },
+    'additional_unused_ec2': {
+        'iam_perms': {
+            'Version': '2012-10-17',
+            'Statement': [
+                {
+                    'Action': ['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy'],
+                    'Resource': ['*'],
+                    'Effect': 'Allow'
+                }
+            ]
+        },
+
+        'ec2_perms': {
+            'Version': '2012-10-17',
+            'Statement': [
+                {
+                    'Action': ['ec2:AllocateHosts', 'ec2:AssociateAddress'],
+                    'Resource': ['*'],
+                    'Effect': 'Allow'
+                }
+            ]
+        }
+    },
+    'unused_iam': {
         'iam_perms': {
             'Version': '2012-10-17',
             'Statement': [
@@ -119,7 +182,21 @@ ROLES = [
         "RoleId": "AROAABCDEFGHIJKLMNOPD",
         "RoleName": "inactive_role",
         "Active": False,
-    }
+    },
+    {
+        "Arn": "arn:aws:iam::123456789012:role/additional_unused_ec2",
+        "CreateDate": datetime.datetime(2017, 1, 31, 12, 0, 0, tzinfo=tzlocal()),
+        "RoleId": "AROAXYZDEFGHIJKLMNOPB",
+        "RoleName": "unused_ec2",
+        "Active": True,
+    },
+    {
+        "Arn": "arn:aws:iam::123456789012:role/unused_iam",
+        "CreateDate": datetime.datetime(2017, 1, 31, 12, 0, 0, tzinfo=tzlocal()),
+        "RoleId": "AROAXYZDEFGHIJKLMNABC",
+        "RoleName": "unused_ec2",
+        "Active": True,
+    },
 ]
 
 ROLES_FOR_DISPLAY = [
@@ -149,6 +226,20 @@ ROLES_FOR_DISPLAY = [
         "RepoablePermissions": 0,
         "Repoed": "Never",
         "RepoableServices": [],
+        "Refreshed": "Someday"
+    },
+    {
+        "TotalPermissions": 4,
+        "RepoablePermissions": 2,
+        "Repoed": "Never",
+        "RepoableServices": ["ec2"],
+        "Refreshed": "Someday"
+    },
+    {
+        "TotalPermissions": 4,
+        "RepoablePermissions": 2,
+        "Repoed": "Never",
+        "RepoableServices": ["ec2"],
         "Refreshed": "Someday"
     }
 ]
@@ -201,7 +292,7 @@ class TestRepokidCLI(object):
 
         roles = Roles([Role(ROLES[0]), Role(ROLES[1]), Role(ROLES[2])])
 
-        assert mock_calculate_repo_scores.mock_calls == [call(roles, 90, hooks)]
+        assert mock_calculate_repo_scores.mock_calls == [call(roles, 90, hooks, False, 100)]
 
         # validate update data called for each role
         assert mock_update_role_data.mock_calls == [

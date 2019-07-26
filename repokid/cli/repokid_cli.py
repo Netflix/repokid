@@ -81,6 +81,8 @@ def _generate_default_config(filename=None):
         dict: Template for Repokid config as a dictionary
     """
     config_dict = {
+        "batch_processing": False,
+        "batch_processing_size": 100,
         "filter_config": {
             "AgeFilter": {
                 "minimum_age": 90
@@ -304,8 +306,11 @@ def _update_role_data(role, dynamo_table, account_number, config, conn, hooks, s
     if not aardvark_data:
         return
 
+    batch_processing = config.get("batch_processing", False)
+    batch_size = config.get("batch_processing_size", 100)
+
     role.aa_data = aardvark_data[role.arn]
-    roledata._calculate_repo_scores([role], config['filter_config']['AgeFilter']['minimum_age'], hooks)
+    roledata._calculate_repo_scores([role], config['filter_config']['AgeFilter']['minimum_age'], hooks, batch_processing, batch_size)
     set_role_data(dynamo_table, role.role_id, {'AAData': role.aa_data,
                                                'TotalPermissions': role.total_permissions,
                                                'RepoablePermissions': role.repoable_permissions,
@@ -438,7 +443,10 @@ def update_role_cache(account_number, dynamo_table, config, hooks):
             set_role_data(dynamo_table, role.role_id, {'AAData': role.aa_data})
 
     LOGGER.info('Calculating repoable permissions and services for account {}'.format(account_number))
-    roledata._calculate_repo_scores(roles, config['filter_config']['AgeFilter']['minimum_age'], hooks)
+
+    batch_processing = config.get("batch_processing", False)
+    batch_size = config.get("batch_processing_size", 100)
+    roledata._calculate_repo_scores(roles, config['filter_config']['AgeFilter']['minimum_age'], hooks, batch_processing, batch_size)
     for role in roles:
         LOGGER.debug('Role {} in account {} has\nrepoable permissions: {}\nrepoable services:'.format(
             role.role_name, account_number, role.repoable_permissions, role.repoable_services

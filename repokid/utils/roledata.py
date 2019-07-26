@@ -521,12 +521,13 @@ def _get_repoable_permissions_batch(repo_able_roles, permissions_dict, minimum_a
     repoable_log_dict = {}
 
     for role in repo_able_roles:
-        potentially_repoable_permissions_dict[role.arn] = _get_potentially_repoable_permissions(role.role_name, role.account, role.aa_data, permissions_dict[role.arn], role.no_repo_permissions, minimum_age)
+        potentially_repoable_permissions_dict[role.arn] = \
+            _get_potentially_repoable_permissions(role.role_name, role.account, role.aa_data,
+                                                  permissions_dict[role.arn], role.no_repo_permissions, minimum_age)
 
     while len(repo_able_roles_batches) > 0:
         role_batch = repo_able_roles_batches[:batch_size]
         repo_able_roles_batches = repo_able_roles_batches[batch_size:]
-
 
         hooks_output = repokid.hooks.call_hooks(hooks, 'DURING_REPOABLE_CALCULATION_BATCH',
                                                 {'role_batch': role_batch,
