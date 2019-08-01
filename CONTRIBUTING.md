@@ -32,7 +32,7 @@ For the majority of contributors, this will not be a huge factor, however, for t
         $ python setup.py sdist
 
 4. Upload to Pypi using Twine:
-        
+
         $ twine upload dist/*
 
 #### Problems that can be found when creating new versions.

@@ -48,7 +48,7 @@ class BlocklistFilter(Filter):
 
         if blocklist_json:
             blocklisted_role_names.update([name.lower() for name, accounts in blocklist_json['names'].items() if
-                                          ('all' in accounts or config.get('current_account') in accounts)])
+                                           ('all' in accounts or config.get('current_account') in accounts)])
 
         self.blocklisted_arns = set() if not blocklist_json else blocklist_json.get('arns', [])
         self.blocklisted_role_names = blocklisted_role_names

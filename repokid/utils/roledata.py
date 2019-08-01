@@ -283,17 +283,17 @@ def _calculate_repo_scores(roles, minimum_age, hooks, batch=False, batch_size=10
 
     repoable_permissions_dict = {}
     if batch:
-        repoable_permissions_dict = _get_repoable_permissions_batch(repo_able_roles, eligible_permissions_dict, minimum_age, hooks, batch_size)
+        repoable_permissions_dict = _get_repoable_permissions_batch(
+            repo_able_roles, eligible_permissions_dict, minimum_age, hooks, batch_size)
     else:
         for role in repo_able_roles:
             repoable_permissions_dict[role.arn] = _get_repoable_permissions(role.account, role.role_name, eligible_permissions_dict[role.arn],
-                                                             role.aa_data, role.no_repo_permissions, minimum_age, hooks)
+                                                                            role.aa_data, role.no_repo_permissions, minimum_age, hooks)
 
     for role in repo_able_roles:
         eligible_permissions = eligible_permissions_dict[role.arn]
         repoable_permissions = repoable_permissions_dict[role.arn]
         _update_repoable_services(role, repoable_permissions, eligible_permissions)
-
 
 
 def _convert_repoable_perms_to_perms_and_services(total_permissions, repoable_permissions):
@@ -370,7 +370,7 @@ def _filter_scheduled_repoable_perms(repoable_permissions, scheduled_perms):
     """
     (scheduled_permissions, scheduled_services) = _convert_repoed_service_to_sorted_perms_and_services(scheduled_perms)
     return([perm for perm in repoable_permissions
-           if(perm in scheduled_permissions or perm.split(':')[0] in scheduled_services)])
+            if(perm in scheduled_permissions or perm.split(':')[0] in scheduled_services)])
 
 
 def _get_epoch_authenticated(service_authenticated):
@@ -421,10 +421,10 @@ def _get_potentially_repoable_permissions(role_name, account_number, aa_data, pe
         if not valid_authenticated:
             LOGGER.error("Got malformed Access Advisor data for {role_name} in {account_number} for service {service}"
                          ": {last_authenticated}".format(
-                role_name=role_name,
-                account_number=account_number,
-                service=service.get('serviceNamespace'),
-                last_authenticated=service['lastAuthenticated']))
+                             role_name=role_name,
+                             account_number=account_number,
+                             service=service.get('serviceNamespace'),
+                             last_authenticated=service['lastAuthenticated']))
             used_services.add(service['serviceNamespace'])
 
         accessed = datetime.datetime.fromtimestamp(accessed, tzlocal())
@@ -473,7 +473,8 @@ def _get_repoable_permissions(account_number, role_name, permissions, aa_data, n
     Returns:
         set: Permissions that are 'repoable' (not used within the time threshold)
     """
-    potentially_repoable_permissions = _get_potentially_repoable_permissions(role_name, account_number, aa_data, permissions, no_repo_permissions, minimum_age)
+    potentially_repoable_permissions = _get_potentially_repoable_permissions(
+        role_name, account_number, aa_data, permissions, no_repo_permissions, minimum_age)
 
     hooks_output = repokid.hooks.call_hooks(hooks, 'DURING_REPOABLE_CALCULATION',
                                             {'account_number': account_number,
@@ -489,7 +490,6 @@ def _get_repoable_permissions(account_number, role_name, permissions, aa_data, n
 
     return set([permission_name for permission_name, permission_value in
                 hooks_output['potentially_repoable_permissions'].items() if permission_value.repoable])
-
 
 
 def _get_repoable_permissions_batch(repo_able_roles, permissions_dict, minimum_age, hooks, batch_size):
@@ -538,7 +538,7 @@ def _get_repoable_permissions_batch(repo_able_roles, permissions_dict, minimum_a
                                 output['potentially_repoable_permissions'].items() if permission_value.repoable])
             repoable_set_dict[role_arn] = repoable_set
             repoable_log_dict[role_arn] = ''.join('{}: {}\n'.format(perm, decision.decider)
-                             for perm, decision in output['potentially_repoable_permissions'].items())
+                                                  for perm, decision in output['potentially_repoable_permissions'].items())
 
     for role in repo_able_roles:
         LOGGER.debug('Repoable permissions for role {role_name} in {account_number}:\n{repoable}'.format(
@@ -546,7 +546,6 @@ def _get_repoable_permissions_batch(repo_able_roles, permissions_dict, minimum_a
             account_number=role.account,
             repoable=repoable_log_dict[role.arn]))
     return repoable_set_dict
-
 
 
 def _get_repoed_policy(policies, repoable_permissions):

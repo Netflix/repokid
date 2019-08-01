@@ -6,6 +6,7 @@ from repokid.hooks.loggers import log_during_repoable_calculation_batch_hooks
 from repokid.tests.test_repokid_cli import ROLES
 from repokid.role import Role
 
+
 def func_a(input_dict):
     input_dict['value'] += 1
     return input_dict
@@ -68,7 +69,6 @@ class TestHooks(object):
         assert hasattr(func_b, "_implements_hook")
         assert func_b._implements_hook == {"hook_name": 'DECORATOR_TEST', "priority": 1}
 
-
     def test_log_during_repoable_calculation_batch_hooks(self):
         hooks = {'DURING_REPOABLE_CALCULATION_BATCH': [log_during_repoable_calculation_batch_hooks]}
 
@@ -77,7 +77,6 @@ class TestHooks(object):
         with pytest.raises(repokid.hooks.MissingHookParamaeter):
             # role_batch', 'potentially_repoable_permissions', 'minimum_age'
             output_value = repokid.hooks.call_hooks(hooks, 'DURING_REPOABLE_CALCULATION_BATCH', input_dict)
-
 
         input_dict['role_batch'] = [Role(ROLES[0]), Role(ROLES[1]), Role(ROLES[2])]
         assert input_dict == repokid.hooks.call_hooks(hooks, 'DURING_REPOABLE_CALCULATION_BATCH', input_dict)

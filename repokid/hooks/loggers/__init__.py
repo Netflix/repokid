@@ -25,7 +25,8 @@ def log_during_repoable_calculation_batch_hooks(input_dict):
     LOGGER.debug("Calling DURING_REPOABLE_CALCULATION_BATCH hooks")
 
     if not all(required in input_dict for required in['role_batch', 'potentially_repoable_permissions', 'minimum_age']):
-        raise hooks.MissingHookParamaeter("Did not get all required parameters for DURING_REPOABLE_CALCULATION_BATCH hook")
+        raise hooks.MissingHookParamaeter(
+            "Did not get all required parameters for DURING_REPOABLE_CALCULATION_BATCH hook")
     for role in input_dict['role_batch']:
         if not isinstance(role, Role):
             raise hooks.MissingHookParamaeter(

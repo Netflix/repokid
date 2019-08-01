@@ -304,7 +304,7 @@ class TestRepokidCLI(object):
 
         # all roles active
         assert mock_find_and_mark_inactive.mock_calls == [call(dynamo_table, account_number,
-                                                          [Role(ROLES[0]), Role(ROLES[1]), Role(ROLES[2])])]
+                                                               [Role(ROLES[0]), Role(ROLES[1]), Role(ROLES[2])])]
 
         # TODO: validate total permission, repoable, etc are getting updated properly
 
@@ -372,9 +372,9 @@ class TestRepokidCLI(object):
         repokid.cli.repokid_cli.schedule_repo('1234567890', None, config, hooks)
 
         assert mock_set_role_data.mock_calls == [call(None, 'AROAABCDEFGHIJKLMNOPB',
-                                                 {'RepoScheduled': 86401, 'ScheduledPerms': ['ec2']})]
+                                                      {'RepoScheduled': 86401, 'ScheduledPerms': ['ec2']})]
         assert mock_call_hooks.mock_calls == [call(hooks, 'AFTER_SCHEDULE_REPO',
-                                              {'roles': [Role(ROLES_FOR_DISPLAY[1])]})]
+                                                   {'roles': [Role(ROLES_FOR_DISPLAY[1])]})]
 
     @patch('repokid.hooks.call_hooks')
     @patch('repokid.cli.repokid_cli.get_role_data')
