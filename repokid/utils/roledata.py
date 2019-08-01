@@ -287,8 +287,10 @@ def _calculate_repo_scores(roles, minimum_age, hooks, batch=False, batch_size=10
             repo_able_roles, eligible_permissions_dict, minimum_age, hooks, batch_size)
     else:
         for role in repo_able_roles:
-            repoable_permissions_dict[role.arn] = _get_repoable_permissions(role.account, role.role_name, eligible_permissions_dict[role.arn],
-                                                                            role.aa_data, role.no_repo_permissions, minimum_age, hooks)
+            repoable_permissions_dict[role.arn] = _get_repoable_permissions(role.account, role.role_name,
+                                                                            eligible_permissions_dict[role.arn],
+                                                                            role.aa_data, role.no_repo_permissions,
+                                                                            minimum_age, hooks)
 
     for role in repo_able_roles:
         eligible_permissions = eligible_permissions_dict[role.arn]
@@ -399,7 +401,8 @@ def _get_epoch_authenticated(service_authenticated):
         return (None, False)
 
 
-def _get_potentially_repoable_permissions(role_name, account_number, aa_data, permissions, no_repo_permissions, minimum_age):
+def _get_potentially_repoable_permissions(role_name, account_number, aa_data, permissions, no_repo_permissions,
+                                          minimum_age):
     ago = datetime.timedelta(minimum_age)
     now = datetime.datetime.now(tzlocal())
 
@@ -494,8 +497,8 @@ def _get_repoable_permissions(account_number, role_name, permissions, aa_data, n
 
 def _get_repoable_permissions_batch(repo_able_roles, permissions_dict, minimum_age, hooks, batch_size):
     """
-    Generate a dictionary mapping of role arns to their repoable permissions based on the list of all permissions the role's policies
-    currently allow and Access Advisor data for the services included in the role's policies.
+    Generate a dictionary mapping of role arns to their repoable permissions based on the list of all permissions the
+    role's policies currently allow and Access Advisor data for the services included in the role's policies.
 
     The first step is to come up with a list of services that were used within the time threshold (the same defined)
     in the age filter config. Permissions are repoable if they aren't in the used list, aren't in the constant list
@@ -531,14 +534,16 @@ def _get_repoable_permissions_batch(repo_able_roles, permissions_dict, minimum_a
 
         hooks_output = repokid.hooks.call_hooks(hooks, 'DURING_REPOABLE_CALCULATION_BATCH',
                                                 {'role_batch': role_batch,
-                                                 'potentially_repoable_permissions': potentially_repoable_permissions_dict,
+                                                 'potentially_repoable_permissions':
+                                                     potentially_repoable_permissions_dict,
                                                  'minimum_age': minimum_age})
         for role_arn, output in hooks_output.items():
             repoable_set = set([permission_name for permission_name, permission_value in
                                 output['potentially_repoable_permissions'].items() if permission_value.repoable])
             repoable_set_dict[role_arn] = repoable_set
             repoable_log_dict[role_arn] = ''.join('{}: {}\n'.format(perm, decision.decider)
-                                                  for perm, decision in output['potentially_repoable_permissions'].items())
+                                                  for perm, decision in
+                                                  output['potentially_repoable_permissions'].items())
 
     for role in repo_able_roles:
         LOGGER.debug('Repoable permissions for role {role_name} in {account_number}:\n{repoable}'.format(

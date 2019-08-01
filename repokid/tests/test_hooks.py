@@ -76,7 +76,7 @@ class TestHooks(object):
 
         with pytest.raises(repokid.hooks.MissingHookParamaeter):
             # role_batch', 'potentially_repoable_permissions', 'minimum_age'
-            output_value = repokid.hooks.call_hooks(hooks, 'DURING_REPOABLE_CALCULATION_BATCH', input_dict)
+            repokid.hooks.call_hooks(hooks, 'DURING_REPOABLE_CALCULATION_BATCH', input_dict)
 
         input_dict['role_batch'] = [Role(ROLES[0]), Role(ROLES[1]), Role(ROLES[2])]
         assert input_dict == repokid.hooks.call_hooks(hooks, 'DURING_REPOABLE_CALCULATION_BATCH', input_dict)
