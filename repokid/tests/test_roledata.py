@@ -15,7 +15,7 @@ import time
 
 from mock import patch
 from repokid.role import Role
-from repokid.tests.test_repokid_cli import ROLE_POLICIES, ROLES, AARDVARK_DATA
+from repokid.tests.test_repokid_cli import AARDVARK_DATA, ROLE_POLICIES, ROLES
 import repokid.utils.roledata
 
 # AARDVARK_DATA maintained in test_repokid_cli
@@ -314,9 +314,9 @@ class TestRoledata(object):
         )
 
     def test_get_epoch_authenticated(self):
-        assert(repokid.utils.roledata._get_epoch_authenticated(1545787620000) == (1545787620, True))
-        assert(repokid.utils.roledata._get_epoch_authenticated(1545787620) == (1545787620, True))
-        assert(repokid.utils.roledata._get_epoch_authenticated(154578762) == (None, False))
+        assert (repokid.utils.roledata._get_epoch_authenticated(1545787620000) == (1545787620, True))
+        assert (repokid.utils.roledata._get_epoch_authenticated(1545787620) == (1545787620, True))
+        assert (repokid.utils.roledata._get_epoch_authenticated(154578762) == (None, False))
 
     def test_filter_scheduled_repoable_perms(self):
         assert repokid.utils.roledata._filter_scheduled_repoable_perms(
@@ -391,6 +391,7 @@ class TestRoledata(object):
 
         Eligible should always be a subset of total
         """
+
         class TestPolicy:
             def __init__(self, sid=None, actions=None):
                 self.sid = sid

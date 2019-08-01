@@ -1,10 +1,10 @@
 import pytest
 import repokid.cli.repokid_cli
 import repokid.hooks
-from repokid.tests.artifacts.hook import function_1, function_2
 from repokid.hooks.loggers import log_during_repoable_calculation_batch_hooks
-from repokid.tests.test_repokid_cli import ROLES
 from repokid.role import Role
+from repokid.tests.artifacts.hook import function_1, function_2
+from repokid.tests.test_repokid_cli import ROLES
 
 
 def func_a(input_dict):
@@ -34,7 +34,6 @@ def func_e(input_value):
 
 class TestHooks(object):
     def test_call_hooks(self):
-
         hooks = {'TEST_HOOK': [func_a, func_b], 'NOT_CALLED': [func_c], 'MISSING_PARAMETER': [func_d],
                  'MISSING_OUTPUT': [func_e]}
         hook_args = {'value': 0}
