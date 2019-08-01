@@ -81,7 +81,7 @@ def _generate_default_config(filename=None):
         dict: Template for Repokid config as a dictionary
     """
     config_dict = {
-        "batch_processing": False,
+        "query_role_data_in_batch": False,
         "batch_processing_size": 100,
         "filter_config": {
             "AgeFilter": {
@@ -306,7 +306,7 @@ def _update_role_data(role, dynamo_table, account_number, config, conn, hooks, s
     if not aardvark_data:
         return
 
-    batch_processing = config.get("batch_processing", False)
+    batch_processing = config.get("query_role_data_in_batch", False)
     batch_size = config.get("batch_processing_size", 100)
 
     role.aa_data = aardvark_data[role.arn]
@@ -447,7 +447,7 @@ def update_role_cache(account_number, dynamo_table, config, hooks):
 
     LOGGER.info('Calculating repoable permissions and services for account {}'.format(account_number))
 
-    batch_processing = config.get("batch_processing", False)
+    batch_processing = config.get("query_role_data_in_batch", False)
     batch_size = config.get("batch_processing_size", 100)
     roledata._calculate_repo_scores(roles, config['filter_config']['AgeFilter']
                                     ['minimum_age'], hooks, batch_processing, batch_size)
