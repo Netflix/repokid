@@ -36,9 +36,9 @@ For development, you can run dynamo [locally](http://docs.aws.amazon.com/amazond
 
 To run locally:
   `java -Djava.library.path=./DynamoDBLocal_lib -jar DynamoDBLocal.jar -sharedDb -inMemory -port 8010`
-  
+
 If you run the development version the table and index will be created for you automatically.
- 
+
  #### IAM Permissions:
 
 Repokid needs an IAM Role in each account that will be queried.  Additionally, Repokid needs to be launched with a role or user which can `sts:AssumeRole` into the different account roles.
@@ -99,7 +99,7 @@ required.  There are two ways to exclude a role:
 
  - Exclude role name for all accounts: add it to a list in the config `filter_config.BlocklistFilter.all`
  - Exclude role name for specific account: add it to a list in the config `filter_config.BlocklistFilter.<ACCOUNT_NUMBER>`
- 
+
  Blocklists can also be maintained in an S3 blocklist file.  They should be in the following form:
  ```json
  {
@@ -182,7 +182,7 @@ Repokid Dispatcher is designed to listen for messages on a queue and perform act
  - List repoable services from a role
  - Set or remove an opt-out
  - List and perform rollbacks for a role
- 
+
 Repokid will respond on a configurable SNS topic with information about any success or failures. The Dispatcher
 component exists to help with operationalization of the repo lifecycle across your organization. You may choose
 to expose the queue directly to developers, but more likely this should be guarded because rolling back can be

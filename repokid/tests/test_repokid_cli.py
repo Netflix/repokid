@@ -39,7 +39,24 @@ AARDVARK_DATA = {
         {"lastAuthenticated": int(time.time()) * 1000,
          "serviceNamespace": "iam"},
         {"lastAuthenticated": int(time.time()) * 1000,
-         "serviceNamespace": "s3"}]
+         "serviceNamespace": "s3"}],
+
+    "arn:aws:iam::123456789012:role/additional_unused_ec2": [
+        {"lastAuthenticated": int(time.time()) * 1000,
+         "serviceNamespace": "iam"},
+        {"lastAuthenticated": 0,
+         "serviceNamespace": "ec2"},
+        {"lastAuthenticated": 0,
+         "serviceNamespace": "unsupported_service"},
+        {"lastAuthenticated": 0,
+         "serviceNamespace": "supported_service"},
+    ],
+
+    "arn:aws:iam::123456789012:role/unused_iam": [
+        {"lastAuthenticated": 0,
+         "serviceNamespace": "iam"},
+        {"lastAuthenticated": int(time.time()) * 1000,
+         "serviceNamespace": "ec2"}],
 }
 
 ROLE_POLICIES = {
@@ -67,6 +84,52 @@ ROLE_POLICIES = {
         }
     },
     'unused_ec2': {
+        'iam_perms': {
+            'Version': '2012-10-17',
+            'Statement': [
+                {
+                    'Action': ['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy'],
+                    'Resource': ['*'],
+                    'Effect': 'Allow'
+                }
+            ]
+        },
+
+        'ec2_perms': {
+            'Version': '2012-10-17',
+            'Statement': [
+                {
+                    'Action': ['ec2:AllocateHosts', 'ec2:AssociateAddress'],
+                    'Resource': ['*'],
+                    'Effect': 'Allow'
+                }
+            ]
+        }
+    },
+    'additional_unused_ec2': {
+        'iam_perms': {
+            'Version': '2012-10-17',
+            'Statement': [
+                {
+                    'Action': ['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy'],
+                    'Resource': ['*'],
+                    'Effect': 'Allow'
+                }
+            ]
+        },
+
+        'ec2_perms': {
+            'Version': '2012-10-17',
+            'Statement': [
+                {
+                    'Action': ['ec2:AllocateHosts', 'ec2:AssociateAddress'],
+                    'Resource': ['*'],
+                    'Effect': 'Allow'
+                }
+            ]
+        }
+    },
+    'unused_iam': {
         'iam_perms': {
             'Version': '2012-10-17',
             'Statement': [
@@ -119,7 +182,21 @@ ROLES = [
         "RoleId": "AROAABCDEFGHIJKLMNOPD",
         "RoleName": "inactive_role",
         "Active": False,
-    }
+    },
+    {
+        "Arn": "arn:aws:iam::123456789012:role/additional_unused_ec2",
+        "CreateDate": datetime.datetime(2017, 1, 31, 12, 0, 0, tzinfo=tzlocal()),
+        "RoleId": "AROAXYZDEFGHIJKLMNOPB",
+        "RoleName": "unused_ec2",
+        "Active": True,
+    },
+    {
+        "Arn": "arn:aws:iam::123456789012:role/unused_iam",
+        "CreateDate": datetime.datetime(2017, 1, 31, 12, 0, 0, tzinfo=tzlocal()),
+        "RoleId": "AROAXYZDEFGHIJKLMNABC",
+        "RoleName": "unused_ec2",
+        "Active": True,
+    },
 ]
 
 ROLES_FOR_DISPLAY = [
@@ -149,6 +226,20 @@ ROLES_FOR_DISPLAY = [
         "RepoablePermissions": 0,
         "Repoed": "Never",
         "RepoableServices": [],
+        "Refreshed": "Someday"
+    },
+    {
+        "TotalPermissions": 4,
+        "RepoablePermissions": 2,
+        "Repoed": "Never",
+        "RepoableServices": ["ec2"],
+        "Refreshed": "Someday"
+    },
+    {
+        "TotalPermissions": 4,
+        "RepoablePermissions": 2,
+        "Repoed": "Never",
+        "RepoableServices": ["ec2"],
         "Refreshed": "Someday"
     }
 ]
@@ -201,7 +292,7 @@ class TestRepokidCLI(object):
 
         roles = Roles([Role(ROLES[0]), Role(ROLES[1]), Role(ROLES[2])])
 
-        assert mock_calculate_repo_scores.mock_calls == [call(roles, 90, hooks)]
+        assert mock_calculate_repo_scores.mock_calls == [call(roles, 90, hooks, False, 100)]
 
         # validate update data called for each role
         assert mock_update_role_data.mock_calls == [
@@ -213,7 +304,7 @@ class TestRepokidCLI(object):
 
         # all roles active
         assert mock_find_and_mark_inactive.mock_calls == [call(dynamo_table, account_number,
-                                                          [Role(ROLES[0]), Role(ROLES[1]), Role(ROLES[2])])]
+                                                               [Role(ROLES[0]), Role(ROLES[1]), Role(ROLES[2])])]
 
         # TODO: validate total permission, repoable, etc are getting updated properly
 
@@ -281,9 +372,9 @@ class TestRepokidCLI(object):
         repokid.cli.repokid_cli.schedule_repo('1234567890', None, config, hooks)
 
         assert mock_set_role_data.mock_calls == [call(None, 'AROAABCDEFGHIJKLMNOPB',
-                                                 {'RepoScheduled': 86401, 'ScheduledPerms': ['ec2']})]
+                                                      {'RepoScheduled': 86401, 'ScheduledPerms': ['ec2']})]
         assert mock_call_hooks.mock_calls == [call(hooks, 'AFTER_SCHEDULE_REPO',
-                                              {'roles': [Role(ROLES_FOR_DISPLAY[1])]})]
+                                                   {'roles': [Role(ROLES_FOR_DISPLAY[1])]})]
 
     @patch('repokid.hooks.call_hooks')
     @patch('repokid.cli.repokid_cli.get_role_data')

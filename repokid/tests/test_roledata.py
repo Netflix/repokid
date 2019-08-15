@@ -15,29 +15,10 @@ import time
 
 from mock import patch
 from repokid.role import Role
-from repokid.tests.test_repokid_cli import ROLE_POLICIES, ROLES
+from repokid.tests.test_repokid_cli import AARDVARK_DATA, ROLE_POLICIES, ROLES
 import repokid.utils.roledata
 
-
-AARDVARK_DATA = {
-    "arn:aws:iam::123456789012:role/all_services_used": [
-        {"lastAuthenticated": int(time.time()) * 1000,
-         "serviceNamespace": "iam"},
-        {"lastAuthenticated": int(time.time()) * 1000,
-         "serviceNamespace": "s3"}],
-
-    "arn:aws:iam::123456789012:role/unused_ec2": [
-        {"lastAuthenticated": int(time.time()) * 1000,
-         "serviceNamespace": "iam"},
-        {"lastAuthenticated": 0,
-         "serviceNamespace": "ec2"}],
-
-    "arn:aws:iam::123456789012:role/young_role": [
-        {"lastAuthenticated": int(time.time()) * 1000,
-         "serviceNamespace": "iam"},
-        {"lastAuthenticated": int(time.time()) * 1000,
-         "serviceNamespace": "s3"}]
-}
+# AARDVARK_DATA maintained in test_repokid_cli
 
 
 class TestRoledata(object):
@@ -80,12 +61,23 @@ class TestRoledata(object):
 
         no_repo_permissions = {'service_4:action_1': time.time() - 1, 'service_4:action_2': time.time() + 1000}
 
-        repoable_decision = repokid.utils.roledata.RepoablePermissionDecision()
-        repoable_decision.repoable = True
+        true_repoable_decision = repokid.utils.roledata.RepoablePermissionDecision()
+        true_repoable_decision.repoable = True
 
-        mock_call_hooks.return_value = {'potentially_repoable_permissions': {'service_1:action_1': repoable_decision,
-                                                                             'service_1:action_2': repoable_decision,
-                                                                             'service_4:action_1': repoable_decision}}
+        false_repoable_decision = repokid.utils.roledata.RepoablePermissionDecision()
+        false_repoable_decision.repoable = False
+
+        mock_call_hooks.return_value = {'potentially_repoable_permissions':
+                                        {'service_1:action_1': true_repoable_decision,
+                                         'service_1:action_2': true_repoable_decision,
+                                         'service_4:action_1': true_repoable_decision,
+                                         'service_1:action_3': false_repoable_decision,
+                                         'service_1:action_4': false_repoable_decision,
+                                         'service_2:action_1': false_repoable_decision,
+                                         'service_3:action_1': false_repoable_decision,
+                                         'service_3:action_2': false_repoable_decision,
+                                         'service_4:action_2': false_repoable_decision
+                                         }}
 
         repoable_permissions = repokid.utils.roledata._get_repoable_permissions(None, 'test_name', permissions, aa_data,
                                                                                 no_repo_permissions, minimum_age,
@@ -93,6 +85,91 @@ class TestRoledata(object):
         # service_1:action_3 and action_4 are unsupported actions, service_2 is an unsupported service, service_3
         # was used too recently, service_4 action 2 is in no_repo_permissions and not expired
         assert repoable_permissions == set(['service_1:action_1', 'service_1:action_2', 'service_4:action_1'])
+
+    @patch('repokid.hooks.call_hooks')
+    def test_get_repoable_permissions_batch(self, mock_call_hooks):
+        roles = [Role(ROLES[0]), Role(ROLES[4]), Role(ROLES[5])]
+
+        roles[0].aa_data = AARDVARK_DATA[roles[0].arn]
+        roles[1].no_repo_permissions = {'ec2:AllocateHosts': time.time() - 1,
+                                        'ec2:AssociateAddress': time.time() + 1000}
+        roles[1].aa_data = AARDVARK_DATA[roles[1].arn]
+        roles[2].aa_data = AARDVARK_DATA[roles[2].arn]
+
+        minimum_age = 1
+        repokid.utils.roledata.IAM_ACCESS_ADVISOR_UNSUPPORTED_SERVICES = ['unsupported_service']
+        repokid.utils.roledata.IAM_ACCESS_ADVISOR_UNSUPPORTED_ACTIONS = ['supported_service:unsupported_action']
+
+        hooks = {}
+
+        permissions_dict = {
+            "arn:aws:iam::123456789012:role/all_services_used": ['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy',
+                                                                 'ec2:AllocateHosts', 'ec2:AssociateAddress'],
+            "arn:aws:iam::123456789012:role/unused_ec2": ['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy',
+                                                          'ec2:AllocateHosts', 'ec2:AssociateAddress',
+                                                          'unsupported_service:action',
+                                                          'supported_service:unsuported_action'],
+            "arn:aws:iam::123456789012:role/additional_unused_ec2": ['iam:AddRoleToInstanceProfile',
+                                                                     'iam:AttachRolePolicy', 'ec2:AllocateHosts',
+                                                                     'ec2:AssociateAddress'],
+            "arn:aws:iam::123456789012:role/unused_iam": ['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy']
+        }
+
+        true_repoable_decision = repokid.utils.roledata.RepoablePermissionDecision()
+        true_repoable_decision.repoable = True
+
+        false_repoable_decision = repokid.utils.roledata.RepoablePermissionDecision()
+        false_repoable_decision.repoable = False
+
+        # The new hook should return a dict mapping role arn's to a json of their repoable permissions with decisions
+        mock_call_hooks.return_value = {
+            "arn:aws:iam::123456789012:role/all_services_used": {
+                'potentially_repoable_permissions': {
+                    'iam:AddRoleToInstanceProfile': false_repoable_decision,
+                    'iam:AttachRolePolicy': false_repoable_decision,
+                    'ec2:AllocateHosts': false_repoable_decision,
+                    'ec2:AssociateAddress': false_repoable_decision
+                }
+            },
+            "arn:aws:iam::123456789012:role/unused_ec2": {
+                'potentially_repoable_permissions': {
+                    'iam:AddRoleToInstanceProfile': false_repoable_decision,
+                    'iam:AttachRolePolicy': false_repoable_decision,
+                    'ec2:AllocateHosts': true_repoable_decision,
+                    'ec2:AssociateAddress': true_repoable_decision,
+                }
+            },
+            "arn:aws:iam::123456789012:role/additional_unused_ec2": {
+                'potentially_repoable_permissions': {
+                    'iam:AddRoleToInstanceProfile': false_repoable_decision,
+                    'iam:AttachRolePolicy': false_repoable_decision,
+                    'ec2:AllocateHosts': false_repoable_decision,
+                    'ec2:AssociateAddress': false_repoable_decision,
+                    'unsupported_service:action': false_repoable_decision,
+                    'supported_service:unsupported_action': false_repoable_decision
+                }
+            },
+            "arn:aws:iam::123456789012:role/unused_iam": {
+                'potentially_repoable_permissions': {
+                    'iam:AddRoleToInstanceProfile': true_repoable_decision,
+                    'iam:AttachRolePolicy': true_repoable_decision,
+                    'ec2:AllocateHosts': false_repoable_decision,
+                    'ec2:AssociateAddress': false_repoable_decision
+                }
+            },
+        }
+
+        repoable_permissions_dict = {
+            "arn:aws:iam::123456789012:role/all_services_used": set(),
+            "arn:aws:iam::123456789012:role/unused_ec2": set(['ec2:AllocateHosts', 'ec2:AssociateAddress']),
+            "arn:aws:iam::123456789012:role/additional_unused_ec2": set(),
+            "arn:aws:iam::123456789012:role/unused_iam": set(['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy']),
+        }
+
+        assert repoable_permissions_dict == repokid.utils.roledata._get_repoable_permissions_batch(
+            roles, permissions_dict, minimum_age, hooks, 2)
+        assert repoable_permissions_dict == repokid.utils.roledata._get_repoable_permissions_batch(
+            roles, permissions_dict, minimum_age, hooks, 4)
 
     @patch('repokid.utils.roledata._get_role_permissions')
     @patch('repokid.utils.roledata._get_repoable_permissions')
@@ -135,6 +212,72 @@ class TestRoledata(object):
         assert roles[2].repoable_permissions == 0
         assert roles[2].repoable_services == []
 
+    @patch('repokid.utils.roledata._get_role_permissions')
+    @patch('repokid.utils.roledata._get_repoable_permissions_batch')
+    @patch('repokid.hooks.call_hooks')
+    def test_calculate_repo_scores_batch(self, mock_call_hooks, mock_get_repoable_permissions_batch,
+                                         mock_get_role_permissions):
+        roles = [Role(ROLES[0]), Role(ROLES[1]), Role(ROLES[2]), Role(ROLES[4]), Role(ROLES[5])]
+        roles[0].disqualified_by = []
+        roles[0].aa_data = 'some_aa_data'
+
+        # disqualified by a filter
+        roles[1].policies = [{'Policy': ROLE_POLICIES['unused_ec2']}]
+        roles[1].disqualified_by = ['some_filter']
+        roles[1].aa_data = 'some_aa_data'
+
+        # no AA data
+        roles[2].policies = [{'Policy': ROLE_POLICIES['all_services_used']}]
+        roles[2].disqualified_by = []
+        roles[2].aa_data = None
+
+        roles[3].disqualified_by = []
+        roles[3].aa_data = 'some_aa_data'
+
+        roles[4].disqualified_by = []
+        roles[4].aa_data = 'some_aa_data'
+
+        hooks = {}
+
+        mock_get_role_permissions.side_effect = [(['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy',
+                                                   'ec2:AllocateHosts', 'ec2:AssociateAddress'],
+                                                  ['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy']),
+                                                 (['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy'],
+                                                  ['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy']),
+                                                 (['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy'],
+                                                  ['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy']),
+                                                 (['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy',
+                                                   'ec2:AllocateHosts', 'ec2:AssociateAddress'],
+                                                  ['ec2:AllocateHosts', 'ec2:AssociateAddress']),
+                                                 (['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy',
+                                                   'ec2:AllocateHosts', 'ec2:AssociateAddress'],
+                                                  ['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy']),
+                                                 ]
+
+        mock_call_hooks.return_value = set(['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy'])
+
+        batch_perms_dict = {
+            roles[0].arn: set(['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy']),
+            roles[3].arn: set(['ec2:AllocateHosts', 'ec2:AssociateAddress']),
+            roles[4].arn: set(['iam:AddRoleToInstanceProfile', 'iam:AttachRolePolicy']),
+        }
+
+        mock_get_repoable_permissions_batch.side_effect = [batch_perms_dict]
+
+        minimum_age = 90
+        repokid.utils.roledata._calculate_repo_scores(roles, minimum_age, hooks, batch=True, batch_size=100)
+
+        assert roles[0].repoable_permissions == 2
+        assert roles[0].repoable_services == ['iam']
+        assert roles[1].repoable_permissions == 0
+        assert roles[1].repoable_services == []
+        assert roles[2].repoable_permissions == 0
+        assert roles[2].repoable_services == []
+        assert roles[3].repoable_permissions == 2
+        assert roles[3].repoable_services == ['ec2']
+        assert roles[4].repoable_permissions == 2
+        assert roles[4].repoable_services == ['iam']
+
     def test_get_repoed_policy(self):
         policies = ROLE_POLICIES['all_services_used']
         repoable_permissions = set(['iam:addroletoinstanceprofile', 'iam:attachrolepolicy', 's3:createbucket'])
@@ -171,9 +314,9 @@ class TestRoledata(object):
         )
 
     def test_get_epoch_authenticated(self):
-        assert(repokid.utils.roledata._get_epoch_authenticated(1545787620000) == (1545787620, True))
-        assert(repokid.utils.roledata._get_epoch_authenticated(1545787620) == (1545787620, True))
-        assert(repokid.utils.roledata._get_epoch_authenticated(154578762) == (None, False))
+        assert (repokid.utils.roledata._get_epoch_authenticated(1545787620000) == (1545787620, True))
+        assert (repokid.utils.roledata._get_epoch_authenticated(1545787620) == (1545787620, True))
+        assert (repokid.utils.roledata._get_epoch_authenticated(154578762) == (None, False))
 
     def test_filter_scheduled_repoable_perms(self):
         assert repokid.utils.roledata._filter_scheduled_repoable_perms(
@@ -248,6 +391,7 @@ class TestRoledata(object):
 
         Eligible should always be a subset of total
         """
+
         class TestPolicy:
             def __init__(self, sid=None, actions=None):
                 self.sid = sid
