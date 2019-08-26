@@ -567,7 +567,7 @@ def display_roles(account_number, dynamo_table, inactive=False):
     rows.insert(0, headers)
     # print tabulate(rows, headers=headers)
     t.view(rows)
-    with open("table.csv", "wb") as csvfile:
+    with open("table.csv", "w") as csvfile:
         csv_writer = csv.writer(csvfile)
         csv_writer.writerow(headers)
         for row in rows:

@@ -817,7 +817,7 @@ class TestRepokidCLI(object):
 
         mock_hooks = Hooks()
 
-        with patch("__builtin__.open", mock_open(read_data=arns)) as mock_file:
+        with patch("builtins.open", mock_open(read_data=arns)) as mock_file:
             assert open("somefile.json").read() == arns
             mock_file.assert_called_with("somefile.json")
             cli.remove_permissions_from_roles(
