@@ -2,7 +2,7 @@ boto3
 cloudaux
 docopt
 import_string
-marshmallow
+marshmallow<3
 policyuniverse
 requests
 tabulate
@@ -10,3 +10,4 @@ tabview
 tqdm
 pip-tools
 twine
+raven

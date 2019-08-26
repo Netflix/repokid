@@ -23,6 +23,7 @@ def implements_hook(hook_name, priority):
         if not hasattr(func, "_implements_hook"):
             func._implements_hook = {"hook_name": hook_name, "priority": priority}
         return func
+
     return _implements_hook
 
 

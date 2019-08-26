@@ -1,0 +1,28 @@
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v1.4.0  # Use the ref you want to point at
+    hooks:
+    -   id: trailing-whitespace
+    -   id: autopep8-wrapper
+    -   id: check-ast
+    -   id: check-case-conflict
+    -   id: check-yaml
+    -   id: flake8
+        args: []
+    -   id: pretty-format-json
+        args: ["--autofix"]
+
+-   repo: https://github.com/ambv/black
+    rev: stable
+    hooks:
+    - id: black
+      language_version: python3.7
+
+-   repo: local
+    hooks:
+    -   id: python-bandit-vulnerability-check
+        name: bandit
+        entry: bandit
+        args: ['--ini', 'tox.ini', '-r', 'consoleme']
+        language: system
+        pass_filenames: false

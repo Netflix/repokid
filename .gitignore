@@ -14,3 +14,4 @@ dist
 .newt.yml
 tox.ini
 test-reports/*
+config.json

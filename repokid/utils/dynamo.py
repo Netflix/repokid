@@ -16,20 +16,26 @@ def catch_boto_error(func):
         try:
             return func(*args, **kwargs)
         except BotoClientError as e:
-            LOGGER.error('Dynamo table error: {}'.format(e))
+            LOGGER.error("Dynamo table error: {}".format(e))
             sys.exit(1)
+
     return decorated_func
 
 
 @catch_boto_error
 def add_to_end_of_list(dynamo_table, role_id, field_name, object_to_add):
-    dynamo_table.update_item(Key={'RoleId': role_id},
-                             UpdateExpression=("SET #updatelist = list_append(if_not_exists(#updatelist,"
-                                               ":empty_list), :object_to_add)"),
-                             ExpressionAttributeNames={"#updatelist": field_name},
-                             ExpressionAttributeValues={":empty_list": [],
-                                                        ":object_to_add": [_empty_string_to_dynamo_replace(
-                                                            object_to_add)]})
+    dynamo_table.update_item(
+        Key={"RoleId": role_id},
+        UpdateExpression=(
+            "SET #updatelist = list_append(if_not_exists(#updatelist,"
+            ":empty_list), :object_to_add)"
+        ),
+        ExpressionAttributeNames={"#updatelist": field_name},
+        ExpressionAttributeValues={
+            ":empty_list": [],
+            ":object_to_add": [_empty_string_to_dynamo_replace(object_to_add)],
+        },
+    )
 
 
 def dynamo_get_or_create_table(**dynamo_config):
@@ -48,85 +54,56 @@ def dynamo_get_or_create_table(**dynamo_config):
     Returns:
         dynamo_table object
     """
-    if 'localhost' in dynamo_config['endpoint']:
-        resource = boto3.resource('dynamodb',
-                                  region_name='us-east-1',
-                                  endpoint_url=dynamo_config['endpoint'])
+    if "localhost" in dynamo_config["endpoint"]:
+        resource = boto3.resource(
+            "dynamodb", region_name="us-east-1", endpoint_url=dynamo_config["endpoint"]
+        )
     else:
         resource = boto3_cached_conn(
-            'dynamodb',
-            service_type='resource',
-            account_number=dynamo_config['account_number'],
-            assume_role=dynamo_config.get('assume_role', None),
-            session_name=dynamo_config['session_name'],
-            region=dynamo_config['region'])
+            "dynamodb",
+            service_type="resource",
+            account_number=dynamo_config["account_number"],
+            assume_role=dynamo_config.get("assume_role", None),
+            session_name=dynamo_config["session_name"],
+            region=dynamo_config["region"],
+        )
 
     for table in resource.tables.all():
-        if table.name == 'repokid_roles':
+        if table.name == "repokid_roles":
             return table
 
     table = None
     try:
         table = resource.create_table(
-            TableName='repokid_roles',
-            KeySchema=[
-                {
-                    'AttributeName': 'RoleId',
-                    'KeyType': 'HASH'  # Partition key
-                }
-            ],
+            TableName="repokid_roles",
+            KeySchema=[{"AttributeName": "RoleId", "KeyType": "HASH"}],  # Partition key
             AttributeDefinitions=[
-                {
-                    'AttributeName': 'RoleId',
-                    'AttributeType': 'S'
-                },
-                {
-                    'AttributeName': 'RoleName',
-                    'AttributeType': 'S'
-                },
-                {
-                    'AttributeName': 'Account',
-                    'AttributeType': 'S'
-                }
+                {"AttributeName": "RoleId", "AttributeType": "S"},
+                {"AttributeName": "RoleName", "AttributeType": "S"},
+                {"AttributeName": "Account", "AttributeType": "S"},
             ],
-            ProvisionedThroughput={
-                'ReadCapacityUnits': 50,
-                'WriteCapacityUnits': 50
-            },
+            ProvisionedThroughput={"ReadCapacityUnits": 50, "WriteCapacityUnits": 50},
             GlobalSecondaryIndexes=[
                 {
-                    'IndexName': 'Account',
-                    'KeySchema': [
-                        {
-                            'AttributeName': 'Account',
-                            'KeyType': 'HASH'
-                        }
-                    ],
-                    'Projection': {
-                        'ProjectionType': 'KEYS_ONLY',
+                    "IndexName": "Account",
+                    "KeySchema": [{"AttributeName": "Account", "KeyType": "HASH"}],
+                    "Projection": {"ProjectionType": "KEYS_ONLY"},
+                    "ProvisionedThroughput": {
+                        "ReadCapacityUnits": 10,
+                        "WriteCapacityUnits": 10,
                     },
-                    'ProvisionedThroughput': {
-                        'ReadCapacityUnits': 10,
-                        'WriteCapacityUnits': 10
-                    }
                 },
                 {
-                    'IndexName': 'RoleName',
-                    'KeySchema': [
-                        {
-                            'AttributeName': 'RoleName',
-                            'KeyType': 'HASH'
-                        }
-                    ],
-                    'Projection':
-                    {
-                        'ProjectionType': 'KEYS_ONLY',
+                    "IndexName": "RoleName",
+                    "KeySchema": [{"AttributeName": "RoleName", "KeyType": "HASH"}],
+                    "Projection": {"ProjectionType": "KEYS_ONLY"},
+                    "ProvisionedThroughput": {
+                        "ReadCapacityUnits": 10,
+                        "WriteCapacityUnits": 10,
                     },
-                    'ProvisionedThroughput': {
-                        'ReadCapacityUnits': 10,
-                        'WriteCapacityUnits': 10
-                    }
-                }])
+                },
+            ],
+        )
 
     except BotoClientError as e:
         LOGGER.error(e)
@@ -143,15 +120,19 @@ def find_role_in_cache(dynamo_table, account_number, role_name):
     Returns:
         string: RoleID for active role with name in given account, else None
     """
-    results = dynamo_table.query(IndexName='RoleName',
-                                 KeyConditionExpression='RoleName = :rn',
-                                 ExpressionAttributeValues={':rn': role_name})
-    role_id_candidates = [return_dict['RoleId'] for return_dict in results.get('Items')]
+    results = dynamo_table.query(
+        IndexName="RoleName",
+        KeyConditionExpression="RoleName = :rn",
+        ExpressionAttributeValues={":rn": role_name},
+    )
+    role_id_candidates = [return_dict["RoleId"] for return_dict in results.get("Items")]
 
     if len(role_id_candidates) > 1:
         for role_id in role_id_candidates:
-            role_data = get_role_data(dynamo_table, role_id, fields=['Account', 'Active'])
-            if role_data['Account'] == account_number and role_data['Active']:
+            role_data = get_role_data(
+                dynamo_table, role_id, fields=["Account", "Active"]
+            )
+            if role_data["Account"] == account_number and role_data["Active"]:
                 return role_id
     elif len(role_id_candidates) == 1:
         return role_id_candidates[0]
@@ -171,12 +152,12 @@ def get_role_data(dynamo_table, roleID, fields=None):
         dict: data for the role if it exists, else None
     """
     if fields:
-        response = dynamo_table.get_item(Key={'RoleId': roleID}, AttributesToGet=fields)
+        response = dynamo_table.get_item(Key={"RoleId": roleID}, AttributesToGet=fields)
     else:
-        response = dynamo_table.get_item(Key={'RoleId': roleID})
+        response = dynamo_table.get_item(Key={"RoleId": roleID})
 
-    if response and 'Item' in response:
-        return _empty_string_from_dynamo_replace(response['Item'])
+    if response and "Item" in response:
+        return _empty_string_from_dynamo_replace(response["Item"])
 
 
 @catch_boto_error
@@ -192,17 +173,21 @@ def role_ids_for_account(dynamo_table, account_number):
     """
     role_ids = set()
 
-    results = dynamo_table.query(IndexName='Account',
-                                 KeyConditionExpression='Account = :act',
-                                 ExpressionAttributeValues={':act': account_number})
-    role_ids.update([return_dict['RoleId'] for return_dict in results.get('Items')])
+    results = dynamo_table.query(
+        IndexName="Account",
+        KeyConditionExpression="Account = :act",
+        ExpressionAttributeValues={":act": account_number},
+    )
+    role_ids.update([return_dict["RoleId"] for return_dict in results.get("Items")])
 
-    while 'LastEvaluatedKey' in results:
-        results = dynamo_table.query(IndexName='Account',
-                                     KeyConditionExpression='Account = :act',
-                                     ExpressionAttributeValues={':act': account_number},
-                                     ExclusiveStartKey=results.get('LastEvaluatedKey'))
-        role_ids.update([return_dict['RoleId'] for return_dict in results.get('Items')])
+    while "LastEvaluatedKey" in results:
+        results = dynamo_table.query(
+            IndexName="Account",
+            KeyConditionExpression="Account = :act",
+            ExpressionAttributeValues={":act": account_number},
+            ExclusiveStartKey=results.get("LastEvaluatedKey"),
+        )
+        role_ids.update([return_dict["RoleId"] for return_dict in results.get("Items")])
     return role_ids
 
 
@@ -219,13 +204,15 @@ def role_ids_for_all_accounts(dynamo_table):
     """
     role_ids = []
 
-    response = dynamo_table.scan(ProjectionExpression='RoleId')
-    role_ids.extend([role_dict['RoleId'] for role_dict in response['Items']])
+    response = dynamo_table.scan(ProjectionExpression="RoleId")
+    role_ids.extend([role_dict["RoleId"] for role_dict in response["Items"]])
 
-    while 'LastEvaluatedKey' in response:
-        response = dynamo_table.scan(ProjectionExpression='RoleId',
-                                     ExclusiveStartKey=response['LastEvaluatedKey'])
-        role_ids.extend([role_dict['RoleId'] for role_dict in response['Items']])
+    while "LastEvaluatedKey" in response:
+        response = dynamo_table.scan(
+            ProjectionExpression="RoleId",
+            ExclusiveStartKey=response["LastEvaluatedKey"],
+        )
+        role_ids.extend([role_dict["RoleId"] for role_dict in response["Items"]])
     return role_ids
 
 
@@ -238,25 +225,36 @@ def set_role_data(dynamo_table, role_id, update_keys):
     expression_attribute_names = {}
     expression_attribute_values = {}
     count = 0
-    for key, value in update_keys.iteritems():
+    for key, value in update_keys.items():
         count += 1
 
         if count > 1:
-            update_expression += ', '
+            update_expression += ", "
 
         value = _empty_string_to_dynamo_replace(value)
 
-        update_expression += '#expr{} = :val{}'.format(count, count)
-        expression_attribute_names['#expr{}'.format(count)] = key
-        expression_attribute_values[':val{}'.format(count)] = value
+        update_expression += "#expr{} = :val{}".format(count, count)
+        expression_attribute_names["#expr{}".format(count)] = key
+        expression_attribute_values[":val{}".format(count)] = value
 
-    dynamo_table.update_item(Key={'RoleId': role_id},
-                             UpdateExpression=update_expression,
-                             ExpressionAttributeNames=expression_attribute_names,
-                             ExpressionAttributeValues=expression_attribute_values)
+    dynamo_table.update_item(
+        Key={"RoleId": role_id},
+        UpdateExpression=update_expression,
+        ExpressionAttributeNames=expression_attribute_names,
+        ExpressionAttributeValues=expression_attribute_values,
+    )
 
 
-def store_initial_role_data(dynamo_table, arn, create_date, role_id, role_name, account_number, current_policy, tags):
+def store_initial_role_data(
+    dynamo_table,
+    arn,
+    create_date,
+    role_id,
+    role_name,
+    account_number,
+    current_policy,
+    tags,
+):
     """
     Store the initial version of a role in Dynamo
 
@@ -267,17 +265,30 @@ def store_initial_role_data(dynamo_table, arn, create_date, role_id, role_name, 
     Returns:
         None
     """
-    policy_entry = {'Source': 'Scan', 'Discovered': datetime.datetime.utcnow().isoformat(), 'Policy': current_policy}
+    policy_entry = {
+        "Source": "Scan",
+        "Discovered": datetime.datetime.utcnow().isoformat(),
+        "Policy": current_policy,
+    }
 
-    role_dict = {'Arn': arn, 'CreateDate': create_date.isoformat(), 'RoleId': role_id, 'RoleName': role_name,
-                 'Account': account_number, 'Policies': [policy_entry],
-                 'Refreshed': datetime.datetime.utcnow().isoformat(), 'Active': True, 'Repoed': 'Never', 'Tags': tags}
+    role_dict = {
+        "Arn": arn,
+        "CreateDate": create_date.isoformat(),
+        "RoleId": role_id,
+        "RoleName": role_name,
+        "Account": account_number,
+        "Policies": [policy_entry],
+        "Refreshed": datetime.datetime.utcnow().isoformat(),
+        "Active": True,
+        "Repoed": "Never",
+        "Tags": tags,
+    }
 
     store_dynamo = copy.copy(role_dict)
 
     dynamo_table.put_item(Item=_empty_string_to_dynamo_replace(store_dynamo))
     # we want to store CreateDate as a string but keep it as a datetime, so put it back here
-    role_dict['CreateDate'] = create_date
+    role_dict["CreateDate"] = create_date
     return role_dict
 
 
@@ -292,12 +303,12 @@ def _empty_string_from_dynamo_replace(obj):
         object: Object with original empty strings
     """
     if isinstance(obj, dict):
-        return {k: _empty_string_from_dynamo_replace(v) for k, v in obj.items()}
+        return {k: _empty_string_from_dynamo_replace(v) for k, v in list(obj.items())}
     elif isinstance(obj, list):
         return [_empty_string_from_dynamo_replace(elem) for elem in obj]
     else:
         if str(obj) == DYNAMO_EMPTY_STRING:
-            obj = ''
+            obj = ""
         return obj
 
 
@@ -312,12 +323,12 @@ def _empty_string_to_dynamo_replace(obj):
         object: Object with Dynamo friendly empty strings
     """
     if isinstance(obj, dict):
-        return {k: _empty_string_to_dynamo_replace(v) for k, v in obj.items()}
+        return {k: _empty_string_to_dynamo_replace(v) for k, v in list(obj.items())}
     elif isinstance(obj, list):
         return [_empty_string_to_dynamo_replace(elem) for elem in obj]
     else:
         try:
-            if str(obj) == '':
+            if str(obj) == "":
                 obj = DYNAMO_EMPTY_STRING
         except UnicodeEncodeError:
             obj = DYNAMO_EMPTY_STRING
