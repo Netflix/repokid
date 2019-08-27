@@ -1559,7 +1559,7 @@ def repo_stats(output_file, dynamo_table, account_number=None):
             )
 
     try:
-        with open(output_file, "wb") as csvfile:
+        with open(output_file, "w") as csvfile:
             csv_writer = csv.writer(csvfile)
             csv_writer.writerow(headers)
             for row in rows:
