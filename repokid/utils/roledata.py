@@ -23,24 +23,29 @@ from repokid import CONFIG as CONFIG
 from repokid import LOGGER as LOGGER
 import repokid.hooks
 from repokid.role import Role
-from repokid.utils.dynamo import (add_to_end_of_list, get_role_data, role_ids_for_account, set_role_data,
-                                  store_initial_role_data)
+from repokid.utils.dynamo import (
+    add_to_end_of_list,
+    get_role_data,
+    role_ids_for_account,
+    set_role_data,
+    store_initial_role_data,
+)
 
 BEGINNING_OF_2015_MILLI_EPOCH = 1420113600000
-IAM_ACCESS_ADVISOR_UNSUPPORTED_SERVICES = frozenset([''])
-IAM_ACCESS_ADVISOR_UNSUPPORTED_ACTIONS = frozenset(['iam:passrole'])
+IAM_ACCESS_ADVISOR_UNSUPPORTED_SERVICES = frozenset([""])
+IAM_ACCESS_ADVISOR_UNSUPPORTED_ACTIONS = frozenset(["iam:passrole"])
 
-STATEMENT_SKIP_SID = 'NOREPO'
+STATEMENT_SKIP_SID = "NOREPO"
 
 
 # permission decisions have the form repoable - boolean, and decider - string
 class RepoablePermissionDecision(object):
     def __init__(self):
         self.repoable = None
-        self.decider = ''
+        self.decider = ""
 
     def __repr__(self):
-        return('Is repoable: {}, Decider: {}'.format(self.repoable, self.decider))
+        return "Is repoable: {}, Decider: {}".format(self.repoable, self.decider)
 
 
 def add_new_policy_version(dynamo_table, role, current_policy, update_source):
@@ -57,11 +62,16 @@ def add_new_policy_version(dynamo_table, role, current_policy, update_source):
     Returns:
         None
     """
-    policy_entry = {'Source': update_source, 'Discovered': datetime.datetime.utcnow().isoformat(),
-                    'Policy': current_policy}
+    policy_entry = {
+        "Source": update_source,
+        "Discovered": datetime.datetime.utcnow().isoformat(),
+        "Policy": current_policy,
+    }
 
-    add_to_end_of_list(dynamo_table, role.role_id, 'Policies', policy_entry)
-    role.policies = get_role_data(dynamo_table, role.role_id, fields=['Policies'])['Policies']
+    add_to_end_of_list(dynamo_table, role.role_id, "Policies", policy_entry)
+    role.policies = get_role_data(dynamo_table, role.role_id, fields=["Policies"])[
+        "Policies"
+    ]
 
 
 def find_and_mark_inactive(dynamo_table, account_number, active_roles):
@@ -82,9 +92,9 @@ def find_and_mark_inactive(dynamo_table, account_number, active_roles):
     inactive_roles = known_roles - active_roles
 
     for roleID in inactive_roles:
-        role_dict = get_role_data(dynamo_table, roleID, fields=['Active', 'Arn'])
-        if role_dict.get('Active'):
-            set_role_data(dynamo_table, roleID, {'Active': False})
+        role_dict = get_role_data(dynamo_table, roleID, fields=["Active", "Arn"])
+        if role_dict.get("Active"):
+            set_role_data(dynamo_table, roleID, {"Active": False})
 
 
 def find_newly_added_permissions(old_policy, new_policy):
@@ -99,8 +109,12 @@ def find_newly_added_permissions(old_policy, new_policy):
     Returns:
         set: Exapnded set of permissions that are in the new policy and not the old one
     """
-    old_permissions, _ = _get_role_permissions(Role({'Policies': [{'Policy': old_policy}]}))
-    new_permissions, _ = _get_role_permissions(Role({'Policies': [{'Policy': new_policy}]}))
+    old_permissions, _ = _get_role_permissions(
+        Role({"Policies": [{"Policy": old_policy}]})
+    )
+    new_permissions, _ = _get_role_permissions(
+        Role({"Policies": [{"Policy": new_policy}]})
+    )
     return new_permissions - old_permissions
 
 
@@ -118,23 +132,32 @@ def update_no_repo_permissions(dynamo_table, role, newly_added_permissions):
         None
     """
     current_ignored_permissions = get_role_data(
-        dynamo_table, role.role_id, fields=['NoRepoPermissions']).get('NoRepoPermissions', {})
+        dynamo_table, role.role_id, fields=["NoRepoPermissions"]
+    ).get("NoRepoPermissions", {})
     new_ignored_permissions = {}
 
     current_time = int(time.time())
     new_perms_expire_time = current_time + (
-        24 * 60 * 60 * CONFIG['repo_requirements'].get('exclude_new_permissions_for_days', 14))
+        24
+        * 60
+        * 60
+        * CONFIG["repo_requirements"].get("exclude_new_permissions_for_days", 14)
+    )
 
     # only copy non-expired items to the new dictionary
-    for permission, expire_time in current_ignored_permissions.items():
+    for permission, expire_time in list(current_ignored_permissions.items()):
         if expire_time > current_time:
-            new_ignored_permissions[permission] = current_ignored_permissions[permission]
+            new_ignored_permissions[permission] = current_ignored_permissions[
+                permission
+            ]
 
     for permission in newly_added_permissions:
         new_ignored_permissions[permission] = new_perms_expire_time
 
     role.no_repo_permissions = new_ignored_permissions
-    set_role_data(dynamo_table, role.role_id, {'NoRepoPermissions': role.no_repo_permissions})
+    set_role_data(
+        dynamo_table, role.role_id, {"NoRepoPermissions": role.no_repo_permissions}
+    )
 
 
 def update_opt_out(dynamo_table, role):
@@ -148,11 +171,13 @@ def update_opt_out(dynamo_table, role):
     Returns:
         None
     """
-    if role.opt_out and int(role.opt_out['expire']) < int(time.time()):
-        set_role_data(dynamo_table, role.role_id, {'OptOut': {}})
+    if role.opt_out and int(role.opt_out["expire"]) < int(time.time()):
+        set_role_data(dynamo_table, role.role_id, {"OptOut": {}})
 
 
-def update_role_data(dynamo_table, account_number, role, current_policy, source='Scan', add_no_repo=True):
+def update_role_data(
+    dynamo_table, account_number, role, current_policy, source="Scan", add_no_repo=True
+):
     """
     Compare the current version of a policy for a role and what has been previously stored in Dynamo.
       - If current and new policy versions are different store the new version in Dynamo. Add any newly added
@@ -173,40 +198,60 @@ def update_role_data(dynamo_table, account_number, role, current_policy, source=
     """
 
     # policy_entry: source, discovered, policy
-    stored_role = get_role_data(dynamo_table, role.role_id, fields=['OptOut', 'Policies', 'Tags'])
+    stored_role = get_role_data(
+        dynamo_table, role.role_id, fields=["OptOut", "Policies", "Tags"]
+    )
     if not stored_role:
-        role_dict = store_initial_role_data(dynamo_table, role.arn, role.create_date, role.role_id, role.role_name,
-                                            account_number, current_policy, role.tags)
+        role_dict = store_initial_role_data(
+            dynamo_table,
+            role.arn,
+            role.create_date,
+            role.role_id,
+            role.role_name,
+            account_number,
+            current_policy,
+            role.tags,
+        )
         role.set_attributes(role_dict)
-        LOGGER.info('Added new role ({}): {}'.format(role.role_id, role.arn))
+        LOGGER.info("Added new role ({}): {}".format(role.role_id, role.arn))
     else:
         # is the policy list the same as the last we had?
-        old_policy = stored_role['Policies'][-1]['Policy']
+        old_policy = stored_role["Policies"][-1]["Policy"]
         if current_policy != old_policy:
             add_new_policy_version(dynamo_table, role, current_policy, source)
-            LOGGER.info('{} has different inline policies than last time, adding to role store'.format(role.arn))
+            LOGGER.info(
+                "{} has different inline policies than last time, adding to role store".format(
+                    role.arn
+                )
+            )
 
-            newly_added_permissions = find_newly_added_permissions(old_policy, current_policy)
+            newly_added_permissions = find_newly_added_permissions(
+                old_policy, current_policy
+            )
         else:
             newly_added_permissions = set()
 
         # update tags if needed
-        if role.tags != stored_role.get('Tags', []):
-            set_role_data(dynamo_table, role.role_id, {'Tags': role.tags})
+        if role.tags != stored_role.get("Tags", []):
+            set_role_data(dynamo_table, role.role_id, {"Tags": role.tags})
 
         if add_no_repo:
             update_no_repo_permissions(dynamo_table, role, newly_added_permissions)
         update_opt_out(dynamo_table, role)
-        set_role_data(dynamo_table, role.role_id, {'Refreshed': datetime.datetime.utcnow().isoformat()})
+        set_role_data(
+            dynamo_table,
+            role.role_id,
+            {"Refreshed": datetime.datetime.utcnow().isoformat()},
+        )
 
         # Update all data from Dynamo except CreateDate (it's in the wrong format) and DQ_by (we're going to recalc)
         current_role_data = get_role_data(dynamo_table, role.role_id)
-        current_role_data.pop('CreateDate', None)
-        current_role_data.pop('DisqualifiedBy', None)
+        current_role_data.pop("CreateDate", None)
+        current_role_data.pop("DisqualifiedBy", None)
         role.set_attributes(current_role_data)
 
 
-def update_stats(dynamo_table, roles, source='Scan'):
+def update_stats(dynamo_table, roles, source="Scan"):
     """
     Create a new stats entry for each role in a set of roles and add it to Dynamo
 
@@ -218,24 +263,34 @@ def update_stats(dynamo_table, roles, source='Scan'):
         None
     """
     for role in roles:
-        new_stats = {'Date': datetime.datetime.utcnow().isoformat(),
-                     'DisqualifiedBy': role.disqualified_by,
-                     'PermissionsCount': role.total_permissions,
-                     'RepoablePermissionsCount': role.repoable_permissions,
-                     'Source': source}
+        new_stats = {
+            "Date": datetime.datetime.utcnow().isoformat(),
+            "DisqualifiedBy": role.disqualified_by,
+            "PermissionsCount": role.total_permissions,
+            "RepoablePermissionsCount": role.repoable_permissions,
+            "Source": source,
+        }
         try:
             cur_stats = role.stats[-1]
         except IndexError:
-            cur_stats = {'DisqualifiedBy': [], 'PermissionsCount': 0, 'RepoablePermissionsCount': 0}
+            cur_stats = {
+                "DisqualifiedBy": [],
+                "PermissionsCount": 0,
+                "RepoablePermissionsCount": 0,
+            }
 
-        for item in ['DisqualifiedBy', 'PermissionsCount', 'RepoablePermissionsCount']:
+        for item in ["DisqualifiedBy", "PermissionsCount", "RepoablePermissionsCount"]:
             if new_stats.get(item) != cur_stats.get(item):
-                add_to_end_of_list(dynamo_table, role.role_id, 'Stats', new_stats)
+                add_to_end_of_list(dynamo_table, role.role_id, "Stats", new_stats)
 
 
 def _update_repoable_services(role, repoable_permissions, eligible_permissions):
-    (repoable_permissions_set, repoable_services_set) = _convert_repoable_perms_to_perms_and_services(
-        eligible_permissions, repoable_permissions)
+    (
+        repoable_permissions_set,
+        repoable_services_set,
+    ) = _convert_repoable_perms_to_perms_and_services(
+        eligible_permissions, repoable_permissions
+    )
 
     # we're going to store both repoable permissions and repoable services in the field "RepoableServices"
     role.repoable_services = repoable_services_set + repoable_permissions_set
@@ -268,7 +323,7 @@ def _calculate_repo_scores(roles, minimum_age, hooks, batch=False, batch_size=10
 
         # if we don't have any access advisor data for a service than nothing is repoable
         if not role.aa_data:
-            LOGGER.info('No data found in access advisor for {}'.format(role.role_id))
+            LOGGER.info("No data found in access advisor for {}".format(role.role_id))
             role.repoable_permissions = 0
             role.repoable_services = []
             continue
@@ -284,13 +339,19 @@ def _calculate_repo_scores(roles, minimum_age, hooks, batch=False, batch_size=10
     repoable_permissions_dict = {}
     if batch:
         repoable_permissions_dict = _get_repoable_permissions_batch(
-            repo_able_roles, eligible_permissions_dict, minimum_age, hooks, batch_size)
+            repo_able_roles, eligible_permissions_dict, minimum_age, hooks, batch_size
+        )
     else:
         for role in repo_able_roles:
-            repoable_permissions_dict[role.arn] = _get_repoable_permissions(role.account, role.role_name,
-                                                                            eligible_permissions_dict[role.arn],
-                                                                            role.aa_data, role.no_repo_permissions,
-                                                                            minimum_age, hooks)
+            repoable_permissions_dict[role.arn] = _get_repoable_permissions(
+                role.account,
+                role.role_name,
+                eligible_permissions_dict[role.arn],
+                role.aa_data,
+                role.no_repo_permissions,
+                minimum_age,
+                hooks,
+            )
 
     for role in repo_able_roles:
         eligible_permissions = eligible_permissions_dict[role.arn]
@@ -298,7 +359,9 @@ def _calculate_repo_scores(roles, minimum_age, hooks, batch=False, batch_size=10
         _update_repoable_services(role, repoable_permissions, eligible_permissions)
 
 
-def _convert_repoable_perms_to_perms_and_services(total_permissions, repoable_permissions):
+def _convert_repoable_perms_to_perms_and_services(
+    total_permissions, repoable_permissions
+):
     """
     Take a list of total permissions and repoable permissions and determine whether only a few permissions are being
     repoed or if the entire service (all permissions from that service) are being removed.
@@ -320,16 +383,21 @@ def _convert_repoable_perms_to_perms_and_services(total_permissions, repoable_pe
 
     # group total permissions and repoable permissions by service
     for perm in total_permissions:
-        total_perms_by_service[perm.split(':')[0]].append(perm)
+        total_perms_by_service[perm.split(":")[0]].append(perm)
 
     for perm in repoable_permissions:
-        repoable_perms_by_service[perm.split(':')[0]].append(perm)
+        repoable_perms_by_service[perm.split(":")[0]].append(perm)
 
     for service in repoable_perms_by_service:
-        if all(perm in repoable_perms_by_service[service] for perm in total_perms_by_service[service]):
+        if all(
+            perm in repoable_perms_by_service[service]
+            for perm in total_perms_by_service[service]
+        ):
             repoed_services.add(service)
         else:
-            repoed_permissions.update(perm for perm in repoable_perms_by_service[service])
+            repoed_permissions.update(
+                perm for perm in repoable_perms_by_service[service]
+            )
 
     return (sorted(repoed_permissions), sorted(repoed_services))
 
@@ -352,7 +420,7 @@ def _convert_repoed_service_to_sorted_perms_and_services(repoed_services):
     repoable_services = set()
 
     for entry in repoed_services:
-        if len(entry.split(':')) == 2:
+        if len(entry.split(":")) == 2:
             repoable_permissions.add(entry)
         else:
             repoable_services.add(entry)
@@ -370,9 +438,15 @@ def _filter_scheduled_repoable_perms(repoable_permissions, scheduled_perms):
     Returns:
         list: New (filtered) repoable permissions
     """
-    (scheduled_permissions, scheduled_services) = _convert_repoed_service_to_sorted_perms_and_services(scheduled_perms)
-    return([perm for perm in repoable_permissions
-            if(perm in scheduled_permissions or perm.split(':')[0] in scheduled_services)])
+    (
+        scheduled_permissions,
+        scheduled_services,
+    ) = _convert_repoed_service_to_sorted_perms_and_services(scheduled_perms)
+    return [
+        perm
+        for perm in repoable_permissions
+        if (perm in scheduled_permissions or perm.split(":")[0] in scheduled_services)
+    ]
 
 
 def _get_epoch_authenticated(service_authenticated):
@@ -401,58 +475,80 @@ def _get_epoch_authenticated(service_authenticated):
         return (None, False)
 
 
-def _get_potentially_repoable_permissions(role_name, account_number, aa_data, permissions, no_repo_permissions,
-                                          minimum_age):
+def _get_potentially_repoable_permissions(
+    role_name, account_number, aa_data, permissions, no_repo_permissions, minimum_age
+):
     ago = datetime.timedelta(minimum_age)
     now = datetime.datetime.now(tzlocal())
 
     current_time = time.time()
-    no_repo_list = [perm.lower() for perm in no_repo_permissions if no_repo_permissions[perm] > current_time]
+    no_repo_list = [
+        perm.lower()
+        for perm in no_repo_permissions
+        if no_repo_permissions[perm] > current_time
+    ]
 
     # cast all permissions to lowercase
     permissions = [permission.lower() for permission in permissions]
-    potentially_repoable_permissions = {permission: RepoablePermissionDecision()
-                                        for permission in permissions if permission not in no_repo_list}
+    potentially_repoable_permissions = {
+        permission: RepoablePermissionDecision()
+        for permission in permissions
+        if permission not in no_repo_list
+    }
 
     used_services = set()
     for service in aa_data:
-        (accessed, valid_authenticated) = _get_epoch_authenticated(service['lastAuthenticated'])
+        (accessed, valid_authenticated) = _get_epoch_authenticated(
+            service["lastAuthenticated"]
+        )
 
         if not accessed:
             continue
 
         if not valid_authenticated:
-            LOGGER.error("Got malformed Access Advisor data for {role_name} in {account_number} for service {service}"
-                         ": {last_authenticated}".format(
-                             role_name=role_name,
-                             account_number=account_number,
-                             service=service.get('serviceNamespace'),
-                             last_authenticated=service['lastAuthenticated']))
-            used_services.add(service['serviceNamespace'])
+            LOGGER.error(
+                "Got malformed Access Advisor data for {role_name} in {account_number} for service {service}"
+                ": {last_authenticated}".format(
+                    role_name=role_name,
+                    account_number=account_number,
+                    service=service.get("serviceNamespace"),
+                    last_authenticated=service["lastAuthenticated"],
+                )
+            )
+            used_services.add(service["serviceNamespace"])
 
         accessed = datetime.datetime.fromtimestamp(accessed, tzlocal())
         if accessed > now - ago:
-            used_services.add(service['serviceNamespace'])
+            used_services.add(service["serviceNamespace"])
 
-    for permission_name, permission_decision in potentially_repoable_permissions.items():
-        if permission_name.split(':')[0] in IAM_ACCESS_ADVISOR_UNSUPPORTED_SERVICES:
-            LOGGER.warn('skipping {}'.format(permission_name))
+    for permission_name, permission_decision in list(
+        potentially_repoable_permissions.items()
+    ):
+        if permission_name.split(":")[0] in IAM_ACCESS_ADVISOR_UNSUPPORTED_SERVICES:
+            LOGGER.warn("skipping {}".format(permission_name))
             continue
 
         # we have an unused service but need to make sure it's repoable
-        if permission_name.split(':')[0] not in used_services:
+        if permission_name.split(":")[0] not in used_services:
             if permission_name in IAM_ACCESS_ADVISOR_UNSUPPORTED_ACTIONS:
-                LOGGER.warn('skipping {}'.format(permission_name))
+                LOGGER.warn("skipping {}".format(permission_name))
                 continue
 
             permission_decision.repoable = True
-            permission_decision.decider = 'Access Advisor'
+            permission_decision.decider = "Access Advisor"
 
     return potentially_repoable_permissions
 
 
-def _get_repoable_permissions(account_number, role_name, permissions, aa_data, no_repo_permissions, minimum_age,
-                              hooks):
+def _get_repoable_permissions(
+    account_number,
+    role_name,
+    permissions,
+    aa_data,
+    no_repo_permissions,
+    minimum_age,
+    hooks,
+):
     """
     Generate a list of repoable permissions for a role based on the list of all permissions the role's policies
     currently allow and Access Advisor data for the services included in the role's policies.
@@ -477,25 +573,52 @@ def _get_repoable_permissions(account_number, role_name, permissions, aa_data, n
         set: Permissions that are 'repoable' (not used within the time threshold)
     """
     potentially_repoable_permissions = _get_potentially_repoable_permissions(
-        role_name, account_number, aa_data, permissions, no_repo_permissions, minimum_age)
+        role_name,
+        account_number,
+        aa_data,
+        permissions,
+        no_repo_permissions,
+        minimum_age,
+    )
 
-    hooks_output = repokid.hooks.call_hooks(hooks, 'DURING_REPOABLE_CALCULATION',
-                                            {'account_number': account_number,
-                                             'role_name': role_name,
-                                             'potentially_repoable_permissions': potentially_repoable_permissions,
-                                             'minimum_age': minimum_age})
+    hooks_output = repokid.hooks.call_hooks(
+        hooks,
+        "DURING_REPOABLE_CALCULATION",
+        {
+            "account_number": account_number,
+            "role_name": role_name,
+            "potentially_repoable_permissions": potentially_repoable_permissions,
+            "minimum_age": minimum_age,
+        },
+    )
 
-    LOGGER.debug('Repoable permissions for role {role_name} in {account_number}:\n{repoable}'.format(
-        role_name=role_name,
-        account_number=account_number,
-        repoable=''.join('{}: {}\n'.format(perm, decision.decider)
-                         for perm, decision in hooks_output['potentially_repoable_permissions'].items())))
+    LOGGER.debug(
+        "Repoable permissions for role {role_name} in {account_number}:\n{repoable}".format(
+            role_name=role_name,
+            account_number=account_number,
+            repoable="".join(
+                "{}: {}\n".format(perm, decision.decider)
+                for perm, decision in list(
+                    hooks_output["potentially_repoable_permissions"].items()
+                )
+            ),
+        )
+    )
 
-    return set([permission_name for permission_name, permission_value in
-                hooks_output['potentially_repoable_permissions'].items() if permission_value.repoable])
+    return set(
+        [
+            permission_name
+            for permission_name, permission_value in list(
+                hooks_output["potentially_repoable_permissions"].items()
+            )
+            if permission_value.repoable
+        ]
+    )
 
 
-def _get_repoable_permissions_batch(repo_able_roles, permissions_dict, minimum_age, hooks, batch_size):
+def _get_repoable_permissions_batch(
+    repo_able_roles, permissions_dict, minimum_age, hooks, batch_size
+):
     """
     Generate a dictionary mapping of role arns to their repoable permissions based on the list of all permissions the
     role's policies currently allow and Access Advisor data for the services included in the role's policies.
@@ -524,33 +647,56 @@ def _get_repoable_permissions_batch(repo_able_roles, permissions_dict, minimum_a
     repoable_log_dict = {}
 
     for role in repo_able_roles:
-        potentially_repoable_permissions_dict[role.arn] = (
-            _get_potentially_repoable_permissions(role.role_name, role.account, role.aa_data,
-                                                  permissions_dict[role.arn], role.no_repo_permissions, minimum_age)
+        potentially_repoable_permissions_dict[
+            role.arn
+        ] = _get_potentially_repoable_permissions(
+            role.role_name,
+            role.account,
+            role.aa_data,
+            permissions_dict[role.arn],
+            role.no_repo_permissions,
+            minimum_age,
         )
 
     while len(repo_able_roles_batches) > 0:
         role_batch = repo_able_roles_batches[:batch_size]
         repo_able_roles_batches = repo_able_roles_batches[batch_size:]
 
-        hooks_output = repokid.hooks.call_hooks(hooks, 'DURING_REPOABLE_CALCULATION_BATCH',
-                                                {'role_batch': role_batch,
-                                                 'potentially_repoable_permissions':
-                                                     potentially_repoable_permissions_dict,
-                                                 'minimum_age': minimum_age})
-        for role_arn, output in hooks_output.items():
-            repoable_set = set([permission_name for permission_name, permission_value in
-                                output['potentially_repoable_permissions'].items() if permission_value.repoable])
+        hooks_output = repokid.hooks.call_hooks(
+            hooks,
+            "DURING_REPOABLE_CALCULATION_BATCH",
+            {
+                "role_batch": role_batch,
+                "potentially_repoable_permissions": potentially_repoable_permissions_dict,
+                "minimum_age": minimum_age,
+            },
+        )
+        for role_arn, output in list(hooks_output.items()):
+            repoable_set = set(
+                [
+                    permission_name
+                    for permission_name, permission_value in list(
+                        output["potentially_repoable_permissions"].items()
+                    )
+                    if permission_value.repoable
+                ]
+            )
             repoable_set_dict[role_arn] = repoable_set
-            repoable_log_dict[role_arn] = ''.join('{}: {}\n'.format(perm, decision.decider)
-                                                  for perm, decision in
-                                                  output['potentially_repoable_permissions'].items())
+            repoable_log_dict[role_arn] = "".join(
+                "{}: {}\n".format(perm, decision.decider)
+                for perm, decision in list(
+                    output["potentially_repoable_permissions"].items()
+                )
+            )
 
     for role in repo_able_roles:
-        LOGGER.debug('Repoable permissions for role {role_name} in {account_number}:\n{repoable}'.format(
-            role_name=role.role_name,
-            account_number=role.account,
-            repoable=repoable_log_dict[role.arn]))
+        LOGGER.debug(
+            "Repoable permissions for role {role_name} in {account_number}:\n{repoable}".format(
+                role_name=role.role_name,
+                account_number=role.account,
+                repoable=repoable_log_dict[role.arn],
+            )
+        )
     return repoable_set_dict
 
 
@@ -576,16 +722,18 @@ def _get_repoed_policy(policies, repoable_permissions):
     role_policies = copy.deepcopy(policies)
 
     empty_policies = []
-    for policy_name, policy in role_policies.items():
+    for policy_name, policy in list(role_policies.items()):
         # list of indexes in the policy that are empty
         empty_statements = []
 
-        if type(policy['Statement']) is dict:
-            policy['Statement'] = [policy['Statement']]
+        if type(policy["Statement"]) is dict:
+            policy["Statement"] = [policy["Statement"]]
 
-        for idx, statement in enumerate(policy['Statement']):
-            if statement['Effect'].lower() == 'allow':
-                if 'Sid' in statement and statement['Sid'].startswith(STATEMENT_SKIP_SID):
+        for idx, statement in enumerate(policy["Statement"]):
+            if statement["Effect"].lower() == "allow":
+                if "Sid" in statement and statement["Sid"].startswith(
+                    STATEMENT_SKIP_SID
+                ):
                     continue
 
                 statement_actions = get_actions_from_statement(statement)
@@ -597,22 +745,22 @@ def _get_repoed_policy(policies, repoable_permissions):
                 statement_actions = statement_actions.difference(repoable_permissions)
 
                 # get_actions_from_statement has already inverted this so our new statement should be 'Action'
-                if 'NotAction' in statement:
-                    del statement['NotAction']
+                if "NotAction" in statement:
+                    del statement["NotAction"]
 
                 # by putting this into a set, we lose order, which may be confusing to someone.
-                statement['Action'] = sorted(list(statement_actions))
+                statement["Action"] = sorted(list(statement_actions))
 
                 # mark empty statements to be removed
-                if len(statement['Action']) == 0:
+                if len(statement["Action"]) == 0:
                     empty_statements.append(idx)
 
         # do the actual removal of empty statements
         for idx in sorted(empty_statements, reverse=True):
-            del policy['Statement'][idx]
+            del policy["Statement"][idx]
 
         # mark empty policies to be removed
-        if len(policy['Statement']) == 0:
+        if len(policy["Statement"]) == 0:
             empty_policies.append(policy_name)
 
     # do the actual removal of empty policies.
@@ -638,19 +786,26 @@ def _get_permissions_in_policy(policy_dict, warn_unknown_perms=False):
     total_permissions = set()
     eligible_permissions = set()
 
-    for policy_name, policy in policy_dict.items():
+    for policy_name, policy in list(policy_dict.items()):
         policy = expand_policy(policy=policy, expand_deny=False)
-        for statement in policy.get('Statement'):
-            if statement['Effect'].lower() == 'allow':
-                total_permissions = total_permissions.union(get_actions_from_statement(statement))
-                if not ('Sid' in statement and statement['Sid'].startswith(STATEMENT_SKIP_SID)):
+        for statement in policy.get("Statement"):
+            if statement["Effect"].lower() == "allow":
+                total_permissions = total_permissions.union(
+                    get_actions_from_statement(statement)
+                )
+                if not (
+                    "Sid" in statement
+                    and statement["Sid"].startswith(STATEMENT_SKIP_SID)
+                ):
                     # No Sid
                     # Sid exists, but doesn't start with STATEMENT_SKIP_SID
-                    eligible_permissions = eligible_permissions.union(get_actions_from_statement(statement))
+                    eligible_permissions = eligible_permissions.union(
+                        get_actions_from_statement(statement)
+                    )
 
     weird_permissions = total_permissions.difference(all_permissions)
     if weird_permissions and warn_unknown_perms:
-        LOGGER.warn('Unknown permissions found: {}'.format(weird_permissions))
+        LOGGER.warn("Unknown permissions found: {}".format(weird_permissions))
 
     return total_permissions, eligible_permissions
 
@@ -671,7 +826,7 @@ def _get_role_permissions(role, warn_unknown_perms=False):
         set - all permissions allowed by the policies
         set - all permisisons allowed by the policies not marked with STATEMENT_SKIP_SID
     """
-    return _get_permissions_in_policy(role.policies[-1]['Policy'])
+    return _get_permissions_in_policy(role.policies[-1]["Policy"])
 
 
 def _get_services_in_permissions(permissions_set):
@@ -687,7 +842,7 @@ def _get_services_in_permissions(permissions_set):
     services_set = set()
     for permission in permissions_set:
         try:
-            service = permission.split(':')[0]
+            service = permission.split(":")[0]
         except IndexError:
             pass
         else:

@@ -13,40 +13,52 @@
 #     limitations under the License.
 import copy
 
-dict_to_attr = {'AAData': {'attribute': 'aa_data', 'default': dict()},
-                'Account': {'attribute': 'account', 'default': None},
-                'Active': {'attribute': 'active', 'default': True},
-                'Arn': {'attribute': 'arn', 'default': None},
-                'AssumeRolePolicyDocument': {'attribute': 'assume_role_policy_document', 'default': None},
-                'CreateDate': {'attribute': 'create_date', 'default': None},
-                'DisqualifiedBy': {'attribute': 'disqualified_by', 'default': list()},
-                'NoRepoPermissions': {'attribute': 'no_repo_permissions', 'default': dict()},
-                'OptOut': {'attribute': 'opt_out', 'default': dict()},
-                'Policies': {'attribute': 'policies', 'default': list()},
-                'Refreshed': {'attribute': 'refreshed', 'default': str()},
-                'RepoablePermissions': {'attribute': 'repoable_permissions', 'default': int()},
-                'RepoableServices': {'attribute': 'repoable_services', 'default': list()},
-                'Repoed': {'attribute': 'repoed', 'default': str()},
-                'RepoScheduled': {'attribute': 'repo_scheduled', 'default': int()},
-                'RoleId': {'attribute': 'role_id', 'default': None},
-                'RoleName': {'attribute': 'role_name', 'default': None},
-                'ScheduledPerms': {'attribute': 'scheduled_perms', 'default': dict()},
-                'Stats': {'attribute': 'stats', 'default': list()},
-                'Tags': {'attribute': 'tags', 'default': list()},
-                'TotalPermissions': {'attribute': 'total_permissions', 'default': int()}}
+dict_to_attr = {
+    "AAData": {"attribute": "aa_data", "default": dict()},
+    "Account": {"attribute": "account", "default": None},
+    "Active": {"attribute": "active", "default": True},
+    "Arn": {"attribute": "arn", "default": None},
+    "AssumeRolePolicyDocument": {
+        "attribute": "assume_role_policy_document",
+        "default": None,
+    },
+    "CreateDate": {"attribute": "create_date", "default": None},
+    "DisqualifiedBy": {"attribute": "disqualified_by", "default": list()},
+    "NoRepoPermissions": {"attribute": "no_repo_permissions", "default": dict()},
+    "OptOut": {"attribute": "opt_out", "default": dict()},
+    "Policies": {"attribute": "policies", "default": list()},
+    "Refreshed": {"attribute": "refreshed", "default": str()},
+    "RepoablePermissions": {"attribute": "repoable_permissions", "default": int()},
+    "RepoableServices": {"attribute": "repoable_services", "default": list()},
+    "Repoed": {"attribute": "repoed", "default": str()},
+    "RepoScheduled": {"attribute": "repo_scheduled", "default": int()},
+    "RoleId": {"attribute": "role_id", "default": None},
+    "RoleName": {"attribute": "role_name", "default": None},
+    "ScheduledPerms": {"attribute": "scheduled_perms", "default": dict()},
+    "Stats": {"attribute": "stats", "default": list()},
+    "Tags": {"attribute": "tags", "default": list()},
+    "TotalPermissions": {"attribute": "total_permissions", "default": int()},
+}
 
 
 class Role(object):
     def __init__(self, role_dict):
-        for key, value in dict_to_attr.items():
-            setattr(self, value['attribute'], role_dict[key] if key in role_dict else copy.copy(value['default']))
+        for key, value in list(dict_to_attr.items()):
+            setattr(
+                self,
+                value["attribute"],
+                role_dict[key] if key in role_dict else copy.copy(value["default"]),
+            )
 
     def as_dict(self):
-        return {key: getattr(self, value['attribute']) for key, value in dict_to_attr.items()}
+        return {
+            key: getattr(self, value["attribute"])
+            for key, value in dict_to_attr.items()
+        }
 
     def set_attributes(self, attributes_dict):
         for key, value in attributes_dict.items():
-            setattr(self, dict_to_attr[key]['attribute'], value)
+            setattr(self, dict_to_attr[key]["attribute"], value)
 
     def __eq__(self, other):
         return self.role_id == other
@@ -72,8 +84,9 @@ class Roles(object):
         return str([role.role_id for role in self.roles])
 
     def __eq__(self, other):
-        return (all(role.role_id in other for role in self.roles) and
-                all(role.role_id in self.roles for role in other))
+        return all(role.role_id in other for role in self.roles) and all(
+            role.role_id in self.roles for role in other
+        )
 
     def append(self, role):
         self.roles.append(role)

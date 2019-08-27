@@ -17,42 +17,43 @@ import re
 
 from setuptools import find_packages, setup
 
-with open('requirements.txt') as f:
+with open("requirements.in") as f:
     REQUIRED = f.read().splitlines()
 
-_version_re = re.compile(r'__version__\s+=\s+(.*)')
-with open('repokid/__init__.py', 'rb') as f:
-    REPOKID_VERSION = str(ast.literal_eval(_version_re.search(
-        f.read().decode('utf-8')).group(1)))
+_version_re = re.compile(r"__version__\s+=\s+(.*)")
+with open("repokid/__init__.py", "rb") as f:
+    REPOKID_VERSION = str(
+        ast.literal_eval(_version_re.search(f.read().decode("utf-8")).group(1))
+    )
 
 setup(
-    name='repokid',
+    name="repokid",
     version=REPOKID_VERSION,
-    description='AWS Least Privilege for Distributed, High-Velocity Deployment',
+    description="AWS Least Privilege for Distributed, High-Velocity Deployment",
     # removed as I think getting long_desc to work is perhaps outside the scope
     # of this PR, other long_desc's I've seen have used .rst to display on
     # Pypi, so I think that may be necessary also.
     # long_description=open("readme.md").read(),
-    url='https://github.com/Netflix/repokid',
+    url="https://github.com/Netflix/repokid",
     packages=find_packages(),
     install_requires=REQUIRED,
-    keywords=['aws', 'iam', 'access_advisor'],
+    keywords=["aws", "iam", "access_advisor"],
     entry_points={
-        'console_scripts': [
-            'repokid = repokid.cli.repokid_cli:main',
-            'dispatcher = repokid.cli.dispatcher_cli:main'
-        ],
+        "console_scripts": [
+            "repokid = repokid.cli.repokid_cli:main",
+            "dispatcher = repokid.cli.dispatcher_cli:main",
+        ]
     },
     classifiers=[
-        'Development Status :: 5 - Production/Stable',
-        'Intended Audience :: Developers',
-        'Intended Audience :: System Administrators',
-        'License :: OSI Approved :: Apache Software License',
-        'Natural Language :: English',
-        'Operating System :: OS Independent',
-        'Programming Language :: Python :: 2.7',
-        'Topic :: Security',
-        'Topic :: System',
-        'Topic :: System :: Systems Administration'
-    ]
+        "Development Status :: 5 - Production/Stable",
+        "Intended Audience :: Developers",
+        "Intended Audience :: System Administrators",
+        "License :: OSI Approved :: Apache Software License",
+        "Natural Language :: English",
+        "Operating System :: OS Independent",
+        "Programming Language :: Python :: 3.7",
+        "Topic :: Security",
+        "Topic :: System",
+        "Topic :: System :: Systems Administration",
+    ],
 )

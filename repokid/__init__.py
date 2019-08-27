@@ -19,7 +19,7 @@ import os
 
 import import_string
 
-__version__ = '0.9.5'
+__version__ = "0.10.0"
 
 
 def init_config():
@@ -33,12 +33,14 @@ def init_config():
     Returns:
         None
     """
-    load_config_paths = [os.path.join(os.getcwd(), 'config.json'),
-                         '/etc/repokid/config.json',
-                         '/apps/repokid/config.json']
+    load_config_paths = [
+        os.path.join(os.getcwd(), "config.json"),
+        "/etc/repokid/config.json",
+        "/apps/repokid/config.json",
+    ]
     for path in load_config_paths:
         try:
-            with open(path, 'r') as f:
+            with open(path, "r") as f:
                 print("Loaded config from {}".format(path))
                 return json.load(f)
 
@@ -59,12 +61,12 @@ def init_logging():
         None
     """
     if CONFIG:
-        logging.config.dictConfig(CONFIG['logging'])
+        logging.config.dictConfig(CONFIG["logging"])
 
     # these loggers are very noisy
     suppressed_loggers = [
-        'botocore.vendored.requests.packages.urllib3.connectionpool',
-        'urllib3'
+        "botocore.vendored.requests.packages.urllib3.connectionpool",
+        "urllib3",
     ]
 
     for logger in suppressed_loggers:
@@ -94,7 +96,9 @@ def _get_hooks(hooks_list):
             if hasattr(func, "_implements_hook"):
                 # append to the dictionary in whatever order we see them, we'll sort later. Dictionary value should be
                 # a list of tuples (priority, function)
-                hooks[func._implements_hook['hook_name']].append((func._implements_hook['priority'], func))
+                hooks[func._implements_hook["hook_name"]].append(
+                    (func._implements_hook["priority"], func)
+                )
 
     # sort by priority
     for k in hooks.keys():
