@@ -53,11 +53,11 @@ class Role(object):
     def as_dict(self):
         return {
             key: getattr(self, value["attribute"])
-            for key, value in list(dict_to_attr.items())
+            for key, value in dict_to_attr.items()
         }
 
     def set_attributes(self, attributes_dict):
-        for key, value in list(attributes_dict.items()):
+        for key, value in attributes_dict.items():
             setattr(self, dict_to_attr[key]["attribute"], value)
 
     def __eq__(self, other):
@@ -102,6 +102,6 @@ class Roles(object):
 
     def filter(self, **kwargs):
         roles = self.roles
-        for arg, value in list(kwargs.items()):
+        for arg, value in kwargs.items():
             roles = [role for role in roles if getattr(role, arg, None) == value]
         return roles

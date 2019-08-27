@@ -494,7 +494,7 @@ def update_role_cache(account_number, dynamo_table, config, hooks):
     )
     for role in roles:
         LOGGER.debug(
-            "Role {} in account {} has\nrepoable permissions: {}\nrepoable services:".format(
+            "Role {} in account {} has\nrepoable permissions: {}\nrepoable services: {}".format(
                 role.role_name,
                 account_number,
                 role.repoable_permissions,
@@ -1368,9 +1368,9 @@ def rollback_role(
     # if we're restoring from a version with fewer policies than we have now, we need to remove them to
     # complete the restore.  To do so we'll store all the policy names we currently have and remove them
     # from the list as we update.  Any policy names left need to be manually removed
-    policies_to_remove = list(current_policies.keys())
+    policies_to_remove = current_policies.keys()
 
-    for policy_name, policy in list(role.policies[int(selection)]["Policy"].items()):
+    for policy_name, policy in role.policies[int(selection)]["Policy"].items():
         try:
             LOGGER.info(
                 "Pushing cached policy: {} (role: {} account {})".format(
