@@ -9,7 +9,7 @@
 bleach==3.1.0             # via readme-renderer
 boto3==1.9.216
 boto==2.49.0              # via cloudaux
-botocore==1.12.216        # via boto3, cloudaux, s3transfer
+botocore==1.12.218        # via boto3, cloudaux, s3transfer
 certifi==2019.6.16        # via requests
 chardet==3.0.4            # via requests
 click==7.0                # via pip-tools
