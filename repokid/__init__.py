@@ -90,7 +90,7 @@ def init_logging():
         logging.getLogger(logger).setLevel(logging.ERROR)
 
     log = logging.getLogger(__name__)
-    logging.basicConfig(level="debug", format=logging_format)
+    logging.basicConfig(level="DEBUG", format=logging_format)
     log.addFilter(ContextFilter())
     extra = {"eventTime": datetime.datetime.now(timezone("US/Pacific")).isoformat()}
     filter_c = ContextFilter()
