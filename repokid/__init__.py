@@ -11,6 +11,7 @@
 #     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #     See the License for the specific language governing permissions and
 #     limitations under the License.
+import collections
 import datetime
 import inspect
 import json
@@ -18,7 +19,6 @@ import logging.config
 import os
 import socket
 import sys
-from collections import defaultdict
 
 import import_string
 import logmatic
@@ -114,7 +114,7 @@ def _get_hooks(hooks_list):
     Returns:
         dict: Keys are hooks by name (AFTER_SCHEDULE_REPO) and values are a list of functions to execute
     """
-    hooks = defaultdict(list)
+    hooks = collections.defaultdict(list)
     for hook in hooks_list:
         module = import_string(hook)
         # get members retrieves all the functions from a given module
