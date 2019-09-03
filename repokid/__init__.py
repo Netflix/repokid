@@ -11,15 +11,30 @@
 #     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #     See the License for the specific language governing permissions and
 #     limitations under the License.
-from collections import defaultdict
+import datetime
 import inspect
 import json
 import logging.config
 import os
+import socket
+import sys
+from collections import defaultdict
 
 import import_string
+import logmatic
+from pytz import timezone
 
 __version__ = "0.10.0"
+
+
+class ContextFilter(logging.Filter):
+    """Logging Filter for adding hostname to log entries."""
+
+    hostname = socket.gethostname()
+
+    def filter(self, record):
+        record.hostname = ContextFilter.hostname
+        return True
 
 
 def init_config():
@@ -60,8 +75,10 @@ def init_logging():
     Returns:
         None
     """
+    logging_format = "%(asctime)s - %(levelname)s - %(name)s - [%(filename)s:%(lineno)s - %(funcName)s() ] - %(message)s"  # noqa: E501
+
     if CONFIG:
-        logging.config.dictConfig(CONFIG["logging"])
+        logging_format = CONFIG["logging"]
 
     # these loggers are very noisy
     suppressed_loggers = [
@@ -72,7 +89,19 @@ def init_logging():
     for logger in suppressed_loggers:
         logging.getLogger(logger).setLevel(logging.ERROR)
 
-    return logging.getLogger(__name__)
+    log = logging.getLogger(__name__)
+    logging.basicConfig(level="debug", format=logging_format)
+    log.addFilter(ContextFilter())
+    extra = {"eventTime": datetime.datetime.now(timezone("US/Pacific")).isoformat()}
+    filter_c = ContextFilter()
+    log.addFilter(filter_c)
+    log.propagate = False
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(logmatic.JsonFormatter())
+    handler.setLevel("DEBUG")
+    log.addHandler(handler)
+    log = logging.LoggerAdapter(log, extra)
+    return log
 
 
 def _get_hooks(hooks_list):
