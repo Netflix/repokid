@@ -24,7 +24,7 @@ import import_string
 import logmatic
 from pytz import timezone
 
-__version__ = "0.10.1"
+__version__ = "0.11.0"
 
 
 class ContextFilter(logging.Filter):
