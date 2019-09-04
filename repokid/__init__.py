@@ -75,10 +75,9 @@ def init_logging():
     Returns:
         None
     """
-    logging_format = "%(asctime)s - %(levelname)s - %(name)s - [%(filename)s:%(lineno)s - %(funcName)s() ] - %(message)s"  # noqa: E501
 
     if CONFIG:
-        logging_format = CONFIG["logging"]
+        logging.config.dictConfig(CONFIG["logging"])
 
     # these loggers are very noisy
     suppressed_loggers = [
@@ -90,16 +89,21 @@ def init_logging():
         logging.getLogger(logger).setLevel(logging.ERROR)
 
     log = logging.getLogger(__name__)
-    logging.basicConfig(level="DEBUG", format=logging_format)
     log.addFilter(ContextFilter())
     extra = {"eventTime": datetime.datetime.now(timezone("US/Pacific")).isoformat()}
-    filter_c = ContextFilter()
-    log.addFilter(filter_c)
     log.propagate = False
     handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(logmatic.JsonFormatter())
     handler.setLevel("DEBUG")
     log.addHandler(handler)
+
+    json_logging_file = CONFIG.get("json_logging_file")
+    if json_logging_file:
+        if "~" in json_logging_file:
+            json_logging_file = os.path.expanduser(json_logging_file)
+        os.makedirs(os.path.dirname(json_logging_file), exist_ok=True)
+        file_handler = logging.FileHandler(json_logging_file)
+        file_handler.setFormatter(logmatic.JsonFormatter())
+        log.addHandler(file_handler)
     log = logging.LoggerAdapter(log, extra)
     return log
 
