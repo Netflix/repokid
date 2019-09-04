@@ -95,15 +95,15 @@ def init_logging():
     handler = logging.StreamHandler(sys.stdout)
     handler.setLevel("DEBUG")
     log.addHandler(handler)
-
-    json_logging_file = CONFIG.get("json_logging_file")
-    if json_logging_file:
-        if "~" in json_logging_file:
-            json_logging_file = os.path.expanduser(json_logging_file)
-        os.makedirs(os.path.dirname(json_logging_file), exist_ok=True)
-        file_handler = logging.FileHandler(json_logging_file)
-        file_handler.setFormatter(logmatic.JsonFormatter())
-        log.addHandler(file_handler)
+    if CONFIG:
+        json_logging_file = CONFIG.get("json_logging_file")
+        if json_logging_file:
+            if "~" in json_logging_file:
+                json_logging_file = os.path.expanduser(json_logging_file)
+            os.makedirs(os.path.dirname(json_logging_file), exist_ok=True)
+            file_handler = logging.FileHandler(json_logging_file)
+            file_handler.setFormatter(logmatic.JsonFormatter())
+            log.addHandler(file_handler)
     log = logging.LoggerAdapter(log, extra)
     return log
 
