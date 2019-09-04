@@ -1,0 +1,8 @@
+bandit
+black
+coveralls
+flake8
+flake8-import-order
+python-dateutil
+mock
+pytest

@@ -9,15 +9,14 @@ before_install:
   - sudo rm -f /etc/boto.cfg
 
 install:
-  - pip install coveralls
-  - pip install bandit
   - pip install .
-  - pip install -r test-requirements.txt
+  - pip install -r requirements-test.txt
 
 script:
   - coverage run --source repokid -m py.test
   - bandit -r . -ll -ii -x repokid/tests/
   - flake8 .
+  - black .
 
 after_success:
   - coveralls
