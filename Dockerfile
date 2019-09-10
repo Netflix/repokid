@@ -1,4 +1,4 @@
-FROM python:2.7-onbuild
+FROM python:3-onbuild
 
 RUN pip install bandit coveralls && \
     pip install . && \
