@@ -608,7 +608,7 @@ def find_roles_with_permissions(permissions, dynamo_table, output_file):
     if not output_file:
         return
 
-    with open(output_file, "wb") as fd:
+    with open(output_file, "w") as fd:
         json.dump(arns, fd)
 
     LOGGER.info('Ouput written to file "{output_file}"'.format(output_file=output_file))
