@@ -1373,9 +1373,7 @@ def rollback_role(
     for policy_name, policy in role.policies[int(selection)]["Policy"].items():
         try:
             LOGGER.info(
-                "Pushing cached policy: {} (role: {} account {})".format(
-                    policy_name, role.role_name, account_number
-                )
+                f"Pushing cached policy: {policy_name} (role: {role.role_name} account {account_number})"
             )
 
             put_role_policy(
@@ -1402,6 +1400,9 @@ def rollback_role(
     if policies_to_remove:
         for policy_name in policies_to_remove:
             try:
+                LOGGER.info(
+                    f"Deleting policy {policy_name} for rollback (role: {role.role_name} account {account_number})"
+                )
                 delete_role_policy(
                     RoleName=role.role_name, PolicyName=policy_name, **conn
                 )
@@ -1426,9 +1427,8 @@ def rollback_role(
 
     if not errors:
         LOGGER.info(
-            "Successfully restored selected version of role policies (role: {} account: {})".format(
-                role.role_name, account_number
-            )
+            f"Successfully restored selected version {selection} of role policies (role: {role.role_name} "
+            f"account: {account_number}"
         )
     return errors
 
