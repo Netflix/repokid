@@ -21,8 +21,7 @@ import sys
 
 import import_string
 from pytz import timezone
-
-from repokid.utils.logging import ContextFilter, JSONFormatter
+from repokid.utils.logging import ContextFilter
 
 __version__ = "0.11.1"
 

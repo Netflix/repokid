@@ -1,8 +1,8 @@
+from datetime import datetime
 import json
 import logging
-import traceback
-from datetime import datetime
 from socket import gethostname
+import traceback
 
 
 class ContextFilter(logging.Filter):
