@@ -18,7 +18,7 @@ class JSONFormatter(logging.Formatter):
             'message': record.getMessage(),
             'process': record.process,
             'thread': record.threadName,
-            'hostname': JSONFormatter.hostname,
+            'hostname': self.hostname,
         }
 
         if record.exc_info:
