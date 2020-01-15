@@ -28,7 +28,11 @@ class TestLogging(object):
 
     def test_format_with_exception(self):
         record = MockRecord("Hi there!")
-        record.exc_info = (AttributeError, AttributeError("you did a wrong thing"), None)
+        record.exc_info = (
+            AttributeError,
+            AttributeError("you did a wrong thing"),
+            None,
+        )
         with patch("traceback.format_exc", return_value="this is totally a traceback"):
             result = self.formatter.format(record)
         expected = """{"time": "2020-01-15T22:57:09", "level": "INFO", "name": "repokid_test", "message": "Hi there!", "process": 12345, "thread": "MainThread", "hostname": "test_host", "exception": "AttributeError: you did a wrong thing", "traceback": "this is totally a traceback"}"""  # noqa: E501

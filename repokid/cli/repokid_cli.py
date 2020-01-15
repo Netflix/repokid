@@ -137,9 +137,7 @@ def _generate_default_config(filename=None):
                 "standard": {
                     "format": "%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]"
                 },
-                "json": {
-                    "class": "repokid.utils.logging.JSONFormatter"
-                }
+                "json": {"class": "repokid.utils.logging.JSONFormatter"},
             },
             "handlers": {
                 "file": {
@@ -167,7 +165,12 @@ def _generate_default_config(filename=None):
                     "stream": "ext://sys.stdout",
                 },
             },
-            "loggers": {"repokid": {"handlers": ["file", "json_file", "console"], "level": "INFO"}},
+            "loggers": {
+                "repokid": {
+                    "handlers": ["file", "json_file", "console"],
+                    "level": "INFO",
+                }
+            },
         },
         "opt_out_period_days": 90,
         "dispatcher": {
@@ -995,7 +998,7 @@ def _replace_policies(repoed_policies, role, account_number, conn):
                 RoleName=role.role_name,
                 PolicyName=policy_name,
                 PolicyDocument=json.dumps(policy, indent=2, sort_keys=True),
-                **conn
+                **conn,
             )
 
         except botocore.exceptions.ClientError as e:
@@ -1392,7 +1395,7 @@ def rollback_role(
                 RoleName=role.role_name,
                 PolicyName=policy_name,
                 PolicyDocument=json.dumps(policy, indent=2, sort_keys=True),
-                **conn
+                **conn,
             )
 
         except botocore.exceptions.ClientError as e:
