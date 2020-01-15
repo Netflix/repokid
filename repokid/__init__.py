@@ -17,24 +17,14 @@ import inspect
 import json
 import logging.config
 import os
-import socket
 import sys
 
 import import_string
-import logmatic
 from pytz import timezone
 
-__version__ = "0.11.0"
+from repokid.utils.logging import ContextFilter, JSONFormatter
 
-
-class ContextFilter(logging.Filter):
-    """Logging Filter for adding hostname to log entries."""
-
-    hostname = socket.gethostname()
-
-    def filter(self, record):
-        record.hostname = ContextFilter.hostname
-        return True
+__version__ = "0.11.1"
 
 
 def init_config():
@@ -95,15 +85,6 @@ def init_logging():
     handler = logging.StreamHandler(sys.stdout)
     handler.setLevel("DEBUG")
     log.addHandler(handler)
-    if CONFIG:
-        json_logging_file = CONFIG.get("json_logging_file")
-        if json_logging_file:
-            if "~" in json_logging_file:
-                json_logging_file = os.path.expanduser(json_logging_file)
-            os.makedirs(os.path.dirname(json_logging_file), exist_ok=True)
-            file_handler = logging.FileHandler(json_logging_file)
-            file_handler.setFormatter(logmatic.JsonFormatter())
-            log.addHandler(file_handler)
     log = logging.LoggerAdapter(log, extra)
     return log
 
