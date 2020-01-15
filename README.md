@@ -19,7 +19,7 @@ an AWS account.
 mkvirtualenv repokid
 git clone git@github.com:Netflix/repokid.git
 cd repokid
-python setup.py develop
+pip install -e .
 repokid config config.json
 ```
 
