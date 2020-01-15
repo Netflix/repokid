@@ -12,7 +12,7 @@ class JSONFormatter(logging.Formatter):
     def format(self, record):
         """Format the given record into JSON."""
         message = {
-            'time': datetime.fromtimestamp(record.created).isoformat(),
+            'time': datetime.utcfromtimestamp(record.created).isoformat(),
             'level': record.levelname,
             'name': record.name,
             'message': record.getMessage(),
