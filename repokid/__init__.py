@@ -19,7 +19,6 @@ import logging.config
 import os
 
 import import_string
-from repokid.utils.logging import ContextFilter
 
 __version__ = "0.11.1"
 
@@ -77,7 +76,6 @@ def init_logging():
         logging.getLogger(logger).setLevel(logging.ERROR)
 
     log = logging.getLogger(__name__)
-    log.addFilter(ContextFilter())
     log.propagate = False
     return log
 

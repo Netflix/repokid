@@ -5,18 +5,9 @@ from socket import gethostname
 import traceback
 
 
-class ContextFilter(logging.Filter):
-    """Logging Filter for adding hostname to log entries."""
-
-    hostname = gethostname()
-
-    def filter(self, record):
-        record.hostname = ContextFilter.hostname
-        return True
-
-
 class JSONFormatter(logging.Formatter):
     """Custom formatter to output log records as JSON."""
+    hostname = gethostname()
 
     def format(self, record):
         """Format the given record into JSON."""
@@ -26,7 +17,8 @@ class JSONFormatter(logging.Formatter):
             'name': record.name,
             'message': record.getMessage(),
             'process': record.process,
-            'thread': record.threadName
+            'thread': record.threadName,
+            'hostname': JSONFormatter.hostname,
         }
 
         if record.exc_info:
