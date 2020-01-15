@@ -1,5 +1,4 @@
 from mock import patch
-
 from repokid.utils.logging import JSONFormatter
 
 
