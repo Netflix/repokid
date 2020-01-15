@@ -12,15 +12,13 @@
 #     See the License for the specific language governing permissions and
 #     limitations under the License.
 import collections
-import datetime
 import inspect
 import json
+import logging
 import logging.config
 import os
-import sys
 
 import import_string
-from pytz import timezone
 from repokid.utils.logging import ContextFilter
 
 __version__ = "0.11.1"
@@ -72,6 +70,7 @@ def init_logging():
     suppressed_loggers = [
         "botocore.vendored.requests.packages.urllib3.connectionpool",
         "urllib3",
+        "botocore.credentials",
     ]
 
     for logger in suppressed_loggers:
@@ -79,12 +78,7 @@ def init_logging():
 
     log = logging.getLogger(__name__)
     log.addFilter(ContextFilter())
-    extra = {"eventTime": datetime.datetime.now(timezone("US/Pacific")).isoformat()}
     log.propagate = False
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setLevel("DEBUG")
-    log.addHandler(handler)
-    log = logging.LoggerAdapter(log, extra)
     return log
 
 
