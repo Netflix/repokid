@@ -20,6 +20,9 @@ class JSONFormatter(logging.Formatter):
             "process": record.process,
             "thread": record.threadName,
             "hostname": self.hostname,
+            "filename": record.filename,
+            "function": record.funcName,
+            "lineNo": record.lineno,
         }
 
         if record.exc_info:
