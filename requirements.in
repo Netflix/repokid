@@ -2,7 +2,6 @@ boto3
 cloudaux
 docopt
 import_string
-logmatic-python
 marshmallow<3
 policyuniverse
 requests
