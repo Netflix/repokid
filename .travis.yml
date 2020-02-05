@@ -1,28 +1,30 @@
 language: python
-
 matrix:
   include:
-    - python: "3.7"
-
-# horrible thing to fix cloudaux/boto/google issue
+  - python: '3.7'
+  - python: '3.8'
 before_install:
-  - sudo rm -f /etc/boto.cfg
-
+- sudo rm -f /etc/boto.cfg
 install:
-  - pip install .
-  - pip install -r requirements-test.txt
-
+- pip install .
+- pip install -r requirements-test.txt
 script:
-  - coverage run --source repokid -m py.test
-  - bandit -r . -ll -ii -x repokid/tests/
-  - flake8 .
-  - black .
-
+- coverage run --source repokid -m py.test
+- bandit -r . -ll -ii -x repokid/tests/
+- flake8 .
+- black .
 after_success:
-  - coveralls
-
+- coveralls
+deploy:
+  provider: pypi
+  user: __token__
+  password:
+    secure: sKvt+rF2E4bjJFWPZRuIrZJga6te5rtAHDsXOHaDHNPSfM+5n2vnRKUsZd+YgxpkCY2SaPtPDHqlsHL6QqLqDqonDniqgi/PhmWbasCKB+2zzG+nIP+nZ8ds14gnP7Pey70m5YY2kSR6E4m7Y6rQLL8hyQAbtmHnQDXlC66+LXGrXuwAU21NRkn+7BSU5c6SHtxr4/ymYRJMqI4lFBXCpjtyG7gFBPM2h94D/14fSw7JjC2ekRuoXz923LFw+vXoS0DtpCibGdoOzqAPUtH7A1vbe+e2e500idjFq9aCehnZicW7cIvK74jfyJ84igPxlrZNvXH/r/POY6ZGntVLgosF6Ehr6OxW8sSPvWlWy2242KPzR1Yv+TzjZY32AOjXN5UQS2Mb6scidMVHCP7yLPGLWDX8hn0eywXrLV2RVU+Kq+sCq22l7fBfs2FNECAX4WSHtZ2ZSxQ0IKbpF6rd5G8agzYNswejvRx95j0vSRibLJUsPVsjW2RrKqVGotfHM6GJZb8id7RNaUlT37mKcjbqH/1OoQ0I5yAFia0dDkYgLhLf6a21R/VPrs0RUL1BSuWX3vC9He/1XcNz9Ey/Fi35OKWzTy4fBqvPstQmveJ0eRuqvak4wq08/cgHHSOJN6keY0H51rKsdpB9LKbxaAy5KDt5iyfqIQm1mVBlaz4=
+  skip_existing: true
+  on:
+    tags: true
 notifications:
   email:
-    - tmcpeak@netflix.com
-    - ccastrapel@netflix.com
-
+  - tmcpeak@netflix.com
+  - ccastrapel@netflix.com
+  - psanders@netflix.com
