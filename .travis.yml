@@ -2,7 +2,6 @@ language: python
 matrix:
   include:
   - python: '3.7'
-  - python: '3.8'
 before_install:
 - sudo rm -f /etc/boto.cfg
 install:
