@@ -20,7 +20,7 @@ import os
 
 import import_string
 
-__version__ = "0.12.0"
+__version__ = "0.12.1"
 
 
 def init_config():
