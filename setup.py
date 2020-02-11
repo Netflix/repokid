@@ -13,9 +13,13 @@
 #     limitations under the License.
 
 import ast
+import os.path
 import re
 
 from setuptools import find_packages, setup
+
+
+ROOT = os.path.realpath(os.path.join(os.path.dirname(__file__)))
 
 with open("requirements.in") as f:
     REQUIRED = f.read().splitlines()
@@ -30,10 +34,8 @@ setup(
     name="repokid",
     version=REPOKID_VERSION,
     description="AWS Least Privilege for Distributed, High-Velocity Deployment",
-    # removed as I think getting long_desc to work is perhaps outside the scope
-    # of this PR, other long_desc's I've seen have used .rst to display on
-    # Pypi, so I think that may be necessary also.
-    # long_description=open("readme.md").read(),
+    long_description=open(os.path.join(ROOT, 'README.md')).read(),
+    long_description_content_type="text/markdown",
     url="https://github.com/Netflix/repokid",
     packages=find_packages(),
     install_requires=REQUIRED,
