@@ -4,6 +4,7 @@
 #
 #    pip-compile requirements.in
 #
+
 bleach==3.1.1             # via readme-renderer
 boto3==1.9.216
 boto==2.49.0              # via cloudaux
@@ -40,3 +41,6 @@ tqdm==4.35.0
 twine==1.13.0
 urllib3==1.25.3           # via botocore, requests
 webencodings==0.5.1       # via bleach
+
+# The following packages are considered to be unsafe in a requirements file:
+# setuptools
