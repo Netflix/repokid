@@ -22,7 +22,7 @@ Please also verify that the changes you've made work as expected locally.
 Pushing New Versions to Pypi
 ----------------------------
 For the majority of contributors, this will not be a huge factor, however, for those deploying new versions, the instructions are as follows:
-1. Ensure you have `twine` installed, this is part of the requirements file, so if you've installed via the recommended paths, you should be fine.
+1. Ensure you have `twine` installed in your virtual environment.
 2. Edit the version number present in the `repokid/init.py`:
 
         $ vim repokid/__init__.py

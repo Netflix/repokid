@@ -15,3 +15,4 @@ dist
 tox.ini
 test-reports/*
 config.json
+.setupmeta.version

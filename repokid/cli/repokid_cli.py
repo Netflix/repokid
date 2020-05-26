@@ -55,7 +55,6 @@ from cloudaux.aws.sts import sts_conn
 from docopt import docopt
 import import_string
 from policyuniverse.arn import ARN
-from repokid import __version__ as __version__
 from repokid import _get_hooks
 from repokid import CONFIG
 from repokid import LOGGER
@@ -1586,7 +1585,7 @@ def repo_stats(output_file, dynamo_table, account_number=None):
 
 
 def main():
-    args = docopt(__doc__, version="Repokid {version}".format(version=__version__))
+    args = docopt(__doc__)
 
     if args.get("config"):
         config_filename = args.get("<config_filename>")
