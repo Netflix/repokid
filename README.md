@@ -135,6 +135,19 @@ New filters can be created to support internal logic.  At Netflix we have severa
 use cases.  To make them active make sure they are in the Python path and add them in the config to the list in
 the section `active_filters`.
 
+## Hooks
+Repokid is extensible via hooks that are called before, during, and after various operations as listed below.
+
+| Hook name | Context |
+|-----------|---------|
+| `AFTER_REPO` | role |
+| `BEFORE_REPO_ROLES` | account_number, roles |
+| `AFTER_SCHEDULE_REPO` | roles |
+| `DURING_REPOABLE_CALCULATION` | account_number, role_name, potentially_repoable_permissions, minimum_age |
+| `DURING_REPOABLE_CALCULATION_BATCH` | role_batch, potentially_repoable_permissions, minimum_age |
+
+Examples of hook implementations can be found in [`repokid.hooks.loggers`](repokid/hooks/loggers/__init__.py).
+
 ## How to Use
 
 Once Repokid is configured, use it as follows:
