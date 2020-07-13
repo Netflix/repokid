@@ -1,6 +1,8 @@
 import copy
 import datetime
+import pytest
 
+from marshmallow import ValidationError
 from mock import call, patch
 import repokid.cli.dispatcher_cli as dispatcher_cli
 import repokid.dispatcher as dispatcher
@@ -43,7 +45,7 @@ class TestDispatcherCLI(object):
             "respond_user": "user",
         }
         result = schema.load(test_message)
-        assert not result.errors
+        assert result.command == "list_repoable_services"
 
         # missing required field command
         test_message = {
@@ -52,8 +54,8 @@ class TestDispatcherCLI(object):
             "respond_channel": "channel",
             "respond_user": "user",
         }
-        result = schema.load(test_message)
-        assert result.errors
+        with pytest.raises(ValidationError):
+            _ = schema.load(test_message)
 
     @patch("repokid.utils.dynamo.find_role_in_cache")
     @patch("repokid.utils.dynamo.get_role_data")

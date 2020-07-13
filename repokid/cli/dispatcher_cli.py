@@ -42,7 +42,7 @@ class MessageSchema(Schema):
     selection = fields.Str()
 
     @post_load
-    def make_message(self, data):
+    def make_message(self, data, **kwargs):
         return Message(**data)
 
 
