@@ -2,7 +2,7 @@ boto3
 cloudaux
 docopt
 import_string
-marshmallow<3
+marshmallow
 policyuniverse
 requests
 tabulate
