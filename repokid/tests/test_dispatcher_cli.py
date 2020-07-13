@@ -1,9 +1,9 @@
 import copy
 import datetime
-import pytest
 
 from marshmallow import ValidationError
 from mock import call, patch
+import pytest
 import repokid.cli.dispatcher_cli as dispatcher_cli
 import repokid.dispatcher as dispatcher
 
