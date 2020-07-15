@@ -50,9 +50,10 @@ class TestRoledata(object):
         ]
         mock_expand_policy.return_value = ROLE_POLICIES["unused_ec2"]["ec2_perms"]
 
-        total_permissions, eligible_permissions = repokid.utils.roledata._get_role_permissions(
-            test_role
-        )
+        (
+            total_permissions,
+            eligible_permissions,
+        ) = repokid.utils.roledata._get_role_permissions(test_role)
         assert total_permissions == set(ROLE_POLICIES["unused_ec2"]["ec2_perms"])
         assert eligible_permissions == set(ROLE_POLICIES["unused_ec2"]["ec2_perms"])
 

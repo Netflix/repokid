@@ -20,7 +20,12 @@ from tqdm import tqdm
 import repokid.hooks
 from repokid import LOGGER
 from repokid.role import Roles, Role
-from repokid.utils.dynamo import get_role_data, role_ids_for_account, set_role_data, find_role_in_cache
+from repokid.utils.dynamo import (
+    get_role_data,
+    role_ids_for_account,
+    set_role_data,
+    find_role_in_cache,
+)
 
 
 def schedule_repo(account_number, dynamo_table, config, hooks):

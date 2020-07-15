@@ -23,10 +23,16 @@ import repokid.hooks
 from repokid import LOGGER
 from repokid.role import Roles, Role
 from repokid.utils import roledata as roledata
-from repokid.utils.dynamo import get_role_data, role_ids_for_account, role_ids_for_all_accounts, \
-    find_role_in_cache
-from repokid.utils.iam import inline_policies_size_exceeds_maximum, \
-    remove_permissions_from_role
+from repokid.utils.dynamo import (
+    get_role_data,
+    role_ids_for_account,
+    role_ids_for_all_accounts,
+    find_role_in_cache,
+)
+from repokid.utils.iam import (
+    inline_policies_size_exceeds_maximum,
+    remove_permissions_from_role,
+)
 
 
 def display_roles(account_number, dynamo_table, inactive=False):
@@ -307,5 +313,3 @@ def remove_permissions_from_roles(
         )
 
         repokid.hooks.call_hooks(hooks, "AFTER_REPO", {"role": role})
-
-

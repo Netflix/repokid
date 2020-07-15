@@ -724,7 +724,9 @@ class TestRepokidCLI(object):
         cli.delete_role_policy = mock_delete_role_policy
         mock_role = MockRole()
 
-        error = repokid.utils.iam.delete_policy("PolicyName", mock_role, "123456789012", dict())
+        error = repokid.utils.iam.delete_policy(
+            "PolicyName", mock_role, "123456789012", dict()
+        )
         assert "Error deleting policy:" in error
 
     def test_replace_policies(self):
@@ -743,7 +745,9 @@ class TestRepokidCLI(object):
         cli.put_role_policy = mock_put_role_policy
         mock_role = MockRole()
 
-        error = repokid.utils.iam.replace_policies(ROLE_POLICIES, mock_role, "123456789012", {})
+        error = repokid.utils.iam.replace_policies(
+            ROLE_POLICIES, mock_role, "123456789012", {}
+        )
         assert "Exception calling PutRolePolicy" in error
 
     @patch("repokid.cli.repokid_cli._delete_policy", MagicMock(return_value=None))

@@ -34,7 +34,7 @@ setup(
     name="repokid",
     version=REPOKID_VERSION,
     description="AWS Least Privilege for Distributed, High-Velocity Deployment",
-    long_description=open(os.path.join(ROOT, 'README.md')).read(),
+    long_description=open(os.path.join(ROOT, "README.md")).read(),
     long_description_content_type="text/markdown",
     url="https://github.com/Netflix/repokid",
     packages=find_packages(),
