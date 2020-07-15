@@ -1,3 +1,16 @@
+#     Copyright 2020 Netflix, Inc.
+#
+#     Licensed under the Apache License, Version 2.0 (the "License");
+#     you may not use this file except in compliance with the License.
+#     You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+#     Unless required by applicable law or agreed to in writing, software
+#     distributed under the License is distributed on an "AS IS" BASIS,
+#     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#     See the License for the specific language governing permissions and
+#     limitations under the License.
 import pytest
 import repokid.cli.repokid_cli
 import repokid.hooks
@@ -57,7 +70,7 @@ class TestHooks(object):
 
     def test_get_hooks(self):
         hooks_config = ["repokid.tests.artifacts.hook"]
-        hooks = repokid.cli.repokid_cli._get_hooks(hooks_config)
+        hooks = repokid.cli.repokid_cli.get_hooks(hooks_config)
 
         # key is correct, both functions are loaded and in correct priority order
         assert hooks == {"TEST_HOOK": [function_1, function_2]}

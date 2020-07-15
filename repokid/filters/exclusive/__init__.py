@@ -1,7 +1,7 @@
 import fnmatch
 
 from repokid import LOGGER
-from repokid.cli.repokid_cli import Filter
+from repokid.filters import Filter
 
 
 class ExclusiveFilter(Filter):

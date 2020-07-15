@@ -1,4 +1,4 @@
-#     Copyright 2017 Netflix, Inc.
+#     Copyright 2020 Netflix, Inc.
 #
 #     Licensed under the Apache License, Version 2.0 (the "License");
 #     you may not use this file except in compliance with the License.
@@ -18,6 +18,12 @@ import time
 from dateutil.tz import tzlocal
 from mock import call, MagicMock, mock_open, patch
 import repokid.cli.repokid_cli
+import repokid.commands.repo
+import repokid.commands.role
+import repokid.commands.role_cache
+import repokid.commands.schedule
+import repokid.utils.iam
+import repokid.utils.logging
 from repokid.role import Role, Roles
 import repokid.utils.roledata
 
@@ -291,7 +297,7 @@ class TestRepokidCLI(object):
         dynamo_table = None
         account_number = "123456789012"
 
-        repokid.cli.repokid_cli.update_role_cache(
+        repokid.commands.role_cache.update_role_cache(
             account_number, dynamo_table, config, hooks
         )
 
@@ -374,8 +380,8 @@ class TestRepokidCLI(object):
             ROLES_FOR_DISPLAY[3],
         ]
 
-        repokid.cli.repokid_cli.display_roles("123456789012", None, inactive=True)
-        repokid.cli.repokid_cli.display_roles("123456789012", None, inactive=False)
+        repokid.commands.role.display_roles("123456789012", None, inactive=True)
+        repokid.commands.role.display_roles("123456789012", None, inactive=False)
 
         # first call has inactive role, second doesn't because it's filtered
         assert mock_tabview.mock_calls == [
@@ -443,7 +449,7 @@ class TestRepokidCLI(object):
 
         config = {"repo_schedule_period_days": 1}
 
-        repokid.cli.repokid_cli.schedule_repo("1234567890", None, config, hooks)
+        repokid.commands.schedule.schedule_repo("1234567890", None, config, hooks)
 
         assert mock_set_role_data.mock_calls == [
             call(
@@ -511,9 +517,9 @@ class TestRepokidCLI(object):
         mock_repo_role.return_value = None
 
         # repo all roles in the account, should call repo with all roles
-        repokid.cli.repokid_cli.repo_all_roles(None, None, None, hooks, scheduled=False)
+        repokid.commands.repo.repo_all_roles(None, None, None, hooks, scheduled=False)
         # repo only scheduled, should only call repo role with role C
-        repokid.cli.repokid_cli.repo_all_roles(None, None, None, hooks, scheduled=True)
+        repokid.commands.repo.repo_all_roles(None, None, None, hooks, scheduled=True)
 
         assert mock_repo_role.mock_calls == [
             call(None, "ROLE_A", None, None, hooks, commit=False, scheduled=False),
@@ -576,14 +582,14 @@ class TestRepokidCLI(object):
         mock_get_role_data.side_effect = [roles[0], roles[2], roles[0]]
 
         # first check all
-        repokid.cli.repokid_cli.cancel_scheduled_repo(
+        repokid.commands.schedule.cancel_scheduled_repo(
             None, None, role_name=None, is_all=True
         )
 
         # ensure all are cancelled
         mock_find_role_in_cache.return_value = ["AROAABCDEFGHIJKLMNOPA"]
 
-        repokid.cli.repokid_cli.cancel_scheduled_repo(
+        repokid.commands.schedule.cancel_scheduled_repo(
             None, None, role_name="ROLE_A", is_all=False
         )
 
@@ -655,14 +661,14 @@ class TestRepokidCLI(object):
         cli = repokid.cli.repokid_cli
 
         small_policy = dict()
-        assert not cli._inline_policies_size_exceeds_maximum(small_policy)
+        assert not repokid.utils.iam.inline_policies_size_exceeds_maximum(small_policy)
 
-        backup_size = cli.MAX_AWS_POLICY_SIZE
-        cli.MAX_AWS_POLICY_SIZE = 10
-        assert cli._inline_policies_size_exceeds_maximum(
+        backup_size = repokid.utils.iam.MAX_AWS_POLICY_SIZE
+        repokid.utils.iam.MAX_AWS_POLICY_SIZE = 10
+        assert repokid.utils.iam.inline_policies_size_exceeds_maximum(
             ROLE_POLICIES["all_services_used"]
         )
-        cli.MAX_AWS_POLICY_SIZE = backup_size
+        repokid.utils.iam.MAX_AWS_POLICY_SIZE = backup_size
 
     def test_logprint_deleted_and_repoed_policies(self):
         cli = repokid.cli.repokid_cli
@@ -694,7 +700,7 @@ class TestRepokidCLI(object):
 
         policy_names = ["policy1", "policy2"]
         repoed_policies = [ROLE_POLICIES]
-        cli._logprint_deleted_and_repoed_policies(
+        repokid.utils.logging.log_deleted_and_repoed_policies(
             policy_names, repoed_policies, "MyRoleName", "123456789012"
         )
         assert len(mock_logger.messages["info"]) == 3
@@ -718,7 +724,7 @@ class TestRepokidCLI(object):
         cli.delete_role_policy = mock_delete_role_policy
         mock_role = MockRole()
 
-        error = cli._delete_policy("PolicyName", mock_role, "123456789012", dict())
+        error = repokid.utils.iam.delete_policy("PolicyName", mock_role, "123456789012", dict())
         assert "Error deleting policy:" in error
 
     def test_replace_policies(self):
@@ -737,7 +743,7 @@ class TestRepokidCLI(object):
         cli.put_role_policy = mock_put_role_policy
         mock_role = MockRole()
 
-        error = cli._replace_policies(ROLE_POLICIES, mock_role, "123456789012", {})
+        error = repokid.utils.iam.replace_policies(ROLE_POLICIES, mock_role, "123456789012", {})
         assert "Exception calling PutRolePolicy" in error
 
     @patch("repokid.cli.repokid_cli._delete_policy", MagicMock(return_value=None))
@@ -770,7 +776,7 @@ class TestRepokidCLI(object):
 
         mock_role = MockRole()
 
-        cli._remove_permissions_from_role(
+        repokid.utils.iam.remove_permissions_from_role(
             "123456789012",
             ["s3:putobjectacl"],
             mock_role,
@@ -781,7 +787,7 @@ class TestRepokidCLI(object):
             commit=False,
         )
 
-        cli._remove_permissions_from_role(
+        repokid.utils.iam.remove_permissions_from_role(
             "123456789012",
             ["s3:putobjectacl"],
             mock_role,
@@ -820,7 +826,7 @@ class TestRepokidCLI(object):
         with patch("builtins.open", mock_open(read_data=arns)) as mock_file:
             assert open("somefile.json").read() == arns
             mock_file.assert_called_with("somefile.json")
-            cli.remove_permissions_from_roles(
+            repokid.commands.role.remove_permissions_from_roles(
                 ["s3:putobjectacl"],
                 "somefile.json",
                 None,

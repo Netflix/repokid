@@ -4,7 +4,7 @@ import sys
 import botocore
 from cloudaux.aws.sts import boto3_cached_conn
 from repokid import LOGGER
-from repokid.cli.repokid_cli import Filter
+from repokid.filters import Filter
 
 
 def get_blocklist_from_bucket(bucket_config):

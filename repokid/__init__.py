@@ -1,4 +1,4 @@
-#     Copyright 2017 Netflix, Inc.
+#     Copyright 2020 Netflix, Inc.
 #
 #     Licensed under the Apache License, Version 2.0 (the "License");
 #     you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@ import os
 
 import import_string
 
-__version__ = "0.13.0"
+__version__ = "0.14.0"
 
 
 def init_config():
@@ -80,7 +80,7 @@ def init_logging():
     return log
 
 
-def _get_hooks(hooks_list):
+def get_hooks(hooks_list):
     """
     Output should be a dictionary with keys as the names of hooks and values as a list of functions (in order) to call
 

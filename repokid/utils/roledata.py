@@ -1,4 +1,4 @@
-#     Copyright 2017 Netflix, Inc.
+#     Copyright 2020 Netflix, Inc.
 #
 #     Licensed under the Apache License, Version 2.0 (the "License");
 #     you may not use this file except in compliance with the License.
@@ -16,13 +16,14 @@ import copy
 import datetime
 import time
 
-
+from cloudaux.aws.iam import get_role_inline_policies
 from dateutil.tz import tzlocal
 from policyuniverse import all_permissions, expand_policy, get_actions_from_statement
 from repokid import CONFIG as CONFIG
 from repokid import LOGGER as LOGGER
 import repokid.hooks
 from repokid.role import Role
+from repokid.utils.aardvark import get_aardvark_data
 from repokid.utils.dynamo import (
     add_to_end_of_list,
     get_role_data,
@@ -848,3 +849,71 @@ def _get_services_in_permissions(permissions_set):
         else:
             services_set.add(service)
     return sorted(services_set)
+
+
+def partial_update_role_data(
+    role, dynamo_table, account_number, config, conn, hooks, source, add_no_repo=True
+):
+    """
+    Perform a scaled down version of role update, this is used to get an accurate count of repoable permissions after
+    a rollback or repo.
+
+    Does update:
+     - Policies
+     - Aardvark data
+     - Total permissions
+     - Repoable permissions
+     - Repoable services
+     - Stats
+
+    Does not update:
+     - Filters
+     - Active/inactive roles
+
+    Args:
+        role (Role)
+        dynamo_table
+        account_number
+        conn (dict)
+        source: repo, rollback, etc
+        add_no_repo: if set to True newly discovered permissions will be added to no repo list
+
+    Returns:
+        None
+    """
+    current_policies = get_role_inline_policies(role.as_dict(), **conn) or {}
+    update_role_data(
+        dynamo_table,
+        account_number,
+        role,
+        current_policies,
+        source=source,
+        add_no_repo=add_no_repo,
+    )
+    aardvark_data = get_aardvark_data(config["aardvark_api_location"], arn=role.arn)
+
+    if not aardvark_data:
+        return
+
+    batch_processing = config.get("query_role_data_in_batch", False)
+    batch_size = config.get("batch_processing_size", 100)
+
+    role.aa_data = aardvark_data[role.arn]
+    _calculate_repo_scores(
+        [role],
+        config["filter_config"]["AgeFilter"]["minimum_age"],
+        hooks,
+        batch_processing,
+        batch_size,
+    )
+    set_role_data(
+        dynamo_table,
+        role.role_id,
+        {
+            "AAData": role.aa_data,
+            "TotalPermissions": role.total_permissions,
+            "RepoablePermissions": role.repoable_permissions,
+            "RepoableServices": role.repoable_services,
+        },
+    )
+    update_stats(dynamo_table, [role], source=source)
