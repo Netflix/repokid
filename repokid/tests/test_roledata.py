@@ -1,4 +1,4 @@
-#     Copyright 2017 Netflix, Inc.
+#     Copyright 2020 Netflix, Inc.
 #
 #     Licensed under the Apache License, Version 2.0 (the "License");
 #     you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@ import time
 
 from mock import patch
 from repokid.role import Role
-from repokid.tests.test_repokid_cli import AARDVARK_DATA, ROLE_POLICIES, ROLES
+from repokid.tests.test_commands import AARDVARK_DATA, ROLE_POLICIES, ROLES
 import repokid.utils.roledata
 
 # AARDVARK_DATA maintained in test_repokid_cli
@@ -50,9 +50,10 @@ class TestRoledata(object):
         ]
         mock_expand_policy.return_value = ROLE_POLICIES["unused_ec2"]["ec2_perms"]
 
-        total_permissions, eligible_permissions = repokid.utils.roledata._get_role_permissions(
-            test_role
-        )
+        (
+            total_permissions,
+            eligible_permissions,
+        ) = repokid.utils.roledata._get_role_permissions(test_role)
         assert total_permissions == set(ROLE_POLICIES["unused_ec2"]["ec2_perms"])
         assert eligible_permissions == set(ROLE_POLICIES["unused_ec2"]["ec2_perms"])
 

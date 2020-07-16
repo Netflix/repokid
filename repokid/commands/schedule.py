@@ -1,0 +1,162 @@
+#     Copyright 2020 Netflix, Inc.
+#
+#     Licensed under the Apache License, Version 2.0 (the "License");
+#     you may not use this file except in compliance with the License.
+#     You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+#     Unless required by applicable law or agreed to in writing, software
+#     distributed under the License is distributed on an "AS IS" BASIS,
+#     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#     See the License for the specific language governing permissions and
+#     limitations under the License.
+from datetime import datetime as dt
+import time
+
+from repokid import LOGGER
+import repokid.hooks
+from repokid.role import Role, Roles
+from repokid.utils.dynamo import (
+    find_role_in_cache,
+    get_role_data,
+    role_ids_for_account,
+    set_role_data,
+)
+from tabulate import tabulate
+from tqdm import tqdm
+
+
+def schedule_repo(account_number, dynamo_table, config, hooks):
+    """
+    Schedule a repo for a given account.  Schedule repo for a time in the future (default 7 days) for any roles in
+    the account with repoable permissions.
+    """
+    scheduled_roles = []
+
+    roles = Roles(
+        [
+            Role(get_role_data(dynamo_table, roleID))
+            for roleID in tqdm(role_ids_for_account(dynamo_table, account_number))
+        ]
+    )
+
+    scheduled_time = int(time.time()) + (
+        86400 * config.get("repo_schedule_period_days", 7)
+    )
+    for role in roles:
+        if role.repoable_permissions > 0 and not role.repo_scheduled:
+            role.repo_scheduled = scheduled_time
+            # freeze the scheduled perms to whatever is repoable right now
+            set_role_data(
+                dynamo_table,
+                role.role_id,
+                {
+                    "RepoScheduled": scheduled_time,
+                    "ScheduledPerms": role.repoable_services,
+                },
+            )
+
+            scheduled_roles.append(role)
+
+    LOGGER.info(
+        "Scheduled repo for {} days from now for account {} and these roles:\n\t{}".format(
+            config.get("repo_schedule_period_days", 7),
+            account_number,
+            ", ".join([r.role_name for r in scheduled_roles]),
+        )
+    )
+
+    repokid.hooks.call_hooks(hooks, "AFTER_SCHEDULE_REPO", {"roles": scheduled_roles})
+
+
+def show_scheduled_roles(account_number, dynamo_table):
+    """
+    Show scheduled repos for a given account.  For each scheduled show whether scheduled time is elapsed or not.
+    """
+    roles = Roles(
+        [
+            Role(get_role_data(dynamo_table, roleID))
+            for roleID in tqdm(role_ids_for_account(dynamo_table, account_number))
+        ]
+    )
+
+    # filter to show only roles that are scheduled
+    roles = roles.filter(active=True)
+    roles = [role for role in roles if (role.repo_scheduled)]
+
+    header = ["Role name", "Scheduled", "Scheduled Time Elapsed?"]
+    rows = []
+
+    curtime = int(time.time())
+
+    for role in roles:
+        rows.append(
+            [
+                role.role_name,
+                dt.fromtimestamp(role.repo_scheduled).strftime("%Y-%m-%d %H:%M"),
+                role.repo_scheduled < curtime,
+            ]
+        )
+
+    print(tabulate(rows, headers=header))
+
+
+def cancel_scheduled_repo(account_number, dynamo_table, role_name=None, is_all=None):
+    """
+    Cancel scheduled repo for a role in an account
+    """
+    if not is_all and not role_name:
+        LOGGER.error("Either a specific role to cancel or all must be provided")
+        return
+
+    if is_all:
+        roles = Roles(
+            [
+                Role(get_role_data(dynamo_table, roleID))
+                for roleID in role_ids_for_account(dynamo_table, account_number)
+            ]
+        )
+
+        # filter to show only roles that are scheduled
+        roles = [role for role in roles if (role.repo_scheduled)]
+
+        for role in roles:
+            set_role_data(
+                dynamo_table, role.role_id, {"RepoScheduled": 0, "ScheduledPerms": []}
+            )
+
+        LOGGER.info(
+            "Canceled scheduled repo for roles: {}".format(
+                ", ".join([role.role_name for role in roles])
+            )
+        )
+        return
+
+    role_id = find_role_in_cache(dynamo_table, account_number, role_name)
+    if not role_id:
+        LOGGER.warn(
+            "Could not find role with name {} in account {}".format(
+                role_name, account_number
+            )
+        )
+        return
+
+    role = Role(get_role_data(dynamo_table, role_id))
+
+    if not role.repo_scheduled:
+        LOGGER.warn(
+            "Repo was not scheduled for role {} in account {}".format(
+                role.role_name, account_number
+            )
+        )
+        return
+
+    set_role_data(
+        dynamo_table, role.role_id, {"RepoScheduled": 0, "ScheduledPerms": []}
+    )
+    LOGGER.info(
+        "Successfully cancelled scheduled repo for role {} in account {}".format(
+            role.role_name, role.account
+        )
+    )

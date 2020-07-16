@@ -1,4 +1,4 @@
-#     Copyright 2017 Netflix, Inc.
+#     Copyright 2020 Netflix, Inc.
 #
 #     Licensed under the Apache License, Version 2.0 (the "License");
 #     you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@ setup(
     name="repokid",
     version=REPOKID_VERSION,
     description="AWS Least Privilege for Distributed, High-Velocity Deployment",
-    long_description=open(os.path.join(ROOT, 'README.md')).read(),
+    long_description=open(os.path.join(ROOT, "README.md")).read(),
     long_description_content_type="text/markdown",
     url="https://github.com/Netflix/repokid",
     packages=find_packages(),
