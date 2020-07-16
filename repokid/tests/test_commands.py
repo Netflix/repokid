@@ -236,13 +236,13 @@ ROLES_FOR_DISPLAY = [
 
 
 class TestRepokidCLI(object):
-    @patch("repokid.utils.roledata.update_stats")
-    @patch("repokid.utils.roledata.find_and_mark_inactive")
-    @patch("repokid.utils.roledata.update_role_data")
-    @patch("repokid.utils.roledata._calculate_repo_scores")
-    @patch("repokid.cli.repokid_cli.set_role_data")
-    @patch("repokid.cli.repokid_cli._get_aardvark_data")
-    @patch("repokid.cli.repokid_cli.get_account_authorization_details")
+    @patch("repokid.commands.role_cache.roledata.update_stats")
+    @patch("repokid.commands.role_cache.roledata.find_and_mark_inactive")
+    @patch("repokid.commands.role_cache.roledata.update_role_data")
+    @patch("repokid.commands.role_cache.roledata._calculate_repo_scores")
+    @patch("repokid.commands.role_cache.set_role_data")
+    @patch("repokid.commands.role_cache.get_aardvark_data")
+    @patch("repokid.commands.role_cache.get_account_authorization_details")
     def test_repokid_update_role_cache(
         self,
         mock_get_account_authorization_details,
@@ -347,8 +347,8 @@ class TestRepokidCLI(object):
         # TODO: set_role_data called with
 
     @patch("tabview.view")
-    @patch("repokid.cli.repokid_cli.get_role_data")
-    @patch("repokid.cli.repokid_cli.role_ids_for_account")
+    @patch("repokid.commands.role.get_role_data")
+    @patch("repokid.commands.role.role_ids_for_account")
     def test_repokid_display_roles(
         self, mock_role_ids_for_account, mock_get_role_data, mock_tabview
     ):
@@ -423,9 +423,9 @@ class TestRepokidCLI(object):
         ]
 
     @patch("repokid.hooks.call_hooks")
-    @patch("repokid.cli.repokid_cli.get_role_data")
-    @patch("repokid.cli.repokid_cli.set_role_data")
-    @patch("repokid.cli.repokid_cli.role_ids_for_account")
+    @patch("repokid.commands.schedule.get_role_data")
+    @patch("repokid.commands.schedule.set_role_data")
+    @patch("repokid.commands.schedule.role_ids_for_account")
     @patch("time.time")
     def test_schedule_repo(
         self,
@@ -463,9 +463,9 @@ class TestRepokidCLI(object):
         ]
 
     @patch("repokid.hooks.call_hooks")
-    @patch("repokid.cli.repokid_cli.get_role_data")
-    @patch("repokid.cli.repokid_cli.role_ids_for_account")
-    @patch("repokid.cli.repokid_cli.repo_role")
+    @patch("repokid.commands.repo.get_role_data")
+    @patch("repokid.commands.repo.role_ids_for_account")
+    @patch("repokid.commands.repo.repo_role")
     @patch("time.time")
     def test_repo_all_roles(
         self,
@@ -543,10 +543,10 @@ class TestRepokidCLI(object):
             ),
         ]
 
-    @patch("repokid.cli.repokid_cli.find_role_in_cache")
-    @patch("repokid.cli.repokid_cli.get_role_data")
-    @patch("repokid.cli.repokid_cli.role_ids_for_account")
-    @patch("repokid.cli.repokid_cli.set_role_data")
+    @patch("repokid.commands.schedule.find_role_in_cache")
+    @patch("repokid.commands.schedule.get_role_data")
+    @patch("repokid.commands.schedule.role_ids_for_account")
+    @patch("repokid.commands.schedule.set_role_data")
     def test_cancel_scheduled_repo(
         self,
         mock_set_role_data,
@@ -671,8 +671,6 @@ class TestRepokidCLI(object):
         repokid.utils.iam.MAX_AWS_POLICY_SIZE = backup_size
 
     def test_logprint_deleted_and_repoed_policies(self):
-        cli = repokid.cli.repokid_cli
-
         # TODO: When moving to python >= 3.4, Replace this with assertLogs
         # https://stackoverflow.com/questions/899067/how-should-i-verify-a-log-message-when-testing-python-code-under-nose
         class MockLoggingHandler(logging.Handler):
@@ -694,9 +692,9 @@ class TestRepokidCLI(object):
                     "critical": [],
                 }
 
-        cli.LOGGER = logging.getLogger("test")
+        repokid.utils.logging.LOGGER = logging.getLogger("test")
         mock_logger = MockLoggingHandler()
-        cli.LOGGER.addHandler(mock_logger)
+        repokid.utils.logging.LOGGER.addHandler(mock_logger)
 
         policy_names = ["policy1", "policy2"]
         repoed_policies = [ROLE_POLICIES]
@@ -709,7 +707,7 @@ class TestRepokidCLI(object):
         assert "all_services_used" in mock_logger.messages["info"][2]
 
     def test_delete_policy(self):
-        cli = repokid.cli.repokid_cli
+        iam = repokid.utils.iam
 
         def mock_delete_role_policy(RoleName, PolicyName, **conn):
             import botocore
@@ -721,7 +719,7 @@ class TestRepokidCLI(object):
         class MockRole:
             role_name = "role_name"
 
-        cli.delete_role_policy = mock_delete_role_policy
+        iam.delete_role_policy = mock_delete_role_policy
         mock_role = MockRole()
 
         error = repokid.utils.iam.delete_policy(
@@ -730,7 +728,7 @@ class TestRepokidCLI(object):
         assert "Error deleting policy:" in error
 
     def test_replace_policies(self):
-        cli = repokid.cli.repokid_cli
+        iam = repokid.utils.iam
 
         def mock_put_role_policy(RoleName, PolicyName, PolicyDocument, **conn):
             import botocore
@@ -742,7 +740,7 @@ class TestRepokidCLI(object):
         class MockRole:
             role_name = "role_name"
 
-        cli.put_role_policy = mock_put_role_policy
+        iam.put_role_policy = mock_put_role_policy
         mock_role = MockRole()
 
         error = repokid.utils.iam.replace_policies(
@@ -750,23 +748,25 @@ class TestRepokidCLI(object):
         )
         assert "Exception calling PutRolePolicy" in error
 
-    @patch("repokid.cli.repokid_cli._delete_policy", MagicMock(return_value=None))
-    @patch("repokid.cli.repokid_cli._replace_policies", MagicMock(return_value=None))
+    @patch("repokid.utils.iam.delete_policy", MagicMock(return_value=None))
+    @patch("repokid.utils.iam.replace_policies", MagicMock(return_value=None))
+    @patch("repokid.utils.iam.remove_permissions_from_role", MagicMock(return_value=None))
     @patch(
-        "repokid.cli.repokid_cli.get_role_inline_policies", MagicMock(return_value=None)
+        "repokid.utils.iam.get_role_inline_policies", MagicMock(return_value=None)
     )
     @patch(
-        "repokid.cli.repokid_cli.roledata.add_new_policy_version",
+        "repokid.utils.iam.roledata.add_new_policy_version",
         MagicMock(return_value=None),
     )
-    @patch("repokid.cli.repokid_cli.set_role_data", MagicMock(return_value=None))
+    @patch("repokid.utils.iam.set_role_data", MagicMock(return_value=None))
+    @patch("repokid.utils.iam.set_role_data", MagicMock(return_value=None))
     @patch(
-        "repokid.cli.repokid_cli._update_repoed_description",
+        "repokid.utils.iam.update_repoed_description",
         MagicMock(return_value=None),
     )
-    @patch("repokid.cli.repokid_cli._update_role_data", MagicMock(return_value=None))
+    @patch("repokid.utils.iam.roledata.update_role_data", MagicMock(return_value=None))
     def test_remove_permissions_from_role(self):
-        cli = repokid.cli.repokid_cli
+        iam = repokid.utils.iam
 
         class MockRole:
             role_name = "role_name"
@@ -776,11 +776,11 @@ class TestRepokidCLI(object):
             ]
 
             def as_dict(self):
-                return dict(role_name=self.role_name, policies=self.policies)
+                return dict(RoleName=self.role_name, policies=self.policies)
 
         mock_role = MockRole()
 
-        repokid.utils.iam.remove_permissions_from_role(
+        iam.remove_permissions_from_role(
             "123456789012",
             ["s3:putobjectacl"],
             mock_role,
@@ -791,7 +791,7 @@ class TestRepokidCLI(object):
             commit=False,
         )
 
-        repokid.utils.iam.remove_permissions_from_role(
+        iam.remove_permissions_from_role(
             "123456789012",
             ["s3:putobjectacl"],
             mock_role,
@@ -803,20 +803,18 @@ class TestRepokidCLI(object):
         )
 
     @patch(
-        "repokid.cli.repokid_cli.find_role_in_cache",
+        "repokid.commands.role.find_role_in_cache",
         MagicMock(return_value="12345-roleid"),
     )
-    @patch("repokid.cli.repokid_cli.get_role_data", MagicMock(return_value=None))
-    @patch("repokid.cli.repokid_cli.Role", MagicMock(return_value="IAMROLE"))
+    @patch("repokid.commands.role.get_role_data", MagicMock(return_value=None))
+    @patch("repokid.commands.role.Role", MagicMock(return_value="IAMROLE"))
     @patch(
-        "repokid.cli.repokid_cli._remove_permissions_from_role",
+        "repokid.commands.role.remove_permissions_from_role",
         MagicMock(return_value=None),
     )
-    @patch("repokid.cli.repokid_cli.repokid.hooks")
+    @patch("repokid.commands.role.repokid.hooks")
     def test_remove_permissions_from_roles(self, mock_hooks):
         import json
-
-        cli = repokid.cli.repokid_cli
 
         arns = [role["Arn"] for role in ROLES]
         arns = json.dumps(arns)
