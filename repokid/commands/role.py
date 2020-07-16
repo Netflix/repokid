@@ -14,25 +14,24 @@
 import csv
 import json
 
-import tabview as t
 from policyuniverse.arn import ARN
-from tabulate import tabulate
-from tqdm import tqdm
-
-import repokid.hooks
 from repokid import LOGGER
-from repokid.role import Roles, Role
+import repokid.hooks
+from repokid.role import Role, Roles
 from repokid.utils import roledata as roledata
 from repokid.utils.dynamo import (
+    find_role_in_cache,
     get_role_data,
     role_ids_for_account,
     role_ids_for_all_accounts,
-    find_role_in_cache,
 )
 from repokid.utils.iam import (
     inline_policies_size_exceeds_maximum,
     remove_permissions_from_role,
 )
+from tabulate import tabulate
+import tabview as t
+from tqdm import tqdm
 
 
 def display_roles(account_number, dynamo_table, inactive=False):

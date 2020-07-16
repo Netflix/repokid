@@ -13,9 +13,8 @@
 #     limitations under the License.
 import sys
 
-import requests
-
 from repokid import LOGGER
+import requests
 
 
 def get_aardvark_data(aardvark_api_location, account_number=None, arn=None):

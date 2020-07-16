@@ -40,21 +40,21 @@ import sys
 
 from docopt import docopt
 from repokid import __version__ as __version__
-from repokid import get_hooks
 from repokid import CONFIG
+from repokid import get_hooks
 from repokid import LOGGER
-from repokid.commands.repo import repo_role, rollback_role, repo_all_roles, repo_stats
+from repokid.commands.repo import repo_all_roles, repo_role, repo_stats, rollback_role
 from repokid.commands.role import (
+    display_role,
     display_roles,
     find_roles_with_permissions,
-    display_role,
     remove_permissions_from_roles,
 )
 from repokid.commands.role_cache import update_role_cache
 from repokid.commands.schedule import (
+    cancel_scheduled_repo,
     schedule_repo,
     show_scheduled_roles,
-    cancel_scheduled_repo,
 )
 from repokid.utils.dynamo import dynamo_get_or_create_table
 

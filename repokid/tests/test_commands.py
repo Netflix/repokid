@@ -22,9 +22,9 @@ import repokid.commands.repo
 import repokid.commands.role
 import repokid.commands.role_cache
 import repokid.commands.schedule
+from repokid.role import Role, Roles
 import repokid.utils.iam
 import repokid.utils.logging
-from repokid.role import Role, Roles
 import repokid.utils.roledata
 
 
@@ -658,8 +658,6 @@ class TestRepokidCLI(object):
         assert "warnings" in generated_config
 
     def test_inline_policies_size_exceeds_maximum(self):
-        cli = repokid.cli.repokid_cli
-
         small_policy = dict()
         assert not repokid.utils.iam.inline_policies_size_exceeds_maximum(small_policy)
 
@@ -750,10 +748,10 @@ class TestRepokidCLI(object):
 
     @patch("repokid.utils.iam.delete_policy", MagicMock(return_value=None))
     @patch("repokid.utils.iam.replace_policies", MagicMock(return_value=None))
-    @patch("repokid.utils.iam.remove_permissions_from_role", MagicMock(return_value=None))
     @patch(
-        "repokid.utils.iam.get_role_inline_policies", MagicMock(return_value=None)
+        "repokid.utils.iam.remove_permissions_from_role", MagicMock(return_value=None)
     )
+    @patch("repokid.utils.iam.get_role_inline_policies", MagicMock(return_value=None))
     @patch(
         "repokid.utils.iam.roledata.add_new_policy_version",
         MagicMock(return_value=None),
@@ -761,8 +759,7 @@ class TestRepokidCLI(object):
     @patch("repokid.utils.iam.set_role_data", MagicMock(return_value=None))
     @patch("repokid.utils.iam.set_role_data", MagicMock(return_value=None))
     @patch(
-        "repokid.utils.iam.update_repoed_description",
-        MagicMock(return_value=None),
+        "repokid.utils.iam.update_repoed_description", MagicMock(return_value=None),
     )
     @patch("repokid.utils.iam.roledata.update_role_data", MagicMock(return_value=None))
     def test_remove_permissions_from_role(self):

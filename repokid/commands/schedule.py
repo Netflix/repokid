@@ -11,21 +11,20 @@
 #     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #     See the License for the specific language governing permissions and
 #     limitations under the License.
-import time
 from datetime import datetime as dt
+import time
 
-from tabulate import tabulate
-from tqdm import tqdm
-
-import repokid.hooks
 from repokid import LOGGER
-from repokid.role import Roles, Role
+import repokid.hooks
+from repokid.role import Role, Roles
 from repokid.utils.dynamo import (
+    find_role_in_cache,
     get_role_data,
     role_ids_for_account,
     set_role_data,
-    find_role_in_cache,
 )
+from tabulate import tabulate
+from tqdm import tqdm
 
 
 def schedule_repo(account_number, dynamo_table, config, hooks):

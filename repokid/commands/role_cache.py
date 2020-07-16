@@ -12,14 +12,13 @@
 #     See the License for the specific language governing permissions and
 #     limitations under the License.
 from cloudaux.aws.iam import get_account_authorization_details
-from tqdm import tqdm
-
 from repokid import LOGGER
 from repokid.filters import FilterPlugins
-from repokid.utils.aardvark import get_aardvark_data
-from repokid.role import Roles, Role
+from repokid.role import Role, Roles
 from repokid.utils import roledata as roledata
+from repokid.utils.aardvark import get_aardvark_data
 from repokid.utils.dynamo import set_role_data
+from tqdm import tqdm
 
 
 def update_role_cache(account_number, dynamo_table, config, hooks):

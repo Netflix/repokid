@@ -19,31 +19,30 @@ import time
 
 import botocore
 from cloudaux.aws.iam import (
+    delete_role_policy,
     get_role_inline_policies,
     put_role_policy,
-    delete_role_policy,
 )
-from tabulate import tabulate
-
-import repokid.hooks
 from repokid import LOGGER
-from repokid.utils.logging import log_deleted_and_repoed_policies
-from repokid.utils.roledata import partial_update_role_data
-from repokid.utils.iam import (
-    update_repoed_description,
-    inline_policies_size_exceeds_maximum,
-    delete_policy,
-    replace_policies,
-)
+import repokid.hooks
 from repokid.role import Role, Roles
 from repokid.utils import roledata as roledata
 from repokid.utils.dynamo import (
     find_role_in_cache,
     get_role_data,
-    set_role_data,
     role_ids_for_account,
     role_ids_for_all_accounts,
+    set_role_data,
 )
+from repokid.utils.iam import (
+    delete_policy,
+    inline_policies_size_exceeds_maximum,
+    replace_policies,
+    update_repoed_description,
+)
+from repokid.utils.logging import log_deleted_and_repoed_policies
+from repokid.utils.roledata import partial_update_role_data
+from tabulate import tabulate
 
 
 def repo_role(

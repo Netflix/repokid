@@ -1,5 +1,4 @@
 import import_string
-
 from repokid import LOGGER
 
 
