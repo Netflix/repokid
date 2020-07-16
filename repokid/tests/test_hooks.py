@@ -17,7 +17,7 @@ import repokid.hooks
 from repokid.hooks.loggers import log_during_repoable_calculation_batch_hooks
 from repokid.role import Role
 from repokid.tests.artifacts.hook import function_1, function_2
-from repokid.tests.test_repokid_cli import ROLES
+from repokid.tests.test_commands import ROLES
 
 
 def func_a(input_dict):

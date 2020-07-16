@@ -15,7 +15,7 @@ import time
 
 from mock import patch
 from repokid.role import Role
-from repokid.tests.test_repokid_cli import AARDVARK_DATA, ROLE_POLICIES, ROLES
+from repokid.tests.test_commands import AARDVARK_DATA, ROLE_POLICIES, ROLES
 import repokid.utils.roledata
 
 # AARDVARK_DATA maintained in test_repokid_cli
