@@ -36,7 +36,7 @@ from tqdm import tqdm
 LOGGER = logging.getLogger("repokid")
 
 
-def display_roles(account_number, dynamo_table, inactive=False):
+def _display_roles(account_number, dynamo_table, inactive=False):
     """
     Display a table with data about all roles in an account and write a csv file with the data.
 
@@ -95,7 +95,7 @@ def display_roles(account_number, dynamo_table, inactive=False):
             csv_writer.writerow(row)
 
 
-def find_roles_with_permissions(permissions, dynamo_table, output_file):
+def _find_roles_with_permissions(permissions, dynamo_table, output_file):
     """
     Search roles in all accounts for a policy with any of the provided permissions, log the ARN of each role.
 
@@ -135,7 +135,7 @@ def find_roles_with_permissions(permissions, dynamo_table, output_file):
     LOGGER.info('Ouput written to file "{output_file}"'.format(output_file=output_file))
 
 
-def display_role(account_number, role_name, dynamo_table, config, hooks):
+def _display_role(account_number, role_name, dynamo_table, config, hooks):
     """
     Displays data about a role in a given account:
       1) Name, which filters are disqualifying it from repo, if it's repoable, total/repoable permissions,
@@ -273,7 +273,7 @@ def display_role(account_number, role_name, dynamo_table, config, hooks):
         )
 
 
-def remove_permissions_from_roles(
+def _remove_permissions_from_roles(
     permissions, role_filename, dynamo_table, config, hooks, commit=False
 ):
     """Loads roles specified in file and calls _remove_permissions_from_role() for each one.

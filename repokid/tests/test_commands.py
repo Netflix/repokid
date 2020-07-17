@@ -297,7 +297,7 @@ class TestRepokidCLI(object):
         dynamo_table = None
         account_number = "123456789012"
 
-        repokid.commands.role_cache.update_role_cache(
+        repokid.commands.role_cache._update_role_cache(
             account_number, dynamo_table, config, hooks
         )
 
@@ -380,8 +380,8 @@ class TestRepokidCLI(object):
             ROLES_FOR_DISPLAY[3],
         ]
 
-        repokid.commands.role.display_roles("123456789012", None, inactive=True)
-        repokid.commands.role.display_roles("123456789012", None, inactive=False)
+        repokid.commands.role._display_roles("123456789012", None, inactive=True)
+        repokid.commands.role._display_roles("123456789012", None, inactive=False)
 
         # first call has inactive role, second doesn't because it's filtered
         assert mock_tabview.mock_calls == [
@@ -449,7 +449,7 @@ class TestRepokidCLI(object):
 
         config = {"repo_schedule_period_days": 1}
 
-        repokid.commands.schedule.schedule_repo("1234567890", None, config, hooks)
+        repokid.commands.schedule._schedule_repo("1234567890", None, config, hooks)
 
         assert mock_set_role_data.mock_calls == [
             call(
@@ -517,9 +517,9 @@ class TestRepokidCLI(object):
         mock_repo_role.return_value = None
 
         # repo all roles in the account, should call repo with all roles
-        repokid.commands.repo.repo_all_roles(None, None, None, hooks, scheduled=False)
+        repokid.commands.repo._repo_all_roles(None, None, None, hooks, scheduled=False)
         # repo only scheduled, should only call repo role with role C
-        repokid.commands.repo.repo_all_roles(None, None, None, hooks, scheduled=True)
+        repokid.commands.repo._repo_all_roles(None, None, None, hooks, scheduled=True)
 
         assert mock_repo_role.mock_calls == [
             call(None, "ROLE_A", None, None, hooks, commit=False, scheduled=False),
@@ -582,14 +582,14 @@ class TestRepokidCLI(object):
         mock_get_role_data.side_effect = [roles[0], roles[2], roles[0]]
 
         # first check all
-        repokid.commands.schedule.cancel_scheduled_repo(
+        repokid.commands.schedule._cancel_scheduled_repo(
             None, None, role_name=None, is_all=True
         )
 
         # ensure all are cancelled
         mock_find_role_in_cache.return_value = ["AROAABCDEFGHIJKLMNOPA"]
 
-        repokid.commands.schedule.cancel_scheduled_repo(
+        repokid.commands.schedule._cancel_scheduled_repo(
             None, None, role_name="ROLE_A", is_all=False
         )
 
@@ -825,7 +825,7 @@ class TestRepokidCLI(object):
         with patch("builtins.open", mock_open(read_data=arns)) as mock_file:
             assert open("somefile.json").read() == arns
             mock_file.assert_called_with("somefile.json")
-            repokid.commands.role.remove_permissions_from_roles(
+            repokid.commands.role._remove_permissions_from_roles(
                 ["s3:putobjectacl"],
                 "somefile.json",
                 None,
