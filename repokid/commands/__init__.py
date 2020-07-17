@@ -11,9 +11,17 @@
 #     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #     See the License for the specific language governing permissions and
 #     limitations under the License.
+from typing import List
+from typing import Optional
+
 from repokid import CONFIG
 from repokid import get_hooks
-from repokid.commands.repo import _repo_all_roles, _repo_role, _repo_stats, _rollback_role
+from repokid.commands.repo import (
+    _repo_all_roles,
+    _repo_role,
+    _repo_stats,
+    _rollback_role,
+)
 from repokid.commands.role import (
     _display_role,
     _display_roles,
@@ -34,48 +42,236 @@ dynamo_table = dynamo_get_or_create_table(**CONFIG["dynamo_db"])
 
 
 def update_role_cache(account_number: str):
-    return _update_role_cache(account_number)
+    """
+    Library wrapper to update data about all roles in a given account.
+
+    Ref: :func:`~repokid.commands.role_cache._update_role_cache`
+
+    Args:
+        account_number (string): The current account number Repokid is being run against
+
+    Returns:
+        None
+    """
+    return _update_role_cache(account_number, dynamo_table, CONFIG, hooks)
 
 
-def display_role_cache(account_numner: str, inactive: bool = False):
-    pass
+def display_role_cache(account_number: str, inactive: bool = False):
+    """
+    Library wrapper to display a table with data about all roles in an account and write a csv file with the data.
+
+    Ref: :func:`~repokid.commands.role_cache._display_roles`
+
+    Args:
+        account_number (string): The current account number Repokid is being run against
+        inactive (bool): show roles that have historically (but not currently) existed in the account if True
+
+    Returns:
+        None
+    """
+    return _display_roles(account_number, dynamo_table, inactive=inactive)
 
 
-def find_roles_with_permissions(permissions: str, output_file: str = ""):
-    pass
+def find_roles_with_permissions(permissions: List[str], output_file: str = ""):
+    """
+    Library wrapper to search roles in all accounts for a policy with any of the provided permissions, log the ARN of each role.
+
+    Ref: :func:`~repokid.commands.role._find_roles_with_permissions`
+
+    Args:
+        permissions (list[string]): The name of the permissions to find
+        output_file (string): filename to write the output
+
+    Returns:
+        None
+    """
+    return _find_roles_with_permissions(permissions, dynamo_table, output_file)
 
 
-def remove_permissions_from_roles(permissions: str, role_filename: str = "", commit: bool = False):
-    pass
+def remove_permissions_from_roles(
+    permissions: List[str], role_filename: str, commit: bool = False
+):
+    """
+    Library wrapper to loads role specified in file and call _remove_permissions_from_role() for each one.
+
+    Ref: :func:`~repokid.commands.role._remove_permissions_from_roles`
+
+    Args:
+        permissions (list<string>)
+        role_filename (string)
+        commit (bool)
+
+    Returns:
+        None
+    """
+    return _remove_permissions_from_roles(
+        permissions, role_filename, dynamo_table, CONFIG, hooks, commit=commit
+    )
 
 
 def display_role(account_number: str, role_name: str):
-    pass
+    """
+    Library wrapper to display data about a role in a given account
+
+    Ref: :func:`~repokid.commands.role._display_role`
+
+    Args:
+        account_number (string): The current account number Repokid is being run against
+        role_name (string)
+
+    Returns:
+        None
+    """
+    return _display_role(account_number, role_name, dynamo_table, CONFIG, hooks)
 
 
 def repo_role(account_number: str, role_name: str, commit: bool = False):
-    pass
+    """
+    Library wrapper to calculate what repoing can be done for a role and then actually do it if commit is set.
+
+    Ref: :func:`~repokid.commands.repo._repo_role`
+
+    Args:
+        account_number (string): The current account number Repokid is being run against
+        role_name (string)
+        commit (bool)
+
+    Returns:
+        None
+    """
+    return _repo_role(
+        account_number, role_name, dynamo_table, CONFIG, hooks, commit=commit
+    )
 
 
-def rollback_role(account_number: str, role_name: str, selection: int = 0, commit: bool = False):
-    pass
+def rollback_role(
+    account_number: str, role_name: str, selection: int = 0, commit: bool = False
+) -> Optional[List[str]]:
+    """
+    Library wrapper to display the historical policy versions for a roll as a numbered list.  Restore to a specific version if selected.
+    Indicate changes that will be made and then actually make them if commit is selected.
+
+    Ref: :func:`~repokid.commands.repo._rollback_role`
+
+    Args:
+        account_number (string): The current account number Repokid is being run against
+        role_name (string)
+        selection (int): which policy version in the list to rollback to
+        commit (bool): actually make the change
+
+    Returns:
+        errors (list): if any
+    """
+    return _rollback_role(
+        account_number,
+        role_name,
+        dynamo_table,
+        CONFIG,
+        hooks,
+        selection=selection,
+        commit=commit,
+    )
 
 
-def repo_all_roles(account_number: str, commit: bool = False, scheduled: bool = False):
-    pass
+def repo_all_roles(account_number: str, commit: bool = False):
+    """
+    Convenience wrapper for repo_roles() with scheduled=False.
 
+    Ref: :func:`~repokid.commands.repo_roles`
 
-def show_scheduled_roles(account_number: str):
-    pass
+    Args:
+        account_number (string): The current account number Repokid is being run against
+        commit (bool): actually make the changes
 
-
-def cancel_scheduled_repo(account_number: str, role_name: str = "", is_all: bool = False):
-    pass
+    Returns:
+        None
+    """
+    return repo_roles(account_number, commit=commit, scheduled=False)
 
 
 def repo_scheduled_roles(account_number: str, commit: bool = False):
-    pass
+    """
+    Convenience wrapper for repo_roles() with scheduled=True.
+
+    Ref: :func:`~repokid.commands.repo_roles`
+
+    Args:
+        account_number (string): The current account number Repokid is being run against
+        commit (bool): actually make the changes
+
+    Returns:
+        None
+    """
+    return repo_roles(account_number, commit=commit, scheduled=True)
 
 
-def repo_stats(account_number: str, output_filename: str = ""):
-    pass
+def repo_roles(account_number: str, commit: bool = False, scheduled: bool = False):
+    """
+    Library wrapper to repo all scheduled or eligible roles in an account. Collect any errors and display them at the end.
+
+    Ref: :func:`~repokid.commands.repo._repo_all_roles`
+
+    Args:
+        account_number (string): The current account number Repokid is being run against
+        commit (bool): actually make the changes
+        scheduled (bool): if True only repo the scheduled roles, if False repo all the (eligible) roles
+
+    Returns:
+        None
+    """
+    _update_role_cache(account_number, dynamo_table, CONFIG, hooks)
+    return _repo_all_roles(
+        account_number, dynamo_table, CONFIG, hooks, commit=commit, scheduled=scheduled
+    )
+
+
+def show_scheduled_roles(account_number: str):
+    """
+    Library wrapper to show scheduled repos for a given account.  For each scheduled show whether scheduled time is elapsed or not.
+
+    Ref: :func:`~repokid.commands.schedule._show_scheduled_roles`
+
+    Args:
+        account_number (string): The current account number Repokid is being run against
+
+    Returns:
+        None
+    """
+    return _show_scheduled_roles(account_number, dynamo_table)
+
+
+def cancel_scheduled_repo(
+    account_number: str, role_name: str = "", is_all: bool = False
+):
+    """
+    Library wrapper to cancel scheduled repo for a role in an account.
+
+    Ref: :func:`~repokid.commands.schedule._cancel_scheduled_repo`
+
+    Args:
+        account_number (string): The current account number Repokid is being run against
+        role_name (string): Role name to cancel scheduled repo for
+        is_all (bool): Cancel schedule repos on all roles if True
+
+    Returns:
+        None
+    """
+    return _cancel_scheduled_repo(
+        account_number, dynamo_table, role_name=role_name, is_all=is_all
+    )
+
+
+def repo_stats(output_filename: str = "", account_number: str = ""):
+    """
+    Library wrapper to create a csv file with stats about roles, total permissions, and applicable filters over time.
+
+    Ref: :func:`~repokid.commands.repo._repo_stats`
+
+    Args:
+        output_filename (string): the name of the csv file to write
+        account_number (string): if specified only display roles from selected account, otherwise display all
+
+    Returns:
+        None
+    """
+    return _repo_stats(output_filename, dynamo_table, account_number=account_number)
