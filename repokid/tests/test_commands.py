@@ -465,7 +465,7 @@ class TestRepokidCLI(object):
     @patch("repokid.hooks.call_hooks")
     @patch("repokid.commands.repo.get_role_data")
     @patch("repokid.commands.repo.role_ids_for_account")
-    @patch("repokid.commands.repo.repo_role")
+    @patch("repokid.commands.repo._repo_role")
     @patch("time.time")
     def test_repo_all_roles(
         self,
