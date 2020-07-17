@@ -1,7 +1,8 @@
 import logging
-LOGGER = logging.getLogger("repokid")
 import repokid.hooks as hooks
 from repokid.role import Role
+
+LOGGER = logging.getLogger("repokid")
 
 
 @hooks.implements_hook("BEFORE_REPO_ROLES", 1)

@@ -13,10 +13,9 @@
 #     limitations under the License.
 import csv
 import json
+import logging
 
 from policyuniverse.arn import ARN
-import logging
-LOGGER = logging.getLogger("repokid")
 import repokid.hooks
 from repokid.role import Role, Roles
 from repokid.utils import roledata as roledata
@@ -33,6 +32,8 @@ from repokid.utils.iam import (
 from tabulate import tabulate
 import tabview as t
 from tqdm import tqdm
+
+LOGGER = logging.getLogger("repokid")
 
 
 def display_roles(account_number, dynamo_table, inactive=False):

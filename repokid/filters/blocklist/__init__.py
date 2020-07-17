@@ -1,11 +1,12 @@
 import json
 import sys
+import logging
 
 import botocore
 from cloudaux.aws.sts import boto3_cached_conn
-import logging
-LOGGER = logging.getLogger("repokid")
 from repokid.filters import Filter
+
+LOGGER = logging.getLogger("repokid")
 
 
 def get_blocklist_from_bucket(bucket_config):

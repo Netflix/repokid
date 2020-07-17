@@ -11,15 +11,17 @@
 #     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #     See the License for the specific language governing permissions and
 #     limitations under the License.
-from cloudaux.aws.iam import get_account_authorization_details
 import logging
-LOGGER = logging.getLogger("repokid")
+
+from cloudaux.aws.iam import get_account_authorization_details
 from repokid.filters import FilterPlugins
 from repokid.role import Role, Roles
 from repokid.utils import roledata as roledata
 from repokid.utils.aardvark import get_aardvark_data
 from repokid.utils.dynamo import set_role_data
 from tqdm import tqdm
+
+LOGGER = logging.getLogger("repokid")
 
 
 def update_role_cache(account_number, dynamo_table, config, hooks):

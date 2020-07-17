@@ -1,5 +1,6 @@
 import import_string
 import logging
+
 LOGGER = logging.getLogger("repokid")
 
 

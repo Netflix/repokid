@@ -37,13 +37,12 @@ Options:
 
 import json
 import sys
+import logging
 
 from docopt import docopt
 from repokid import __version__ as __version__
 from repokid import CONFIG
 from repokid import get_hooks
-import logging
-LOGGER = logging.getLogger("repokid")
 from repokid.commands.repo import repo_all_roles, repo_role, repo_stats, rollback_role
 from repokid.commands.role import (
     display_role,
@@ -61,6 +60,8 @@ from repokid.utils.dynamo import dynamo_get_or_create_table
 
 
 # http://docs.aws.amazon.com/IAM/latest/UserGuide/reference_iam-limits.html
+
+LOGGER = logging.getLogger("repokid")
 
 
 def _generate_default_config(filename=None):
