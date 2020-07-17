@@ -79,7 +79,8 @@ def display_role_cache(account_number: str, inactive: bool = False):
 
 def find_roles_with_permissions(permissions: List[str], output_file: str = ""):
     """
-    Library wrapper to search roles in all accounts for a policy with any of the provided permissions, log the ARN of each role.
+    Library wrapper to search roles in all accounts for a policy with any of the provided permissions, log the ARN of
+    each role.
 
     Ref: :func:`~repokid.commands.role._find_roles_with_permissions`
 
@@ -153,8 +154,8 @@ def rollback_role(
     account_number: str, role_name: str, selection: int = 0, commit: bool = False
 ) -> Optional[List[str]]:
     """
-    Library wrapper to display the historical policy versions for a roll as a numbered list.  Restore to a specific version if selected.
-    Indicate changes that will be made and then actually make them if commit is selected.
+    Library wrapper to display the historical policy versions for a roll as a numbered list.  Restore to a specific
+    version if selected. Indicate changes that will be made and then actually make them if commit is selected.
 
     Ref: :func:`~repokid.commands.repo._rollback_role`
 
@@ -180,8 +181,8 @@ def rollback_role(
 
 def schedule_repo(account_number: str):
     """
-    Library wrapper to schedule a repo for a given account.  Schedule repo for a time in the future (default 7 days) for any roles in
-    the account with repoable permissions.
+    Library wrapper to schedule a repo for a given account.  Schedule repo for a time in the future (default 7 days) for
+    any roles in the account with repoable permissions.
 
     Ref: :func:`~repokid.commands.repo._repo_all_roles`
 
@@ -229,7 +230,8 @@ def repo_scheduled_roles(account_number: str, commit: bool = False):
 
 def repo_roles(account_number: str, commit: bool = False, scheduled: bool = False):
     """
-    Library wrapper to repo all scheduled or eligible roles in an account. Collect any errors and display them at the end.
+    Library wrapper to repo all scheduled or eligible roles in an account. Collect any errors and display them at the
+    end.
 
     Ref: :func:`~repokid.commands.repo._repo_all_roles`
 
@@ -249,7 +251,8 @@ def repo_roles(account_number: str, commit: bool = False, scheduled: bool = Fals
 
 def show_scheduled_roles(account_number: str):
     """
-    Library wrapper to show scheduled repos for a given account.  For each scheduled show whether scheduled time is elapsed or not.
+    Library wrapper to show scheduled repos for a given account.  For each scheduled show whether scheduled time is
+    elapsed or not.
 
     Ref: :func:`~repokid.commands.schedule._show_scheduled_roles`
 
