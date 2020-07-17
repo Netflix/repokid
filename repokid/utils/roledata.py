@@ -20,7 +20,8 @@ from cloudaux.aws.iam import get_role_inline_policies
 from dateutil.tz import tzlocal
 from policyuniverse import all_permissions, expand_policy, get_actions_from_statement
 from repokid import CONFIG as CONFIG
-from repokid import LOGGER as LOGGER
+import logging
+LOGGER = logging.getLogger("repokid")
 import repokid.hooks
 from repokid.role import Role
 from repokid.utils.aardvark import get_aardvark_data

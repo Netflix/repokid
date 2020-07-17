@@ -3,7 +3,7 @@ import sys
 
 import botocore
 from cloudaux.aws.sts import boto3_cached_conn
-from repokid import LOGGER
+LOGGER = logging.getLogger("repokid")
 from repokid.filters import Filter
 
 

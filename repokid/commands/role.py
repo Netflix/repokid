@@ -15,7 +15,8 @@ import csv
 import json
 
 from policyuniverse.arn import ARN
-from repokid import LOGGER
+import logging
+LOGGER = logging.getLogger("repokid")
 import repokid.hooks
 from repokid.role import Role, Roles
 from repokid.utils import roledata as roledata

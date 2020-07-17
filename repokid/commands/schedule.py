@@ -14,7 +14,8 @@
 from datetime import datetime as dt
 import time
 
-from repokid import LOGGER
+import logging
+LOGGER = logging.getLogger("repokid")
 import repokid.hooks
 from repokid.role import Role, Roles
 from repokid.utils.dynamo import (

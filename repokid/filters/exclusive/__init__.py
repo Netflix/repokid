@@ -1,6 +1,6 @@
 import fnmatch
 
-from repokid import LOGGER
+LOGGER = logging.getLogger("repokid")
 from repokid.filters import Filter
 
 

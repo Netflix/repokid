@@ -12,7 +12,8 @@
 #     See the License for the specific language governing permissions and
 #     limitations under the License.
 from cloudaux.aws.iam import get_account_authorization_details
-from repokid import LOGGER
+import logging
+LOGGER = logging.getLogger("repokid")
 from repokid.filters import FilterPlugins
 from repokid.role import Role, Roles
 from repokid.utils import roledata as roledata

@@ -23,7 +23,8 @@ from cloudaux.aws.iam import (
     get_role_inline_policies,
     put_role_policy,
 )
-from repokid import LOGGER
+import logging
+LOGGER = logging.getLogger("repokid")
 import repokid.hooks
 from repokid.role import Role, Roles
 from repokid.utils import roledata as roledata

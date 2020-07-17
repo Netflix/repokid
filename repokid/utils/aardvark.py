@@ -13,7 +13,8 @@
 #     limitations under the License.
 import sys
 
-from repokid import LOGGER
+import logging
+LOGGER = logging.getLogger("repokid")
 import requests
 
 

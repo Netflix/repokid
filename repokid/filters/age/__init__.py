@@ -1,7 +1,7 @@
 import datetime
 
 from dateutil.tz import tzlocal
-from repokid import LOGGER
+LOGGER = logging.getLogger("repokid")
 from repokid.filters import Filter
 
 

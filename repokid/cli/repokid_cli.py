@@ -42,7 +42,8 @@ from docopt import docopt
 from repokid import __version__ as __version__
 from repokid import CONFIG
 from repokid import get_hooks
-from repokid import LOGGER
+import logging
+LOGGER = logging.getLogger("repokid")
 from repokid.commands.repo import repo_all_roles, repo_role, repo_stats, rollback_role
 from repokid.commands.role import (
     display_role,

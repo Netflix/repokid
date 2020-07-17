@@ -17,7 +17,7 @@ import logging
 from socket import gethostname
 import traceback
 
-from repokid import LOGGER
+LOGGER = logging.getLogger("repokid")
 
 
 class JSONFormatter(logging.Formatter):
