@@ -17,6 +17,7 @@ import logging
 from socket import gethostname
 import traceback
 
+import logging
 LOGGER = logging.getLogger("repokid")
 
 

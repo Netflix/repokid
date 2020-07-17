@@ -1,3 +1,4 @@
+import logging
 LOGGER = logging.getLogger("repokid")
 import repokid.hooks as hooks
 from repokid.role import Role
