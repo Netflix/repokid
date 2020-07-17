@@ -11,6 +11,11 @@
 #     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #     See the License for the specific language governing permissions and
 #     limitations under the License.
+"""
+This module contains wrapper functions for the functions contained in the child
+modules so developers don't have to worry about passing configs, hooks, and dynamo
+clients.
+"""
 from typing import List
 from typing import Optional
 
@@ -171,6 +176,23 @@ def rollback_role(
         selection=selection,
         commit=commit,
     )
+
+
+def schedule_repo(account_number: str):
+    """
+    Library wrapper to schedule a repo for a given account.  Schedule repo for a time in the future (default 7 days) for any roles in
+    the account with repoable permissions.
+
+    Ref: :func:`~repokid.commands.repo._repo_all_roles`
+
+    Args:
+        account_number (string): The current account number Repokid is being run against
+
+    Returns:
+        None
+    """
+    _update_role_cache(account_number, dynamo_table, CONFIG, hooks)
+    return _schedule_repo(account_number, dynamo_table, CONFIG, hooks)
 
 
 def repo_all_roles(account_number: str, commit: bool = False):
