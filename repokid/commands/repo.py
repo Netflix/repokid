@@ -15,8 +15,8 @@ import csv
 import datetime
 import json
 import pprint
-import time
 import logging
+import time
 
 import botocore
 from cloudaux.aws.iam import (

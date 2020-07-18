@@ -13,8 +13,8 @@
 #     limitations under the License.
 import datetime
 import json
-import re
 import logging
+import re
 
 import botocore
 from cloudaux import sts_conn

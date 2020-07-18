@@ -1,4 +1,5 @@
 import logging
+
 import repokid.hooks as hooks
 from repokid.role import Role
 

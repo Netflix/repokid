@@ -1,6 +1,6 @@
 import json
-import sys
 import logging
+import sys
 
 import botocore
 from cloudaux.aws.sts import boto3_cached_conn

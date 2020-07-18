@@ -12,8 +12,8 @@
 #     See the License for the specific language governing permissions and
 #     limitations under the License.
 from datetime import datetime as dt
-import time
 import logging
+import time
 
 import repokid.hooks
 from repokid.role import Role, Roles

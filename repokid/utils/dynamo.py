@@ -1,7 +1,7 @@
 import copy
 import datetime
-import sys
 import logging
+import sys
 
 import boto3
 from botocore.exceptions import ClientError as BotoClientError

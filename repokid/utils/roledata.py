@@ -14,8 +14,8 @@
 from collections import defaultdict
 import copy
 import datetime
-import time
 import logging
+import time
 
 from cloudaux.aws.iam import get_role_inline_policies
 from dateutil.tz import tzlocal

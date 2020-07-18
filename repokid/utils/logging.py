@@ -14,8 +14,8 @@
 from datetime import datetime
 import json
 from socket import gethostname
-import traceback
 import logging
+import traceback
 
 LOGGER = logging.getLogger("repokid")
 

@@ -36,8 +36,8 @@ Options:
 """
 
 import json
-import sys
 import logging
+import sys
 
 from docopt import docopt
 from repokid import __version__ as __version__
