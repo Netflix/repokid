@@ -13,6 +13,7 @@
 #     limitations under the License.
 import datetime
 import json
+import logging
 import re
 
 import botocore
@@ -22,12 +23,12 @@ from cloudaux.aws.iam import (
     get_role_inline_policies,
     put_role_policy,
 )
-from repokid import LOGGER
 from repokid.utils import roledata as roledata
 from repokid.utils.dynamo import set_role_data
 from repokid.utils.logging import log_deleted_and_repoed_policies
 from repokid.utils.roledata import partial_update_role_data
 
+LOGGER = logging.getLogger("repokid")
 MAX_AWS_POLICY_SIZE = 10240
 
 

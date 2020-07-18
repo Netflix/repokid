@@ -1,5 +1,8 @@
+import logging
+
 import import_string
-from repokid import LOGGER
+
+LOGGER = logging.getLogger("repokid")
 
 
 # inspiration from https://github.com/slackhq/python-rtmbot/blob/master/rtmbot/core.py

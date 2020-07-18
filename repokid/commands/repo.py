@@ -14,6 +14,7 @@
 import csv
 import datetime
 import json
+import logging
 import pprint
 import time
 
@@ -23,7 +24,6 @@ from cloudaux.aws.iam import (
     get_role_inline_policies,
     put_role_policy,
 )
-from repokid import LOGGER
 import repokid.hooks
 from repokid.role import Role, Roles
 from repokid.utils import roledata as roledata
@@ -43,6 +43,8 @@ from repokid.utils.iam import (
 from repokid.utils.logging import log_deleted_and_repoed_policies
 from repokid.utils.roledata import partial_update_role_data
 from tabulate import tabulate
+
+LOGGER = logging.getLogger("repokid")
 
 
 def repo_role(

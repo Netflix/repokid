@@ -1,8 +1,10 @@
 import datetime
+import logging
 
 from dateutil.tz import tzlocal
-from repokid import LOGGER
 from repokid.filters import Filter
+
+LOGGER = logging.getLogger("repokid")
 
 
 class AgeFilter(Filter):

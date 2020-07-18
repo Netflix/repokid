@@ -1,7 +1,9 @@
 import fnmatch
+import logging
 
-from repokid import LOGGER
 from repokid.filters import Filter
+
+LOGGER = logging.getLogger("repokid")
 
 
 class ExclusiveFilter(Filter):

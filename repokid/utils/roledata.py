@@ -14,13 +14,13 @@
 from collections import defaultdict
 import copy
 import datetime
+import logging
 import time
 
 from cloudaux.aws.iam import get_role_inline_policies
 from dateutil.tz import tzlocal
 from policyuniverse import all_permissions, expand_policy, get_actions_from_statement
 from repokid import CONFIG as CONFIG
-from repokid import LOGGER as LOGGER
 import repokid.hooks
 from repokid.role import Role
 from repokid.utils.aardvark import get_aardvark_data
@@ -32,6 +32,7 @@ from repokid.utils.dynamo import (
     store_initial_role_data,
 )
 
+LOGGER = logging.getLogger("repokid")
 BEGINNING_OF_2015_MILLI_EPOCH = 1420113600000
 IAM_ACCESS_ADVISOR_UNSUPPORTED_SERVICES = frozenset([""])
 IAM_ACCESS_ADVISOR_UNSUPPORTED_ACTIONS = frozenset(["iam:passrole"])

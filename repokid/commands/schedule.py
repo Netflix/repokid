@@ -12,9 +12,9 @@
 #     See the License for the specific language governing permissions and
 #     limitations under the License.
 from datetime import datetime as dt
+import logging
 import time
 
-from repokid import LOGGER
 import repokid.hooks
 from repokid.role import Role, Roles
 from repokid.utils.dynamo import (
@@ -25,6 +25,8 @@ from repokid.utils.dynamo import (
 )
 from tabulate import tabulate
 from tqdm import tqdm
+
+LOGGER = logging.getLogger("repokid")
 
 
 def schedule_repo(account_number, dynamo_table, config, hooks):
