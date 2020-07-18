@@ -13,8 +13,8 @@
 #     limitations under the License.
 from datetime import datetime
 import json
-from socket import gethostname
 import logging
+from socket import gethostname
 import traceback
 
 LOGGER = logging.getLogger("repokid")

@@ -14,8 +14,8 @@
 import csv
 import datetime
 import json
-import pprint
 import logging
+import pprint
 import time
 
 import botocore
