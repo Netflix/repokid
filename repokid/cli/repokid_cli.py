@@ -43,18 +43,23 @@ from docopt import docopt
 from repokid import __version__ as __version__
 from repokid import CONFIG
 from repokid import get_hooks
-from repokid.commands.repo import repo_all_roles, repo_role, repo_stats, rollback_role
-from repokid.commands.role import (
-    display_role,
-    display_roles,
-    find_roles_with_permissions,
-    remove_permissions_from_roles,
+from repokid.commands.repo import (
+    _repo_all_roles,
+    _repo_role,
+    _repo_stats,
+    _rollback_role,
 )
-from repokid.commands.role_cache import update_role_cache
+from repokid.commands.role import (
+    _display_role,
+    _display_roles,
+    _find_roles_with_permissions,
+    _remove_permissions_from_roles,
+)
+from repokid.commands.role_cache import _update_role_cache
 from repokid.commands.schedule import (
-    cancel_scheduled_repo,
-    schedule_repo,
-    show_scheduled_roles,
+    _cancel_scheduled_repo,
+    _schedule_repo,
+    _show_scheduled_roles,
 )
 from repokid.utils.dynamo import dynamo_get_or_create_table
 
@@ -202,33 +207,33 @@ def main():
     dynamo_table = dynamo_get_or_create_table(**config["dynamo_db"])
 
     if args.get("update_role_cache"):
-        return update_role_cache(account_number, dynamo_table, config, hooks)
+        return _update_role_cache(account_number, dynamo_table, config, hooks)
 
     if args.get("display_role_cache"):
         inactive = args.get("--inactive")
-        return display_roles(account_number, dynamo_table, inactive=inactive)
+        return _display_roles(account_number, dynamo_table, inactive=inactive)
 
     if args.get("find_roles_with_permissions"):
         permissions = args.get("<permission>")
         output_file = args.get("--output")
-        return find_roles_with_permissions(permissions, dynamo_table, output_file)
+        return _find_roles_with_permissions(permissions, dynamo_table, output_file)
 
     if args.get("remove_permissions_from_roles"):
         permissions = args.get("<permission>")
         role_filename = args.get("--role-file")
         commit = args.get("--commit")
-        return remove_permissions_from_roles(
+        return _remove_permissions_from_roles(
             permissions, role_filename, dynamo_table, config, hooks, commit=commit
         )
 
     if args.get("display_role"):
         role_name = args.get("<role_name>")
-        return display_role(account_number, role_name, dynamo_table, config, hooks)
+        return _display_role(account_number, role_name, dynamo_table, config, hooks)
 
     if args.get("repo_role"):
         role_name = args.get("<role_name>")
         commit = args.get("--commit")
-        return repo_role(
+        return _repo_role(
             account_number, role_name, dynamo_table, config, hooks, commit=commit
         )
 
@@ -236,7 +241,7 @@ def main():
         role_name = args.get("<role_name>")
         commit = args.get("--commit")
         selection = args.get("--selection")
-        return rollback_role(
+        return _rollback_role(
             account_number,
             role_name,
             dynamo_table,
@@ -248,21 +253,21 @@ def main():
 
     if args.get("repo_all_roles"):
         LOGGER.info("Updating role data")
-        update_role_cache(account_number, dynamo_table, config, hooks)
+        _update_role_cache(account_number, dynamo_table, config, hooks)
         LOGGER.info("Repoing all roles")
         commit = args.get("--commit")
-        return repo_all_roles(
+        return _repo_all_roles(
             account_number, dynamo_table, config, hooks, commit=commit, scheduled=False
         )
 
     if args.get("schedule_repo"):
         LOGGER.info("Updating role data")
-        update_role_cache(account_number, dynamo_table, config, hooks)
-        return schedule_repo(account_number, dynamo_table, config, hooks)
+        _update_role_cache(account_number, dynamo_table, config, hooks)
+        return _schedule_repo(account_number, dynamo_table, config, hooks)
 
     if args.get("show_scheduled_roles"):
         LOGGER.info("Showing scheduled roles")
-        return show_scheduled_roles(account_number, dynamo_table)
+        return _show_scheduled_roles(account_number, dynamo_table)
 
     if args.get("cancel_scheduled_repo"):
         role_name = args.get("--role")
@@ -279,22 +284,22 @@ def main():
                     account_number
                 )
             )
-        return cancel_scheduled_repo(
+        return _cancel_scheduled_repo(
             account_number, dynamo_table, role_name=role_name, is_all=is_all
         )
 
     if args.get("repo_scheduled_roles"):
-        update_role_cache(account_number, dynamo_table, config, hooks)
+        _update_role_cache(account_number, dynamo_table, config, hooks)
         LOGGER.info("Repoing scheduled roles")
         commit = args.get("--commit")
-        return repo_all_roles(
+        return _repo_all_roles(
             account_number, dynamo_table, config, hooks, commit=commit, scheduled=True
         )
 
     if args.get("repo_stats"):
         output_file = args.get("<output_filename>")
         account_number = args.get("--account")
-        return repo_stats(output_file, dynamo_table, account_number=account_number)
+        return _repo_stats(output_file, dynamo_table, account_number=account_number)
 
 
 if __name__ == "__main__":

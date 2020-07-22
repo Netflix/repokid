@@ -197,7 +197,7 @@ def rollback_role(dynamo_table, message):
             successful=False, return_message="Rollback must contain a selection number"
         )
 
-    errors = repokid.commands.repo.rollback_role(
+    errors = repokid.commands.repo._rollback_role(
         message.account,
         message.role_name,
         dynamo_table,

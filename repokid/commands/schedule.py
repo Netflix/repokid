@@ -29,7 +29,7 @@ from tqdm import tqdm
 LOGGER = logging.getLogger("repokid")
 
 
-def schedule_repo(account_number, dynamo_table, config, hooks):
+def _schedule_repo(account_number, dynamo_table, config, hooks):
     """
     Schedule a repo for a given account.  Schedule repo for a time in the future (default 7 days) for any roles in
     the account with repoable permissions.
@@ -72,7 +72,7 @@ def schedule_repo(account_number, dynamo_table, config, hooks):
     repokid.hooks.call_hooks(hooks, "AFTER_SCHEDULE_REPO", {"roles": scheduled_roles})
 
 
-def show_scheduled_roles(account_number, dynamo_table):
+def _show_scheduled_roles(account_number, dynamo_table):
     """
     Show scheduled repos for a given account.  For each scheduled show whether scheduled time is elapsed or not.
     """
@@ -104,7 +104,7 @@ def show_scheduled_roles(account_number, dynamo_table):
     print(tabulate(rows, headers=header))
 
 
-def cancel_scheduled_repo(account_number, dynamo_table, role_name=None, is_all=None):
+def _cancel_scheduled_repo(account_number, dynamo_table, role_name=None, is_all=None):
     """
     Cancel scheduled repo for a role in an account
     """

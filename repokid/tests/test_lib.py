@@ -17,11 +17,6 @@ import time
 
 from dateutil.tz import tzlocal
 from mock import call, MagicMock, mock_open, patch
-import repokid.cli.repokid_cli
-import repokid.commands.repo
-import repokid.commands.role
-import repokid.commands.role_cache
-import repokid.commands.schedule
 from repokid.role import Role, Roles
 import repokid.utils.iam
 import repokid.utils.logging
@@ -234,8 +229,15 @@ ROLES_FOR_DISPLAY = [
     },
 ]
 
+TEST_CONFIG = {
+    "aardvark_api_location": "",
+    "connection_iam": {},
+    "active_filters": ["repokid.filters.age:AgeFilter"],
+    "filter_config": {"AgeFilter": {"minimum_age": 90}, "BlocklistFilter": {}},
+    "dynamo_db": {"endpoint": "localhost"},
+}
 
-class TestRepokidCLI(object):
+class TestRepokidLib(object):
     @patch("repokid.commands.role_cache.roledata.update_stats")
     @patch("repokid.commands.role_cache.roledata.find_and_mark_inactive")
     @patch("repokid.commands.role_cache.roledata.update_role_data")
@@ -253,7 +255,8 @@ class TestRepokidCLI(object):
         mock_find_and_mark_inactive,
         mock_update_stats,
     ):
-
+        with patch("repokid.CONFIG", new=TEST_CONFIG):
+            import repokid.lib
         hooks = {}
 
         role_data = ROLES[:3]
@@ -297,8 +300,8 @@ class TestRepokidCLI(object):
         dynamo_table = None
         account_number = "123456789012"
 
-        repokid.commands.role_cache._update_role_cache(
-            account_number, dynamo_table, config, hooks
+        repokid.lib.update_role_cache(
+            account_number
         )
 
         roles = Roles([Role(ROLES[0]), Role(ROLES[1]), Role(ROLES[2])])

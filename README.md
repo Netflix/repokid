@@ -190,6 +190,22 @@ Restore a specific version: `repokid rollback_role <ACCOUNT_NUMBER> <ROLE_NAME> 
 Repokid keeps counts of the total permissions for each role.  Stats are added any time an `update_role_cache` or
 `repo_role` action occur.  To output all stats to a CSV file run: `repokid repo_stats <OUTPUT_FILENAME>`.  An optional account number can be specified to output stats for a specific account only.
 
+### Library
+
+> New in `v0.14.2`
+
+Repokid can be called as a library using the `repokid.lib` module:
+
+```python
+from repokid.lib import display_role, repo_role, update_role_cache
+
+account_number = "123456789012"
+
+display_role(account_number, "superCoolRoleName")
+update_role_cache(account_number)
+repo_role(account_number, "superCoolRoleName", commit=True)
+```
+
 ## Dispatcher ##
 Repokid Dispatcher is designed to listen for messages on a queue and perform actions.  So far the actions are:
  - List repoable services from a role
