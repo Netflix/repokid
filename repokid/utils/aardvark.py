@@ -12,8 +12,8 @@
 #     See the License for the specific language governing permissions and
 #     limitations under the License.
 import logging
-import sys
 
+from repokid.exceptions import AardvarkError
 import requests
 
 LOGGER = logging.getLogger("repokid")
@@ -52,12 +52,12 @@ def get_aardvark_data(aardvark_api_location, account_number=None, arn=None):
                 aardvark_api_location, params=params, json=payload
             )
         except requests.exceptions.RequestException as e:
-            LOGGER.error("Unable to get Aardvark data: {}".format(e))
-            sys.exit(1)
+            LOGGER.exception("Unable to get Aardvark data: {}".format(e))
+            raise AardvarkError("Unable to get aardvark data")
         else:
             if r_aardvark.status_code != 200:
-                LOGGER.error("Unable to get Aardvark data")
-                sys.exit(1)
+                LOGGER.exception("Unable to get Aardvark data")
+                raise AardvarkError("Unable to get aardvark data")
 
             response_data.update(r_aardvark.json())
             # don't want these in our Aardvark data

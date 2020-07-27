@@ -1,7 +1,7 @@
 import copy
 import datetime
+from functools import wraps
 import logging
-import sys
 
 import boto3
 from botocore.exceptions import ClientError as BotoClientError
@@ -13,12 +13,12 @@ DYNAMO_EMPTY_STRING = "---DYNAMO-EMPTY-STRING---"
 
 
 def catch_boto_error(func):
+    @wraps(func)
     def decorated_func(*args, **kwargs):
         try:
             return func(*args, **kwargs)
         except BotoClientError as e:
-            LOGGER.error("Dynamo table error: {}".format(e))
-            sys.exit(1)
+            LOGGER.exception("Dynamo table error: {}".format(e))
 
     return decorated_func
 
@@ -234,16 +234,18 @@ def set_role_data(dynamo_table, role_id, update_keys):
 
         value = _empty_string_to_dynamo_replace(value)
 
-        update_expression += "#expr{} = :val{}".format(count, count)
-        expression_attribute_names["#expr{}".format(count)] = key
-        expression_attribute_values[":val{}".format(count)] = value
+        update_expression += f"#expr{count} = :val{count}"
+        expression_attribute_names[f"#expr{count}"] = key
+        expression_attribute_values[f":val{count}"] = value
 
-    dynamo_table.update_item(
-        Key={"RoleId": role_id},
-        UpdateExpression=update_expression,
-        ExpressionAttributeNames=expression_attribute_names,
-        ExpressionAttributeValues=expression_attribute_values,
-    )
+    update_item_inputs = {
+        "Key": {"RoleId": role_id},
+        "UpdateExpression": update_expression,
+        "ExpressionAttributeNames": expression_attribute_names,
+        "ExpressionAttributeValues": expression_attribute_values,
+    }
+    LOGGER.debug("updating dynamodb with inputs %s", update_item_inputs)
+    dynamo_table.update_item(**update_item_inputs)
 
 
 def store_initial_role_data(
