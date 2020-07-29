@@ -192,7 +192,7 @@ def _repo_role(
         dynamo_table, role.role_id, {"RepoScheduled": 0, "ScheduledPerms": []}
     )
 
-    repokid.hooks.call_hooks(hooks, "AFTER_REPO", {"role": role})
+    repokid.hooks.call_hooks(hooks, "AFTER_REPO", {"role": role, "errors": errors})
 
     if not errors:
         # repos will stay scheduled until they are successful
@@ -366,7 +366,7 @@ def _rollback_role(
 
 
 def _repo_all_roles(
-    account_number, dynamo_table, config, hooks, commit=False, scheduled=True
+    account_number, dynamo_table, config, hooks, commit=False, scheduled=True, limit=0
 ):
     """
     Repo all scheduled or eligible roles in an account.  Collect any errors and display them at the end.
@@ -377,6 +377,7 @@ def _repo_all_roles(
         config
         commit (bool): actually make the changes
         scheduled (bool): if True only repo the scheduled roles, if False repo all the (eligible) roles
+        limit (int): limit number of roles to be repoed per run (0 is unlimited)
 
     Returns:
         None
@@ -419,6 +420,8 @@ def _repo_all_roles(
         hooks, "BEFORE_REPO_ROLES", {"account_number": account_number, "roles": roles}
     )
 
+    count = 0
+    repoed = Roles([])
     for role in roles:
         error = _repo_role(
             account_number,
@@ -431,13 +434,21 @@ def _repo_all_roles(
         )
         if error:
             errors.append(error)
+        repoed.append(role)
+        count += 1
+        if limit and count == limit:
+            break
 
     if errors:
-        LOGGER.error(
-            "Error(s) during repo: \n{} (account: {})".format(errors, account_number)
-        )
+        LOGGER.error(f"Error(s) during repo: \n{errors} (account: {account_number})")
     else:
-        LOGGER.info("Successfully repoed roles in account {}".format(account_number))
+        LOGGER.info(f"Successfully repoed {count} roles in account {account_number}")
+
+    repokid.hooks.call_hooks(
+        hooks,
+        "AFTER_REPO_ROLES",
+        {"account_number": account_number, "roles": repoed, "errors": errors},
+    )
 
 
 def _repo_stats(output_file, dynamo_table, account_number=None):
