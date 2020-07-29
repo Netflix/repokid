@@ -122,7 +122,8 @@ def _repo_role(
         LOGGER.error(
             "AAData older than threshold for these services: {} (role: {}, account {})".format(
                 old_aa_data_services, role_name, account_number
-            )
+            ),
+            exc_info=True,
         )
         continuing = False
 
@@ -319,7 +320,7 @@ def _rollback_role(
             message = "Unable to push policy {}.  Error: {} (role: {} account {})".format(
                 policy_name, e.message, role.role_name, account_number
             )
-            LOGGER.error(message)
+            LOGGER.error(message, exc_info=True)
             errors.append(message)
 
         else:
@@ -343,7 +344,7 @@ def _rollback_role(
                 message = "Unable to delete policy {}.  Error: {} (role: {} account {})".format(
                     policy_name, e.message, role.role_name, account_number
                 )
-                LOGGER.error(message)
+                LOGGER.error(message, exc_info=True)
                 errors.append(message)
 
     partial_update_role_data(
@@ -497,6 +498,8 @@ def _repo_stats(output_file, dynamo_table, account_number=None):
             for row in rows:
                 csv_writer.writerow(row)
     except IOError as e:
-        LOGGER.error("Unable to write file {}: {}".format(output_file, e))
+        LOGGER.error(
+            "Unable to write file {}: {}".format(output_file, e), exc_info=True
+        )
     else:
         LOGGER.info("Successfully wrote stats to {}".format(output_file))

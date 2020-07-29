@@ -131,7 +131,9 @@ def display_role(account_number: str, role_name: str):
     return _display_role(account_number, role_name, dynamo_table, CONFIG, hooks)
 
 
-def repo_role(account_number: str, role_name: str, commit: bool = False):
+def repo_role(
+    account_number: str, role_name: str, commit: bool = False, update: bool = True
+):
     """
     Library wrapper to calculate what repoing can be done for a role and then actually do it if commit is set.
 
@@ -141,6 +143,7 @@ def repo_role(account_number: str, role_name: str, commit: bool = False):
         account_number (string): The current account number Repokid is being run against
         role_name (string)
         commit (bool)
+        update (bool)
 
     Returns:
         None
@@ -196,7 +199,7 @@ def schedule_repo(account_number: str):
     return _schedule_repo(account_number, dynamo_table, CONFIG, hooks)
 
 
-def repo_all_roles(account_number: str, commit: bool = False):
+def repo_all_roles(account_number: str, commit: bool = False, update: bool = True):
     """
     Convenience wrapper for repo_roles() with scheduled=False.
 
@@ -205,14 +208,17 @@ def repo_all_roles(account_number: str, commit: bool = False):
     Args:
         account_number (string): The current account number Repokid is being run against
         commit (bool): actually make the changes
+        update (bool): if True run update_role_cache before repoing
 
     Returns:
         None
     """
-    return repo_roles(account_number, commit=commit, scheduled=False)
+    return repo_roles(account_number, commit=commit, scheduled=False, update=update)
 
 
-def repo_scheduled_roles(account_number: str, commit: bool = False):
+def repo_scheduled_roles(
+    account_number: str, commit: bool = False, update: bool = True
+):
     """
     Convenience wrapper for repo_roles() with scheduled=True.
 
@@ -221,14 +227,20 @@ def repo_scheduled_roles(account_number: str, commit: bool = False):
     Args:
         account_number (string): The current account number Repokid is being run against
         commit (bool): actually make the changes
+        update (bool): if True run update_role_cache before repoing
 
     Returns:
         None
     """
-    return repo_roles(account_number, commit=commit, scheduled=True)
+    return repo_roles(account_number, commit=commit, scheduled=True, update=update)
 
 
-def repo_roles(account_number: str, commit: bool = False, scheduled: bool = False):
+def repo_roles(
+    account_number: str,
+    commit: bool = False,
+    scheduled: bool = False,
+    update: bool = True,
+):
     """
     Library wrapper to repo all scheduled or eligible roles in an account. Collect any errors and display them at the
     end.
@@ -239,11 +251,13 @@ def repo_roles(account_number: str, commit: bool = False, scheduled: bool = Fals
         account_number (string): The current account number Repokid is being run against
         commit (bool): actually make the changes
         scheduled (bool): if True only repo the scheduled roles, if False repo all the (eligible) roles
+        update (bool): if True run update_role_cache before repoing
 
     Returns:
         None
     """
-    _update_role_cache(account_number, dynamo_table, CONFIG, hooks)
+    if update:
+        _update_role_cache(account_number, dynamo_table, CONFIG, hooks)
     return _repo_all_roles(
         account_number, dynamo_table, CONFIG, hooks, commit=commit, scheduled=scheduled
     )

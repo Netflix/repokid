@@ -107,7 +107,7 @@ def dynamo_get_or_create_table(**dynamo_config):
         )
 
     except BotoClientError as e:
-        LOGGER.error(e)
+        LOGGER.error(e, exc_info=True)
     return table
 
 
