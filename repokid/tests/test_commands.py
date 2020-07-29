@@ -538,8 +538,18 @@ class TestRepokidCLI(object):
             ),
             call(
                 hooks,
+                "AFTER_REPO_ROLES",
+                {"account_number": None, "roles": roles_items, "errors": []},
+            ),
+            call(
+                hooks,
                 "BEFORE_REPO_ROLES",
                 {"account_number": None, "roles": [roles_items[2]]},
+            ),
+            call(
+                hooks,
+                "AFTER_REPO_ROLES",
+                {"account_number": None, "roles": [roles_items[2]], "errors": []},
             ),
         ]
 
