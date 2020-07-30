@@ -367,7 +367,7 @@ def _rollback_role(
 
 
 def _repo_all_roles(
-    account_number, dynamo_table, config, hooks, commit=False, scheduled=True, limit=0
+    account_number, dynamo_table, config, hooks, commit=False, scheduled=True, limit=-1
 ):
     """
     Repo all scheduled or eligible roles in an account.  Collect any errors and display them at the end.
@@ -378,7 +378,7 @@ def _repo_all_roles(
         config
         commit (bool): actually make the changes
         scheduled (bool): if True only repo the scheduled roles, if False repo all the (eligible) roles
-        limit (int): limit number of roles to be repoed per run (0 is unlimited)
+        limit (int): limit number of roles to be repoed per run (<0 is unlimited)
 
     Returns:
         None
@@ -424,6 +424,8 @@ def _repo_all_roles(
     count = 0
     repoed = Roles([])
     for role in roles:
+        if limit >= 0 and count == limit:
+            break
         error = _repo_role(
             account_number,
             role.role_name,
@@ -437,8 +439,6 @@ def _repo_all_roles(
             errors.append(error)
         repoed.append(role)
         count += 1
-        if limit and count == limit:
-            break
 
     if errors:
         LOGGER.error(f"Error(s) during repo: \n{errors} (account: {account_number})")
