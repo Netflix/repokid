@@ -200,7 +200,7 @@ def schedule_repo(account_number: str):
 
 
 def repo_all_roles(
-    account_number: str, commit: bool = False, update: bool = True, limit: int = 0
+    account_number: str, commit: bool = False, update: bool = True, limit: int = -1
 ):
     """
     Convenience wrapper for repo_roles() with scheduled=False.
@@ -211,7 +211,7 @@ def repo_all_roles(
         account_number (string): The current account number Repokid is being run against
         commit (bool): actually make the changes
         update (bool): if True run update_role_cache before repoing
-        limit (int): limit number of roles to be repoed per run (0 is unlimited)
+        limit (int): limit number of roles to be repoed per run (< 0 is unlimited)
 
     Returns:
         None
@@ -222,7 +222,7 @@ def repo_all_roles(
 
 
 def repo_scheduled_roles(
-    account_number: str, commit: bool = False, update: bool = True, limit: int = 0
+    account_number: str, commit: bool = False, update: bool = True, limit: int = -1
 ):
     """
     Convenience wrapper for repo_roles() with scheduled=True.
@@ -233,7 +233,7 @@ def repo_scheduled_roles(
         account_number (string): The current account number Repokid is being run against
         commit (bool): actually make the changes
         update (bool): if True run update_role_cache before repoing
-        limit (int): limit number of roles to be repoed per run (0 is unlimited)
+        limit (int): limit number of roles to be repoed per run (< 0 is unlimited)
 
     Returns:
         None
@@ -248,7 +248,7 @@ def repo_roles(
     commit: bool = False,
     scheduled: bool = False,
     update: bool = True,
-    limit: int = 0,
+    limit: int = -1,
 ):
     """
     Library wrapper to repo all scheduled or eligible roles in an account. Collect any errors and display them at the
@@ -261,7 +261,7 @@ def repo_roles(
         commit (bool): actually make the changes
         scheduled (bool): if True only repo the scheduled roles, if False repo all the (eligible) roles
         update (bool): if True run update_role_cache before repoing
-        limit (int): limit number of roles to be repoed per run (0 is unlimited)
+        limit (int): limit number of roles to be repoed per run (< 0 is unlimited)
 
     Returns:
         None

@@ -378,7 +378,7 @@ def _repo_all_roles(
         config
         commit (bool): actually make the changes
         scheduled (bool): if True only repo the scheduled roles, if False repo all the (eligible) roles
-        limit (int): limit number of roles to be repoed per run (<0 is unlimited)
+        limit (int): limit number of roles to be repoed per run (< 0 is unlimited)
 
     Returns:
         None
