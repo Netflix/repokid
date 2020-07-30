@@ -199,7 +199,9 @@ def schedule_repo(account_number: str):
     return _schedule_repo(account_number, dynamo_table, CONFIG, hooks)
 
 
-def repo_all_roles(account_number: str, commit: bool = False, update: bool = True):
+def repo_all_roles(
+    account_number: str, commit: bool = False, update: bool = True, limit: int = -1
+):
     """
     Convenience wrapper for repo_roles() with scheduled=False.
 
@@ -209,15 +211,18 @@ def repo_all_roles(account_number: str, commit: bool = False, update: bool = Tru
         account_number (string): The current account number Repokid is being run against
         commit (bool): actually make the changes
         update (bool): if True run update_role_cache before repoing
+        limit (int): limit number of roles to be repoed per run (< 0 is unlimited)
 
     Returns:
         None
     """
-    return repo_roles(account_number, commit=commit, scheduled=False, update=update)
+    return repo_roles(
+        account_number, commit=commit, scheduled=False, update=update, limit=limit
+    )
 
 
 def repo_scheduled_roles(
-    account_number: str, commit: bool = False, update: bool = True
+    account_number: str, commit: bool = False, update: bool = True, limit: int = -1
 ):
     """
     Convenience wrapper for repo_roles() with scheduled=True.
@@ -228,11 +233,14 @@ def repo_scheduled_roles(
         account_number (string): The current account number Repokid is being run against
         commit (bool): actually make the changes
         update (bool): if True run update_role_cache before repoing
+        limit (int): limit number of roles to be repoed per run (< 0 is unlimited)
 
     Returns:
         None
     """
-    return repo_roles(account_number, commit=commit, scheduled=True, update=update)
+    return repo_roles(
+        account_number, commit=commit, scheduled=True, update=update, limit=limit
+    )
 
 
 def repo_roles(
@@ -240,6 +248,7 @@ def repo_roles(
     commit: bool = False,
     scheduled: bool = False,
     update: bool = True,
+    limit: int = -1,
 ):
     """
     Library wrapper to repo all scheduled or eligible roles in an account. Collect any errors and display them at the
@@ -252,6 +261,7 @@ def repo_roles(
         commit (bool): actually make the changes
         scheduled (bool): if True only repo the scheduled roles, if False repo all the (eligible) roles
         update (bool): if True run update_role_cache before repoing
+        limit (int): limit number of roles to be repoed per run (< 0 is unlimited)
 
     Returns:
         None
@@ -259,7 +269,13 @@ def repo_roles(
     if update:
         _update_role_cache(account_number, dynamo_table, CONFIG, hooks)
     return _repo_all_roles(
-        account_number, dynamo_table, CONFIG, hooks, commit=commit, scheduled=scheduled
+        account_number,
+        dynamo_table,
+        CONFIG,
+        hooks,
+        commit=commit,
+        scheduled=scheduled,
+        limit=limit,
     )
 
 

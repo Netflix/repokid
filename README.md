@@ -140,7 +140,8 @@ Repokid is extensible via hooks that are called before, during, and after variou
 
 | Hook name | Context |
 |-----------|---------|
-| `AFTER_REPO` | role |
+| `AFTER_REPO` | role, errors |
+| `AFTER_REPO_ROLES` | roles, errors |
 | `BEFORE_REPO_ROLES` | account_number, roles |
 | `AFTER_SCHEDULE_REPO` | roles |
 | `DURING_REPOABLE_CALCULATION` | account_number, role_name, potentially_repoable_permissions, minimum_age |
