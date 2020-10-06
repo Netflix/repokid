@@ -18,25 +18,54 @@ def catch_boto_error(func):
         try:
             return func(*args, **kwargs)
         except BotoClientError as e:
-            LOGGER.exception("Dynamo table error: {}".format(e))
+            LOGGER.error("Dynamo table error: {}".format(e))
 
     return decorated_func
 
 
 @catch_boto_error
-def add_to_end_of_list(dynamo_table, role_id, field_name, object_to_add):
-    dynamo_table.update_item(
-        Key={"RoleId": role_id},
-        UpdateExpression=(
-            "SET #updatelist = list_append(if_not_exists(#updatelist,"
-            ":empty_list), :object_to_add)"
-        ),
-        ExpressionAttributeNames={"#updatelist": field_name},
-        ExpressionAttributeValues={
-            ":empty_list": [],
-            ":object_to_add": [_empty_string_to_dynamo_replace(object_to_add)],
-        },
-    )
+def add_to_end_of_list(
+    dynamo_table, role_id, field_name, object_to_add, max_retries=5, _retries=0
+):
+    """Append object to DynamoDB list, removing the first element if item exceeds max size."""
+    try:
+        dynamo_table.update_item(
+            Key={"RoleId": role_id},
+            UpdateExpression=(
+                "SET #updatelist = list_append(if_not_exists(#updatelist,"
+                ":empty_list), :object_to_add)"
+            ),
+            ExpressionAttributeNames={"#updatelist": field_name},
+            ExpressionAttributeValues={
+                ":empty_list": [],
+                ":object_to_add": [_empty_string_to_dynamo_replace(object_to_add)],
+            },
+        )
+    except BotoClientError as e:
+        error = e.response.get("Error", {})
+        code = error.get("Code")
+        message = error.get("Message")
+        if (
+            code == "ValidationException"
+            and "maximum allowed size" in message
+            and _retries < max_retries
+        ):
+            LOGGER.info(
+                "Removing first element from %s for role %s to keep item under maximum size",
+                field_name,
+                role_id,
+            )
+            _retries += 1
+            dynamo_table.update_item(
+                Key={"RoleId": role_id},
+                UpdateExpression="REMOVE #updatelist[0]",
+                ExpressionAttributeNames={"#updatelist": field_name},
+            )
+            add_to_end_of_list(
+                dynamo_table, role_id, field_name, object_to_add, _retries=_retries
+            )
+        else:
+            raise
 
 
 def dynamo_get_or_create_table(**dynamo_config):
