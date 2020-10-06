@@ -47,19 +47,32 @@ def _schedule_repo(account_number, dynamo_table, config, hooks):
         86400 * config.get("repo_schedule_period_days", 7)
     )
     for role in roles:
-        if role.repoable_permissions > 0 and not role.repo_scheduled:
-            role.repo_scheduled = scheduled_time
-            # freeze the scheduled perms to whatever is repoable right now
-            set_role_data(
-                dynamo_table,
-                role.role_id,
-                {
-                    "RepoScheduled": scheduled_time,
-                    "ScheduledPerms": role.repoable_services,
-                },
+        if not role.aa_data:
+            LOGGER.warning("Not scheduling %s; missing Access Advisor data", role.arn)
+            continue
+        if not role.repoable_permissions > 0:
+            LOGGER.debug("Not scheduling %s; no repoable permissions", role.arn)
+            continue
+        if role.repo_scheduled:
+            LOGGER.debug(
+                "Not scheduling %s; already scheduled for %s",
+                role.arn,
+                role.repo_scheduled,
             )
+            continue
 
-            scheduled_roles.append(role)
+        role.repo_scheduled = scheduled_time
+        # freeze the scheduled perms to whatever is repoable right now
+        set_role_data(
+            dynamo_table,
+            role.role_id,
+            {
+                "RepoScheduled": scheduled_time,
+                "ScheduledPerms": role.repoable_services,
+            },
+        )
+
+        scheduled_roles.append(role)
 
     LOGGER.info(
         "Scheduled repo for {} days from now for account {} and these roles:\n\t{}".format(
