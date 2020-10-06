@@ -443,6 +443,7 @@ class TestRepokidCLI(object):
         # first role is not repoable, second role is repoable
         ROLES_FOR_DISPLAY[0].update({"RoleId": "AROAABCDEFGHIJKLMNOPA"})
         ROLES_FOR_DISPLAY[1].update({"RoleId": "AROAABCDEFGHIJKLMNOPB"})
+        ROLES_FOR_DISPLAY[1].update({"AAData": "foo"})
 
         mock_get_role_data.side_effect = [ROLES_FOR_DISPLAY[0], ROLES_FOR_DISPLAY[1]]
         mock_time.return_value = 1
