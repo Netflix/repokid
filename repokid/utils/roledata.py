@@ -527,13 +527,13 @@ def _get_potentially_repoable_permissions(
         potentially_repoable_permissions.items()
     ):
         if permission_name.split(":")[0] in IAM_ACCESS_ADVISOR_UNSUPPORTED_SERVICES:
-            LOGGER.warning("skipping {}".format(permission_name))
+            LOGGER.info("skipping {}".format(permission_name))
             continue
 
         # we have an unused service but need to make sure it's repoable
         if permission_name.split(":")[0] not in used_services:
             if permission_name in IAM_ACCESS_ADVISOR_UNSUPPORTED_ACTIONS:
-                LOGGER.warning("skipping {}".format(permission_name))
+                LOGGER.info("skipping {}".format(permission_name))
                 continue
 
             permission_decision.repoable = True
