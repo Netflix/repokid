@@ -12,11 +12,11 @@
 #     See the License for the specific language governing permissions and
 #     limitations under the License.
 from collections import defaultdict
-from typing import Dict
 import copy
 import datetime
 import logging
 import time
+from typing import Dict
 
 from cloudaux.aws.iam import get_role_inline_policies
 from dateutil.tz import tzlocal
