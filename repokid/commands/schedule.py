@@ -38,7 +38,7 @@ def _schedule_repo(account_number, dynamo_table, config, hooks):
 
     roles = Roles(
         [
-            Role(get_role_data(dynamo_table, roleID))
+            Role.parse_obj(get_role_data(dynamo_table, roleID))
             for roleID in tqdm(role_ids_for_account(dynamo_table, account_number))
         ]
     )
@@ -91,7 +91,7 @@ def _show_scheduled_roles(account_number, dynamo_table):
     """
     roles = Roles(
         [
-            Role(get_role_data(dynamo_table, roleID))
+            Role.parse_obj(get_role_data(dynamo_table, roleID))
             for roleID in tqdm(role_ids_for_account(dynamo_table, account_number))
         ]
     )
@@ -128,7 +128,7 @@ def _cancel_scheduled_repo(account_number, dynamo_table, role_name=None, is_all=
     if is_all:
         roles = Roles(
             [
-                Role(get_role_data(dynamo_table, roleID))
+                Role.parse_obj(get_role_data(dynamo_table, roleID))
                 for roleID in role_ids_for_account(dynamo_table, account_number)
             ]
         )
@@ -157,7 +157,7 @@ def _cancel_scheduled_repo(account_number, dynamo_table, role_name=None, is_all=
         )
         return
 
-    role = Role(get_role_data(dynamo_table, role_id))
+    role = Role.parse_obj(get_role_data(dynamo_table, role_id))
 
     if not role.repo_scheduled:
         LOGGER.warn(

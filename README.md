@@ -144,7 +144,7 @@ Repokid is extensible via hooks that are called before, during, and after variou
 | `AFTER_REPO_ROLES` | roles, errors |
 | `BEFORE_REPO_ROLES` | account_number, roles |
 | `AFTER_SCHEDULE_REPO` | roles |
-| `DURING_REPOABLE_CALCULATION` | account_number, role_name, potentially_repoable_permissions, minimum_age |
+| `DURING_REPOABLE_CALCULATION` | role_id, account_number, role_name, potentially_repoable_permissions, minimum_age |
 | `DURING_REPOABLE_CALCULATION_BATCH` | role_batch, potentially_repoable_permissions, minimum_age |
 
 Examples of hook implementations can be found in [`repokid.hooks.loggers`](repokid/hooks/loggers/__init__.py).

@@ -278,6 +278,7 @@ class TestRepokidCLI(object):
 
         def update_role_data(dynamo_table, account_number, role, current_policies):
             role.policies = [{"Policy": current_policies}]
+            return role
 
         mock_update_role_data.side_effect = update_role_data
 
@@ -301,7 +302,13 @@ class TestRepokidCLI(object):
             account_number, dynamo_table, config, hooks
         )
 
-        roles = Roles([Role(ROLES[0]), Role(ROLES[1]), Role(ROLES[2])])
+        roles = Roles(
+            [
+                Role.parse_obj(ROLES[0]),
+                Role.parse_obj(ROLES[1]),
+                Role.parse_obj(ROLES[2]),
+            ]
+        )
 
         assert mock_calculate_repo_scores.mock_calls == [
             call(roles, 90, hooks, False, 100)
@@ -312,19 +319,19 @@ class TestRepokidCLI(object):
             call(
                 dynamo_table,
                 account_number,
-                Role(ROLES[0]),
+                Role.parse_obj(ROLES[0]),
                 {"all_services_used": ROLE_POLICIES["all_services_used"]},
             ),
             call(
                 dynamo_table,
                 account_number,
-                Role(ROLES[1]),
+                Role.parse_obj(ROLES[1]),
                 {"unused_ec2": ROLE_POLICIES["unused_ec2"]},
             ),
             call(
                 dynamo_table,
                 account_number,
-                Role(ROLES[2]),
+                Role.parse_obj(ROLES[2]),
                 {"all_services_used": ROLE_POLICIES["all_services_used"]},
             ),
         ]
@@ -334,7 +341,11 @@ class TestRepokidCLI(object):
             call(
                 dynamo_table,
                 account_number,
-                [Role(ROLES[0]), Role(ROLES[1]), Role(ROLES[2])],
+                [
+                    Role.parse_obj(ROLES[0]),
+                    Role.parse_obj(ROLES[1]),
+                    Role.parse_obj(ROLES[2]),
+                ],
             )
         ]
 
@@ -443,7 +454,7 @@ class TestRepokidCLI(object):
         # first role is not repoable, second role is repoable
         ROLES_FOR_DISPLAY[0].update({"RoleId": "AROAABCDEFGHIJKLMNOPA"})
         ROLES_FOR_DISPLAY[1].update({"RoleId": "AROAABCDEFGHIJKLMNOPB"})
-        ROLES_FOR_DISPLAY[1].update({"AAData": "foo"})
+        ROLES_FOR_DISPLAY[1].update({"AAData": ["foo"]})
 
         mock_get_role_data.side_effect = [ROLES_FOR_DISPLAY[0], ROLES_FOR_DISPLAY[1]]
         mock_time.return_value = 1
@@ -460,7 +471,11 @@ class TestRepokidCLI(object):
             )
         ]
         assert mock_call_hooks.mock_calls == [
-            call(hooks, "AFTER_SCHEDULE_REPO", {"roles": [Role(ROLES_FOR_DISPLAY[1])]})
+            call(
+                hooks,
+                "AFTER_SCHEDULE_REPO",
+                {"roles": [Role.parse_obj(ROLES_FOR_DISPLAY[1])]},
+            )
         ]
 
     @patch("repokid.hooks.call_hooks")
@@ -529,7 +544,11 @@ class TestRepokidCLI(object):
             call(None, "ROLE_C", None, None, hooks, commit=False, scheduled=True),
         ]
 
-        roles_items = [Role(roles[0]), Role(roles[1]), Role(roles[2])]
+        roles_items = [
+            Role.parse_obj(roles[0]),
+            Role.parse_obj(roles[1]),
+            Role.parse_obj(roles[2]),
+        ]
 
         assert mock_call_hooks.mock_calls == [
             call(

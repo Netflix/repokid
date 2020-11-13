@@ -39,6 +39,7 @@ setup(
     url="https://github.com/Netflix/repokid",
     packages=find_packages(),
     install_requires=REQUIRED,
+    python_requires=">=3.7",
     keywords=["aws", "iam", "access_advisor"],
     entry_points={
         "console_scripts": [

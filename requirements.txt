@@ -29,6 +29,7 @@ packaging==20.4           # via bleach
 pip-tools==5.2.1          # via -r requirements.in
 pkginfo==1.5.0.1          # via twine
 policyuniverse==1.3.2.3   # via -r requirements.in
+pydantic==1.7.2           # via -r requirements.in
 pygments==2.6.1           # via readme-renderer
 pyparsing==2.4.7          # via packaging
 python-dateutil==2.8.1    # via botocore
