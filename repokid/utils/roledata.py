@@ -224,6 +224,7 @@ def update_role_data(
         update_dict = role_updates.dict(exclude_unset=True)
         role = role.copy(update=update_dict)
         LOGGER.info("Added new role ({}): {}".format(role.role_id, role.arn))
+        return role
     else:
         # is the policy list the same as the last we had?
         old_policy = stored_role["Policies"][-1]["Policy"]
