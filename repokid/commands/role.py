@@ -62,7 +62,7 @@ def _display_roles(account_number, dynamo_table, inactive=False):
 
     roles = Roles(
         [
-            Role(get_role_data(dynamo_table, roleID))
+            Role.parse_obj(get_role_data(dynamo_table, roleID))
             for roleID in tqdm(role_ids_for_account(dynamo_table, account_number))
         ]
     )
@@ -108,12 +108,12 @@ def _find_roles_with_permissions(permissions, dynamo_table, output_file):
     """
     arns = list()
     for roleID in role_ids_for_all_accounts(dynamo_table):
-        role = Role(
+        role = Role.parse_obj(
             get_role_data(
                 dynamo_table, roleID, fields=["Policies", "RoleName", "Arn", "Active"]
             )
         )
-        role_permissions, _ = roledata._get_role_permissions(role)
+        role_permissions, _ = roledata.get_role_permissions(role)
 
         permissions = set([p.lower() for p in permissions])
         found_permissions = permissions.intersection(role_permissions)
@@ -154,10 +154,10 @@ def _display_role(account_number, role_name, dynamo_table, config, hooks):
     """
     role_id = find_role_in_cache(dynamo_table, account_number, role_name)
     if not role_id:
-        LOGGER.warn("Could not find role with name {}".format(role_name))
+        LOGGER.warning("Could not find role with name {}".format(role_name))
         return
 
-    role = Role(get_role_data(dynamo_table, role_id))
+    role = Role.parse_obj(get_role_data(dynamo_table, role_id))
 
     print("\n\nRole repo data:")
     headers = [
@@ -218,7 +218,7 @@ def _display_role(account_number, role_name, dynamo_table, config, hooks):
 
     # can't do anymore if we don't have AA data
     if not role.aa_data:
-        LOGGER.warn("ARN not found in Access Advisor: {}".format(role.arn))
+        LOGGER.warning("ARN not found in Access Advisor: {}".format(role.arn))
         return
 
     warn_unknown_permissions = config.get("warnings", {}).get(
@@ -226,7 +226,7 @@ def _display_role(account_number, role_name, dynamo_table, config, hooks):
     )
     repoable_permissions = set([])
 
-    permissions, eligible_permissions = roledata._get_role_permissions(
+    permissions, eligible_permissions = roledata.get_role_permissions(
         role, warn_unknown_perms=warn_unknown_permissions
     )
     if len(role.disqualified_by) == 0:
@@ -236,6 +236,7 @@ def _display_role(account_number, role_name, dynamo_table, config, hooks):
             eligible_permissions,
             role.aa_data,
             role.no_repo_permissions,
+            role.role_id,
             config["filter_config"]["AgeFilter"]["minimum_age"],
             hooks,
         )
@@ -300,7 +301,7 @@ def _remove_permissions_from_roles(
         role_name = arn.name.split("/")[-1]
 
         role_id = find_role_in_cache(dynamo_table, account_number, role_name)
-        role = Role(get_role_data(dynamo_table, role_id))
+        role = Role.parse_obj(get_role_data(dynamo_table, role_id))
 
         remove_permissions_from_role(
             account_number,

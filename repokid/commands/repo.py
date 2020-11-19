@@ -82,7 +82,7 @@ def _repo_role(
         LOGGER.warn("Could not find role with name {}".format(role_name))
         return
     else:
-        role = Role(role_data)
+        role = Role.parse_obj(role_data)
 
     continuing = True
 
@@ -107,7 +107,7 @@ def _repo_role(
         continuing = False
 
     # if we've gotten to this point, load the rest of the role
-    role = Role(get_role_data(dynamo_table, role_id))
+    role = Role.parse_obj(get_role_data(dynamo_table, role_id))
 
     old_aa_data_services = []
     for aa_service in role.aa_data:
@@ -127,13 +127,14 @@ def _repo_role(
         )
         continuing = False
 
-    total_permissions, eligible_permissions = roledata._get_role_permissions(role)
+    total_permissions, eligible_permissions = roledata.get_role_permissions(role)
     repoable_permissions = roledata._get_repoable_permissions(
         account_number,
         role.role_name,
         eligible_permissions,
         role.aa_data,
         role.no_repo_permissions,
+        role.role_id,
         config["filter_config"]["AgeFilter"]["minimum_age"],
         hooks,
     )
@@ -185,7 +186,7 @@ def _repo_role(
             LOGGER.error(error)
             errors.append(error)
 
-    current_policies = get_role_inline_policies(role.as_dict(), **conn) or {}
+    current_policies = get_role_inline_policies(role.dict(), **conn) or {}
     roledata.add_new_policy_version(dynamo_table, role, current_policies, "Repo")
 
     # regardless of whether we're successful we want to unschedule the repo
@@ -248,7 +249,7 @@ def _rollback_role(
         LOGGER.warning(message)
         return errors
     else:
-        role = Role(get_role_data(dynamo_table, role_id))
+        role = Role.parse_obj(get_role_data(dynamo_table, role_id))
 
     # no option selected, display a table of options
     if not selection:
@@ -273,7 +274,7 @@ def _rollback_role(
     conn = config["connection_iam"]
     conn["account_number"] = account_number
 
-    current_policies = get_role_inline_policies(role.as_dict(), **conn)
+    current_policies = get_role_inline_policies(role.dict(), **conn)
 
     if selection:
         pp = pprint.PrettyPrinter()
@@ -389,7 +390,7 @@ def _repo_all_roles(
     roles = Roles([])
     for role_id in role_ids_in_account:
         roles.append(
-            Role(
+            Role.parse_obj(
                 get_role_data(
                     dynamo_table,
                     role_id,

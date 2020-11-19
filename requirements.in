@@ -9,6 +9,7 @@ tabulate
 tabview
 tqdm
 pip-tools
+pydantic
 pytz
 twine
 raven

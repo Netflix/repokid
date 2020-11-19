@@ -67,15 +67,22 @@ def _update_role_cache(account_number, dynamo_table, config, hooks):
             for item in data["RolePolicyList"]
         }
 
-    roles = Roles([Role(rd) for rd in role_data])
+    roles = Roles([Role.parse_obj(rd) for rd in role_data])
 
     active_roles = []
+    updated_roles = []
     LOGGER.info("Updating role data for account {}".format(account_number))
     for role in tqdm(roles):
         role.account = account_number
         current_policies = role_data_by_id[role.role_id]["RolePolicyList"]
         active_roles.append(role.role_id)
-        roledata.update_role_data(dynamo_table, account_number, role, current_policies)
+        role = roledata.update_role_data(
+            dynamo_table, account_number, role, current_policies
+        )
+        updated_roles.append(role)
+
+    # Replace roles list with mutated Role objects
+    roles = Roles(updated_roles)
 
     LOGGER.info("Finding inactive roles in account {}".format(account_number))
     roledata.find_and_mark_inactive(dynamo_table, account_number, active_roles)
@@ -104,7 +111,7 @@ def _update_role_cache(account_number, dynamo_table, config, hooks):
         filtered_list = plugin.apply(roles)
         class_name = plugin.__class__.__name__
         for filtered_role in filtered_list:
-            LOGGER.info(
+            LOGGER.debug(
                 "Role {} filtered by {}".format(filtered_role.role_name, class_name)
             )
             filtered_role.disqualified_by.append(class_name)
