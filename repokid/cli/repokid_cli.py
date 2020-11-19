@@ -40,7 +40,6 @@ import logging
 import sys
 
 from docopt import docopt
-from repokid import __version__ as __version__
 from repokid import CONFIG
 from repokid import get_hooks
 from repokid.commands.repo import (
@@ -62,6 +61,7 @@ from repokid.commands.schedule import (
     _show_scheduled_roles,
 )
 from repokid.utils.dynamo import dynamo_get_or_create_table
+import runez
 
 
 # http://docs.aws.amazon.com/IAM/latest/UserGuide/reference_iam-limits.html
@@ -187,7 +187,7 @@ def _generate_default_config(filename=None):
 
 
 def main():
-    args = docopt(__doc__, version="Repokid {version}".format(version=__version__))
+    args = docopt(__doc__, version=f"Repokid {runez.get_version(__name__)}")
 
     if args.get("config"):
         config_filename = args.get("<config_filename>")
