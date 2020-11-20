@@ -12,19 +12,15 @@
 #     See the License for the specific language governing permissions and
 #     limitations under the License.
 
-import os.path
-
 from setuptools import find_packages, setup
 
-
-ROOT = os.path.realpath(os.path.join(os.path.dirname(__file__)))
 
 setup(
     name="repokid",
     description="AWS Least Privilege for Distributed, High-Velocity Deployment",
     url="https://github.com/Netflix/repokid",
     packages=find_packages(),
-    versioning="distance",
+    versioning="dev",
     setup_requires=["setupmeta"],
     python_requires=">=3.7",
     keywords=["aws", "iam", "access_advisor"],

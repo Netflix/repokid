@@ -39,7 +39,6 @@ readme-renderer==28.0     # via twine
 requests-toolbelt==0.9.1  # via twine
 requests==2.25.0          # via -r requirements.in, requests-toolbelt, twine
 rfc3986==1.4.0            # via twine
-runez==2.2.0              # via -r requirements.in
 s3transfer==0.3.3         # via boto3
 six==1.15.0               # via bleach, cloudaux, import-string, packaging, pip-tools, python-dateutil, readme-renderer
 tabulate==0.8.7           # via -r requirements.in
