@@ -144,7 +144,7 @@ Repokid is extensible via hooks that are called before, during, and after variou
 | `AFTER_REPO_ROLES` | roles, errors |
 | `BEFORE_REPO_ROLES` | account_number, roles |
 | `AFTER_SCHEDULE_REPO` | roles |
-| `DURING_REPOABLE_CALCULATION` | account_number, role_name, potentially_repoable_permissions, minimum_age |
+| `DURING_REPOABLE_CALCULATION` | role_id, account_number, role_name, potentially_repoable_permissions, minimum_age |
 | `DURING_REPOABLE_CALCULATION_BATCH` | role_batch, potentially_repoable_permissions, minimum_age |
 
 Examples of hook implementations can be found in [`repokid.hooks.loggers`](repokid/hooks/loggers/__init__.py).
@@ -217,3 +217,17 @@ Repokid will respond on a configurable SNS topic with information about any succ
 component exists to help with operationalization of the repo lifecycle across your organization. You may choose
 to expose the queue directly to developers, but more likely this should be guarded because rolling back can be
 a destructive action if not done carefully.
+
+## Development
+
+### Releasing
+
+Versioning is handled by [setupmeta](https://github.com/zsimic/setupmeta). To create a new release:
+
+```bash
+python setup.py version --bump patch --push
+
+# Inspect output and make sure it's what you expect
+# If all is well, commit and push the new tag:
+python setup.py version --bump patch --push --commit
+```

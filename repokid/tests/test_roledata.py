@@ -12,8 +12,8 @@
 #     See the License for the specific language governing permissions and
 #     limitations under the License.
 import time
+from unittest.mock import patch
 
-from mock import patch
 from repokid.role import Role
 from repokid.tests.test_commands import AARDVARK_DATA, ROLE_POLICIES, ROLES
 import repokid.utils.roledata
@@ -28,7 +28,7 @@ class TestRoledata(object):
     def test_get_role_permissions(
         self, mock_all_permissions, mock_get_actions_from_statement, mock_expand_policy
     ):
-        test_role = Role(ROLES[0])
+        test_role = Role.parse_obj(ROLES[0])
 
         all_permissions = [
             "ec2:associateaddress",
@@ -53,7 +53,7 @@ class TestRoledata(object):
         (
             total_permissions,
             eligible_permissions,
-        ) = repokid.utils.roledata._get_role_permissions(test_role)
+        ) = repokid.utils.roledata.get_role_permissions(test_role)
         assert total_permissions == set(ROLE_POLICIES["unused_ec2"]["ec2_perms"])
         assert eligible_permissions == set(ROLE_POLICIES["unused_ec2"]["ec2_perms"])
 
@@ -68,6 +68,7 @@ class TestRoledata(object):
 
         hooks = {}
 
+        role_id = "ARIOTHISISAROLE"
         permissions = [
             "service_1:action_1",
             "service_1:action_2",
@@ -124,18 +125,25 @@ class TestRoledata(object):
             permissions,
             aa_data,
             no_repo_permissions,
+            role_id,
             minimum_age,
             hooks,
         )
         # service_1:action_3 and action_4 are unsupported actions, service_2 is an unsupported service, service_3
         # was used too recently, service_4 action 2 is in no_repo_permissions and not expired
-        assert repoable_permissions == set(
-            ["service_1:action_1", "service_1:action_2", "service_4:action_1"]
-        )
+        assert repoable_permissions == {
+            "service_1:action_1",
+            "service_1:action_2",
+            "service_4:action_1",
+        }
 
     @patch("repokid.hooks.call_hooks")
     def test_get_repoable_permissions_batch(self, mock_call_hooks):
-        roles = [Role(ROLES[0]), Role(ROLES[4]), Role(ROLES[5])]
+        roles = [
+            Role.parse_obj(ROLES[0]),
+            Role.parse_obj(ROLES[4]),
+            Role.parse_obj(ROLES[5]),
+        ]
 
         roles[0].aa_data = AARDVARK_DATA[roles[0].arn]
         roles[1].no_repo_permissions = {
@@ -228,13 +236,15 @@ class TestRoledata(object):
 
         repoable_permissions_dict = {
             "arn:aws:iam::123456789012:role/all_services_used": set(),
-            "arn:aws:iam::123456789012:role/unused_ec2": set(
-                ["ec2:AllocateHosts", "ec2:AssociateAddress"]
-            ),
+            "arn:aws:iam::123456789012:role/unused_ec2": {
+                "ec2:AllocateHosts",
+                "ec2:AssociateAddress",
+            },
             "arn:aws:iam::123456789012:role/additional_unused_ec2": set(),
-            "arn:aws:iam::123456789012:role/unused_iam": set(
-                ["iam:AddRoleToInstanceProfile", "iam:AttachRolePolicy"]
-            ),
+            "arn:aws:iam::123456789012:role/unused_iam": {
+                "iam:AddRoleToInstanceProfile",
+                "iam:AttachRolePolicy",
+            },
         }
 
         assert (
@@ -250,13 +260,17 @@ class TestRoledata(object):
             )
         )
 
-    @patch("repokid.utils.roledata._get_role_permissions")
+    @patch("repokid.utils.roledata.get_role_permissions")
     @patch("repokid.utils.roledata._get_repoable_permissions")
     @patch("repokid.hooks.call_hooks")
     def test_calculate_repo_scores(
         self, mock_call_hooks, mock_get_repoable_permissions, mock_get_role_permissions
     ):
-        roles = [Role(ROLES[0]), Role(ROLES[1]), Role(ROLES[2])]
+        roles = [
+            Role.parse_obj(ROLES[0]),
+            Role.parse_obj(ROLES[1]),
+            Role.parse_obj(ROLES[2]),
+        ]
         roles[0].disqualified_by = []
         roles[0].aa_data = "some_aa_data"
 
@@ -292,11 +306,12 @@ class TestRoledata(object):
             ),
         ]
 
-        mock_call_hooks.return_value = set(
-            ["iam:AddRoleToInstanceProfile", "iam:AttachRolePolicy"]
-        )
+        mock_call_hooks.return_value = {
+            "iam:AddRoleToInstanceProfile",
+            "iam:AttachRolePolicy",
+        }
         mock_get_repoable_permissions.side_effect = [
-            set(["iam:AddRoleToInstanceProfile", "iam:AttachRolePolicy"])
+            {"iam:AddRoleToInstanceProfile", "iam:AttachRolePolicy"}
         ]
 
         minimum_age = 90
@@ -309,7 +324,7 @@ class TestRoledata(object):
         assert roles[2].repoable_permissions == 0
         assert roles[2].repoable_services == []
 
-    @patch("repokid.utils.roledata._get_role_permissions")
+    @patch("repokid.utils.roledata.get_role_permissions")
     @patch("repokid.utils.roledata._get_repoable_permissions_batch")
     @patch("repokid.hooks.call_hooks")
     def test_calculate_repo_scores_batch(
@@ -319,11 +334,11 @@ class TestRoledata(object):
         mock_get_role_permissions,
     ):
         roles = [
-            Role(ROLES[0]),
-            Role(ROLES[1]),
-            Role(ROLES[2]),
-            Role(ROLES[4]),
-            Role(ROLES[5]),
+            Role.parse_obj(ROLES[0]),
+            Role.parse_obj(ROLES[1]),
+            Role.parse_obj(ROLES[2]),
+            Role.parse_obj(ROLES[4]),
+            Role.parse_obj(ROLES[5]),
         ]
         roles[0].disqualified_by = []
         roles[0].aa_data = "some_aa_data"
@@ -384,14 +399,15 @@ class TestRoledata(object):
             ),
         ]
 
-        mock_call_hooks.return_value = set(
-            ["iam:AddRoleToInstanceProfile", "iam:AttachRolePolicy"]
-        )
+        mock_call_hooks.return_value = {
+            "iam:AddRoleToInstanceProfile",
+            "iam:AttachRolePolicy",
+        }
 
         batch_perms_dict = {
-            roles[0].arn: set(["iam:AddRoleToInstanceProfile", "iam:AttachRolePolicy"]),
-            roles[3].arn: set(["ec2:AllocateHosts", "ec2:AssociateAddress"]),
-            roles[4].arn: set(["iam:AddRoleToInstanceProfile", "iam:AttachRolePolicy"]),
+            roles[0].arn: {"iam:AddRoleToInstanceProfile", "iam:AttachRolePolicy"},
+            roles[3].arn: {"ec2:AllocateHosts", "ec2:AssociateAddress"},
+            roles[4].arn: {"iam:AddRoleToInstanceProfile", "iam:AttachRolePolicy"},
         }
 
         mock_get_repoable_permissions_batch.side_effect = [batch_perms_dict]
@@ -414,9 +430,11 @@ class TestRoledata(object):
 
     def test_get_repoed_policy(self):
         policies = ROLE_POLICIES["all_services_used"]
-        repoable_permissions = set(
-            ["iam:addroletoinstanceprofile", "iam:attachrolepolicy", "s3:createbucket"]
-        )
+        repoable_permissions = {
+            "iam:addroletoinstanceprofile",
+            "iam:attachrolepolicy",
+            "s3:createbucket",
+        }
 
         rewritten_policies, empty_policies = repokid.utils.roledata._get_repoed_policy(
             policies, repoable_permissions
@@ -443,7 +461,7 @@ class TestRoledata(object):
         new_perms = repokid.utils.roledata.find_newly_added_permissions(
             old_policy, new_policy
         )
-        assert new_perms == set(["ec2:allocatehosts", "ec2:associateaddress"])
+        assert new_perms == {"ec2:allocatehosts", "ec2:associateaddress"}
 
     def test_convert_repoable_perms_to_perms_and_services(self):
         all_perms = ["a:j", "a:k", "b:l", "c:m", "c:n"]
@@ -537,7 +555,7 @@ class TestRoledata(object):
             ).to_dict(),
             "repo_all": TestPolicy(actions=["sqs:createqueue"]).to_dict(),
         }
-        repoable_permissions = ["sqs:createqueue"]
+        repoable_permissions = {"sqs:createqueue"}
         repoed_policies, empty_policies = repokid.utils.roledata._get_repoed_policy(
             policies, repoable_permissions
         )

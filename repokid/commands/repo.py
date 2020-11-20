@@ -46,7 +46,6 @@ from tabulate import tabulate
 
 LOGGER = logging.getLogger("repokid")
 
-
 def _deal_with_policies(role, account_number, config, hooks, scheduled, role_name, dynamo_table, commit, continuing):
     errors = []
     total_permissions, eligible_permissions = roledata._get_role_permissions(role)
@@ -347,6 +346,7 @@ def _repo_role(
     return errors
 
 
+
 def _rollback_role(
         account_number, role_name, dynamo_table, config, hooks, selection=None, commit=None
 ):
@@ -374,7 +374,7 @@ def _rollback_role(
         LOGGER.warning(message)
         return errors
     else:
-        role = Role(get_role_data(dynamo_table, role_id))
+        role = Role.parse_obj(get_role_data(dynamo_table, role_id))
 
     # no option selected, display a table of options
     if not selection:
@@ -399,7 +399,7 @@ def _rollback_role(
     conn = config["connection_iam"]
     conn["account_number"] = account_number
 
-    current_policies = get_role_inline_policies(role.as_dict(), **conn)
+    current_policies = get_role_inline_policies(role.dict(), **conn)
 
     if selection:
         pp = pprint.PrettyPrinter()
@@ -492,7 +492,6 @@ def _rollback_role(
     return errors
 
 
-# Doesn't support managed policies yet
 def _repo_all_roles(
     account_number, dynamo_table, config, hooks, commit=False, scheduled=True, limit=-1
 ):
@@ -516,7 +515,7 @@ def _repo_all_roles(
     roles = Roles([])
     for role_id in role_ids_in_account:
         roles.append(
-            Role(
+            Role.parse_obj(
                 get_role_data(
                     dynamo_table,
                     role_id,
