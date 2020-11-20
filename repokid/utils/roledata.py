@@ -75,6 +75,30 @@ def add_new_policy_version(dynamo_table, role, current_policy, update_source):
         "Policies"
     ]
 
+def add_new_managed_policy_version(dynamo_table, role, current_managed_policy, update_source):
+    """
+    Create a new entry in the history of policy versions in Dynamo. The entry contains the source of the new policy:
+    (scan, repo, or restore) the current time, and the current policy contents. Updates the role's policies with the
+    full policies including the latest.
+
+    Args:
+        role (Role)
+        current_managed_policy (dict)
+        update_source (string): ['Repo', 'Scan', 'Restore']
+
+    Returns:
+        None
+    """
+    policy_entry = {
+        "Source": update_source,
+        "Discovered": datetime.datetime.utcnow().isoformat(),
+        "Policy": current_managed_policy,
+    }
+
+    add_to_end_of_list(dynamo_table, role.role_id, "ManagedPolicies", policy_entry)
+    role.managed_policies = get_role_data(dynamo_table, role.role_id, fields=["ManagedPolicies"])[
+        "ManagedPolicies"
+    ]
 
 def find_and_mark_inactive(dynamo_table, account_number, active_roles):
     """
@@ -111,6 +135,7 @@ def find_newly_added_permissions(old_policy, new_policy):
     Returns:
         set: Exapnded set of permissions that are in the new policy and not the old one
     """
+    LOGGER.info(Role({"Policies": [{"Policy": old_policy}]}))
     old_permissions, _ = _get_role_permissions(
         Role({"Policies": [{"Policy": old_policy}]})
     )
@@ -178,8 +203,8 @@ def update_opt_out(dynamo_table, role):
 
 
 def update_role_data(
-    dynamo_table, account_number, role, current_policy, source="Scan", add_no_repo=True
-):
+    dynamo_table, account_number, role, current_policy, current_managed_policy, source="Scan", add_no_repo=True
+, include_managed_policies=True):
     """
     Compare the current version of a policy for a role and what has been previously stored in Dynamo.
       - If current and new policy versions are different store the new version in Dynamo. Add any newly added
@@ -193,6 +218,7 @@ def update_role_data(
         account_number
         role (Role): current role being updated
         current_policy (dict): representation of the current policy version
+        current_managed_policy (dict): representation of the current managed policy versions
         source: Default 'Scan' but could be Repo, Rollback, etc
 
     Returns:
@@ -201,7 +227,7 @@ def update_role_data(
 
     # policy_entry: source, discovered, policy
     stored_role = get_role_data(
-        dynamo_table, role.role_id, fields=["OptOut", "Policies", "Tags"]
+        dynamo_table, role.role_id, fields=["OptOut", "Policies", "ManagedPolicies", "Tags"]
     )
     if not stored_role:
         role_dict = store_initial_role_data(
@@ -212,6 +238,7 @@ def update_role_data(
             role.role_name,
             account_number,
             current_policy,
+            current_managed_policy,
             role.tags,
         )
         role.set_attributes(role_dict)
@@ -226,12 +253,30 @@ def update_role_data(
                     role.arn
                 )
             )
-
             newly_added_permissions = find_newly_added_permissions(
                 old_policy, current_policy
             )
+
         else:
             newly_added_permissions = set()
+
+        # TODO Make this part of set_role_data instead to allow updating existing dynamo tables
+        # TODO this code will not work with existing dynamo tables - because old roles won't have ManagedPolicies
+        old_managed_policy = stored_role["ManagedPolicies"][-1]["Policy"]
+        if  current_managed_policy != old_managed_policy:
+            add_new_managed_policy_version(dynamo_table, role, current_managed_policy, source)
+            LOGGER.info(
+                "{} has different managed policies than last time, adding to role store".format(
+                    role.arn
+                )
+            )
+
+            newly_added_managed_permissions = find_newly_added_permissions(
+                old_managed_policy, current_managed_policy
+            )
+
+        else:
+            newly_added_managed_permissions = set()
 
         # update tags if needed
         if role.tags != stored_role.get("Tags", []):
@@ -239,6 +284,8 @@ def update_role_data(
 
         if add_no_repo:
             update_no_repo_permissions(dynamo_table, role, newly_added_permissions)
+            if include_managed_policies:
+                update_no_repo_permissions(dynamo_table, role, newly_added_managed_permissions)
         update_opt_out(dynamo_table, role)
         set_role_data(
             dynamo_table,
@@ -286,17 +333,20 @@ def update_stats(dynamo_table, roles, source="Scan"):
                 add_to_end_of_list(dynamo_table, role.role_id, "Stats", new_stats)
 
 
-def _update_repoable_services(role, repoable_permissions, eligible_permissions):
+def _update_repoable_services(role, repoable_permissions, eligible_permissions, managed_permissions=False):
     (
         repoable_permissions_set,
         repoable_services_set,
     ) = _convert_repoable_perms_to_perms_and_services(
         eligible_permissions, repoable_permissions
     )
-
-    # we're going to store both repoable permissions and repoable services in the field "RepoableServices"
-    role.repoable_services = repoable_services_set + repoable_permissions_set
-    role.repoable_permissions = len(repoable_permissions)
+    if managed_permissions:
+        role.repoable_managed_services = repoable_services_set + repoable_permissions_set
+        role.repoable_managed_permissions = len(repoable_permissions)
+    else:
+        # we're going to store both repoable permissions and repoable services in the field "RepoableServices"
+        role.repoable_services = repoable_services_set + repoable_permissions_set
+        role.repoable_permissions = len(repoable_permissions)
 
 
 def _calculate_repo_scores(roles, minimum_age, hooks, batch=False, batch_size=100):
@@ -319,29 +369,43 @@ def _calculate_repo_scores(roles, minimum_age, hooks, batch=False, batch_size=10
     """
     repo_able_roles = []
     eligible_permissions_dict = {}
+    eligible_managed_permissions_dict = {}
     for role in roles:
         total_permissions, eligible_permissions = _get_role_permissions(role)
-        role.total_permissions = len(total_permissions)
+        total_managed_permissions, eligible_managed_permissions = _get_role_managed_permissions(role)
 
+        role.total_permissions = len(total_permissions)
+        role.total_managed_permissions = len(total_managed_permissions)
+        LOGGER.info("managed permissions are: HOLA:\n")
+        LOGGER.info(role.total_managed_permissions)
         # if we don't have any access advisor data for a service than nothing is repoable
         if not role.aa_data:
             LOGGER.info("No data found in access advisor for {}".format(role.role_id))
             role.repoable_permissions = 0
             role.repoable_services = []
+            role.repoable_managed_permissions = 0
+            role.repoable_managed_services = []
             continue
 
         # permissions are only repoable if the role isn't being disqualified by filter(s)
         if len(role.disqualified_by) == 0:
             repo_able_roles.append(role)
             eligible_permissions_dict[role.arn] = eligible_permissions
+            eligible_managed_permissions_dict[role.arn] = eligible_managed_permissions
         else:
             role.repoable_permissions = 0
             role.repoable_services = []
+            role.repoable_managed_permissions = 0
+            role.repoable_managed_services = []
 
     repoable_permissions_dict = {}
+    repoable_managed_permissions_dict = {}
     if batch:
         repoable_permissions_dict = _get_repoable_permissions_batch(
             repo_able_roles, eligible_permissions_dict, minimum_age, hooks, batch_size
+        )
+        repoable_managed_permissions_dict = _get_repoable_permissions_batch(
+            repo_able_roles, eligible_managed_permissions_dict, minimum_age, hooks, batch_size
         )
     else:
         for role in repo_able_roles:
@@ -354,11 +418,25 @@ def _calculate_repo_scores(roles, minimum_age, hooks, batch=False, batch_size=10
                 minimum_age,
                 hooks,
             )
+            repoable_managed_permissions_dict[role.arn] = _get_repoable_permissions(
+                role.account,
+                role.role_name,
+                eligible_managed_permissions_dict[role.arn],
+                role.aa_data,
+                role.no_repo_permissions,
+                minimum_age,
+                hooks,
+            )
 
     for role in repo_able_roles:
         eligible_permissions = eligible_permissions_dict[role.arn]
         repoable_permissions = repoable_permissions_dict[role.arn]
         _update_repoable_services(role, repoable_permissions, eligible_permissions)
+
+        eligible_managed_permissions = eligible_managed_permissions_dict[role.arn]
+        repoable_managed_permissions = repoable_managed_permissions_dict[role.arn]
+        _update_repoable_services(role, eligible_managed_permissions, repoable_managed_permissions,
+                                  managed_permissions=True)
 
 
 def _convert_repoable_perms_to_perms_and_services(
@@ -772,6 +850,76 @@ def _get_repoed_policy(policies, repoable_permissions):
     return role_policies, empty_policies
 
 
+def _get_repoed_managed_policy(managed_policies, repoable_managed_permissions):
+    """
+    This function contains the logic to rewrite the policy to remove any repoable permissions. To do so we:
+      - Iterate over role policies
+      - Iterate over policy statements
+      - Skip Deny statements
+      - Remove any actions that are in repoable_permissions
+      - Remove any statements that now have zero actions
+      - Remove any policies that now have zero statements
+
+    Args:
+        managed_policies (dict): All of the inline policies as a dict with name and policy contents
+        repoable_managed_permissions (set): A set of all of the repoable permissions for policies
+
+    Returns:
+        dict: The rewritten set of all inline policies
+        list: Any policies that are now empty as a result of the rewrites
+    """
+    # work with our own copy; don't mess with the CACHE copy.
+    role_managed_policies = copy.deepcopy(managed_policies)
+
+    empty_policies = []
+    for policy_name, policy in list(role_managed_policies.items()):
+        # list of indexes in the policy that are empty
+        empty_statements = []
+
+        if type(policy["Statement"]) is dict:
+            policy["Statement"] = [policy["Statement"]]
+
+        for idx, statement in enumerate(policy["Statement"]):
+            if statement["Effect"].lower() == "allow":
+                if "Sid" in statement and statement["Sid"].startswith(
+                        STATEMENT_SKIP_SID
+                ):
+                    continue
+
+                statement_actions = get_actions_from_statement(statement)
+
+                if not statement_actions.intersection(repoable_managed_permissions):
+                    # No permissions are being taken away; let's not modify this statement at all.
+                    continue
+
+                statement_actions = statement_actions.difference(repoable_managed_permissions)
+
+                # get_actions_from_statement has already inverted this so our new statement should be 'Action'
+                if "NotAction" in statement:
+                    del statement["NotAction"]
+
+                # by putting this into a set, we lose order, which may be confusing to someone.
+                statement["Action"] = sorted(list(statement_actions))
+
+                # mark empty statements to be removed
+                if len(statement["Action"]) == 0:
+                    empty_statements.append(idx)
+
+        # do the actual removal of empty statements
+        for idx in sorted(empty_statements, reverse=True):
+            del policy["Statement"][idx]
+
+        # mark empty policies to be removed
+        if len(policy["Statement"]) == 0:
+            empty_policies.append(policy_name)
+
+    # do the actual removal of empty policies.
+    for policy_name in empty_policies:
+        del role_managed_policies[policy_name]  # detach any managed policies that can be deleted.
+
+    return role_managed_policies, empty_policies
+
+
 def _get_permissions_in_policy(policy_dict, warn_unknown_perms=False):
     """
     Given a set of policies for a role, return a set of all allowed permissions
@@ -829,6 +977,25 @@ def _get_role_permissions(role, warn_unknown_perms=False):
         set - all permisisons allowed by the policies not marked with STATEMENT_SKIP_SID
     """
     return _get_permissions_in_policy(role.policies[-1]["Policy"])
+
+
+def _get_role_managed_permissions(role, warn_unknown_perms=False):
+    """
+    Expand the most recent version of policies from a role to produce a list of all the permissions that are allowed
+    (permission is included in one or more statements that is allowed).  To perform expansion the policyuniverse
+    library is used. The result is a list of all of the individual permissions that are allowed in any of the
+    statements. If our resultant list contains any permissions that aren't listed in the master list of permissions
+    we'll raise an exception with the set of unknown permissions found.
+
+    Args:
+        role (Role): The role object that we're getting a list of permissions for
+
+    Returns:
+        tuple
+        set - all managed permissions allowed by the policies
+        set - all managed permisisons allowed by the policies not marked with STATEMENT_SKIP_SID
+    """
+    return _get_permissions_in_policy(role.managed_policies[-1]["Policy"])
 
 
 def _get_services_in_permissions(permissions_set):
@@ -917,4 +1084,4 @@ def partial_update_role_data(
             "RepoableServices": role.repoable_services,
         },
     )
-    update_stats(dynamo_table, [role], source=source)
+    update_stats(dynamo_table, [role], source=source)  # TODO update

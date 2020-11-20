@@ -47,15 +47,19 @@ def _display_roles(account_number, dynamo_table, inactive=False):
     Returns:
         None
     """
+
     headers = [
         "Name",
         "Refreshed",
         "Disqualified By",
         "Can be repoed",
         "Permissions",
-        "Repoable",
-        "Repoed",
+        "Policies Repoable",
         "Services",
+        "Repoed",
+        "Managed Permissions",
+        "Managed Policies Repoable"
+        "Managed Services",
     ]
 
     rows = list()
@@ -79,8 +83,11 @@ def _display_roles(account_number, dynamo_table, inactive=False):
                 len(role.disqualified_by) == 0,
                 role.total_permissions,
                 role.repoable_permissions,
-                role.repoed,
                 role.repoable_services,
+                role.repoed,
+                role.total_managed_permissions,
+                role.repoable_managed_permissions,
+                role.repoable_managed_services,
             ]
         )
 
@@ -166,10 +173,14 @@ def _display_role(account_number, role_name, dynamo_table, config, hooks):
         "Disqualified By",
         "Can be repoed",
         "Permissions",
-        "Repoable",
-        "Repoed",
+        "Policies Repoable",
         "Services",
+        "Repoed",
+        "Managed Permissions",
+        "Managed Policies Repoable"
+        "Managed Services",
     ]
+
     rows = [
         [
             role.role_name,
@@ -178,14 +189,17 @@ def _display_role(account_number, role_name, dynamo_table, config, hooks):
             len(role.disqualified_by) == 0,
             role.total_permissions,
             role.repoable_permissions,
-            role.repoed,
             role.repoable_services,
+            role.repoed,
+            role.total_managed_permissions,
+            role.repoable_managed_permissions,
+            role.repoable_managed_services,
         ]
     ]
     print(tabulate(rows, headers=headers) + "\n\n")
 
     print("Policy history:")
-    headers = ["Number", "Source", "Discovered", "Permissions", "Services"]
+    headers = ["Number", "Source", "Discovered", "Permissions", "Services", "",]
     rows = []
     for index, policies_version in enumerate(role.policies):
         policy_permissions, _ = roledata._get_permissions_in_policy(

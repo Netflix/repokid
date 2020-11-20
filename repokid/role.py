@@ -27,9 +27,12 @@ dict_to_attr = {
     "NoRepoPermissions": {"attribute": "no_repo_permissions", "default": dict()},
     "OptOut": {"attribute": "opt_out", "default": dict()},
     "Policies": {"attribute": "policies", "default": list()},
+    "ManagedPolicies": {"attribute": "managed_policies", "default": list()},
     "Refreshed": {"attribute": "refreshed", "default": str()},
     "RepoablePermissions": {"attribute": "repoable_permissions", "default": int()},
+    "RepoableManagedPermissions": {"attribute": "repoable_managed_permissions", "default": int()},
     "RepoableServices": {"attribute": "repoable_services", "default": list()},
+    "RepoableManagedServices": {"attribute": "repoable_managed_services", "default": list()},
     "Repoed": {"attribute": "repoed", "default": str()},
     "RepoScheduled": {"attribute": "repo_scheduled", "default": int()},
     "RoleId": {"attribute": "role_id", "default": None},
@@ -38,6 +41,7 @@ dict_to_attr = {
     "Stats": {"attribute": "stats", "default": list()},
     "Tags": {"attribute": "tags", "default": list()},
     "TotalPermissions": {"attribute": "total_permissions", "default": int()},
+    "TotalManagedPermissions": {"attribute": "total_managed_permissions", "default": int()},
 }
 
 

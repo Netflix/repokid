@@ -47,86 +47,8 @@ from tabulate import tabulate
 LOGGER = logging.getLogger("repokid")
 
 
-def _repo_role(
-    account_number,
-    role_name,
-    dynamo_table,
-    config,
-    hooks,
-    commit=False,
-    scheduled=False,
-):
-    """
-    Calculate what repoing can be done for a role and then actually do it if commit is set
-      1) Check that a role exists, it isn't being disqualified by a filter, and that is has fresh AA data
-      2) Get the role's current permissions, repoable permissions, and the new policy if it will change
-      3) Make the changes if commit is set
-    Args:
-        account_number (string)
-        role_name (string)
-        commit (bool)
-
-    Returns:
-        None
-    """
+def _deal_with_policies(role, account_number, config, hooks, scheduled, role_name, dynamo_table, commit, continuing):
     errors = []
-
-    role_id = find_role_in_cache(dynamo_table, account_number, role_name)
-    # only load partial data that we need to determine if we should keep going
-    role_data = get_role_data(
-        dynamo_table,
-        role_id,
-        fields=["DisqualifiedBy", "AAData", "RepoablePermissions", "RoleName"],
-    )
-    if not role_data:
-        LOGGER.warn("Could not find role with name {}".format(role_name))
-        return
-    else:
-        role = Role(role_data)
-
-    continuing = True
-
-    if len(role.disqualified_by) > 0:
-        LOGGER.info(
-            "Cannot repo role {} in account {} because it is being disqualified by: {}".format(
-                role_name, account_number, role.disqualified_by
-            )
-        )
-        continuing = False
-
-    if not role.aa_data:
-        LOGGER.warning("ARN not found in Access Advisor: {}".format(role.arn))
-        continuing = False
-
-    if not role.repoable_permissions:
-        LOGGER.info(
-            "No permissions to repo for role {} in account {}".format(
-                role_name, account_number
-            )
-        )
-        continuing = False
-
-    # if we've gotten to this point, load the rest of the role
-    role = Role(get_role_data(dynamo_table, role_id))
-
-    old_aa_data_services = []
-    for aa_service in role.aa_data:
-        if datetime.datetime.strptime(
-            aa_service["lastUpdated"], "%a, %d %b %Y %H:%M:%S %Z"
-        ) < datetime.datetime.now() - datetime.timedelta(
-            days=config["repo_requirements"]["oldest_aa_data_days"]
-        ):
-            old_aa_data_services.append(aa_service["serviceName"])
-
-    if old_aa_data_services:
-        LOGGER.error(
-            "AAData older than threshold for these services: {} (role: {}, account {})".format(
-                old_aa_data_services, role_name, account_number
-            ),
-            exc_info=True,
-        )
-        continuing = False
-
     total_permissions, eligible_permissions = roledata._get_role_permissions(role)
     repoable_permissions = roledata._get_repoable_permissions(
         account_number,
@@ -137,7 +59,6 @@ def _repo_role(
         config["filter_config"]["AgeFilter"]["minimum_age"],
         hooks,
     )
-
     # if this is a scheduled repo we need to filter out permissions that weren't previously scheduled
     if scheduled:
         repoable_permissions = roledata._filter_scheduled_repoable_perms(
@@ -221,8 +142,213 @@ def _repo_role(
     return errors
 
 
+def _deal_with_managed_policies(role, account_number, config, hooks, scheduled, role_name, dynamo_table, commit):
+    errors = []
+    total_managed_permissions, eligible_managed_permissions = roledata._get_role_managed_permissions(role)
+    repoable_managed_permissions = roledata._get_repoable_permissions(
+        account_number,
+        role.role_name,
+        eligible_managed_permissions,
+        role.aa_data,
+        role.no_repo_permissions,
+        config["filter_config"]["AgeFilter"]["minimum_age"],
+        hooks,
+    )
+
+    # if this is a scheduled repo we need to filter out permissions that weren't previously scheduled
+    if scheduled:
+        repoable_managed_permissions = roledata._filter_scheduled_repoable_perms(
+            repoable_managed_permissions, role.scheduled_perms
+        )
+
+    repoed_policies, deleted_policy_names = roledata._get_repoed_managed_policy(  # TODO
+        role.policies[-1]["ManagedPolicy"], repoable_managed_permissions
+    )
+
+    if inline_policies_size_exceeds_maximum(repoed_policies):
+        error = (
+            "Policies would exceed the AWS size limit after repo for role: {} in account {}.  "
+            "Please manually minify.".format(role_name, account_number)
+        )
+        LOGGER.error(error)
+        errors.append(error)
+        continuing = False
+
+    # if we aren't repoing for some reason, unschedule the role
+    if not continuing:
+        set_role_data(
+            dynamo_table, role.role_id, {"RepoScheduled": 0, "ScheduledPerms": []}
+        )
+        return
+
+    if not commit:
+        log_deleted_and_repoed_policies(
+            deleted_policy_names, repoed_policies, role_name, account_number
+        )
+        return
+
+    conn = config["connection_iam"]
+    conn["account_number"] = account_number
+
+    for name in deleted_policy_names:
+        error = delete_policy(name, role, account_number, conn)
+        if error:
+            LOGGER.error(error)
+            errors.append(error)
+
+    if repoed_policies:
+        error = replace_policies(repoed_policies, role, account_number, conn)
+        if error:
+            LOGGER.error(error)
+            errors.append(error)
+
+    current_policies = get_role_inline_policies(role.as_dict(), **conn) or {}  # what should this be?
+    roledata.add_new_policy_version(dynamo_table, role, current_policies, "Repo")
+
+    # regardless of whether we're successful we want to unschedule the repo
+    set_role_data(
+        dynamo_table, role.role_id, {"RepoScheduled": 0, "ScheduledPerms": []}
+    )
+
+    repokid.hooks.call_hooks(hooks, "AFTER_REPO", {"role": role, "errors": errors})
+
+    if not errors:
+        # repos will stay scheduled until they are successful
+        set_role_data(
+            dynamo_table,
+            role.role_id,
+            {"Repoed": datetime.datetime.utcnow().isoformat()},
+        )
+        update_repoed_description(role.role_name, **conn)
+        partial_update_role_data(
+            role,
+            dynamo_table,
+            account_number,
+            config,
+            conn,
+            hooks,
+            source="Repo",
+            add_no_repo=False,
+        )
+        LOGGER.info(
+            "Successfully repoed role: {} in account {}. Included managed policies: {}".format(
+                role.role_name, account_number
+            )
+        )
+    return errors
+
+
+def _repo_role(
+        account_number,
+        role_name,
+        dynamo_table,
+        config,
+        hooks,
+        include_managed_policies=True,
+        commit=False,
+        scheduled=False,
+):
+    """
+    Calculate what repoing can be done for a role and then actually do it if commit is set
+      1) Check that a role exists, it isn't being disqualified by a filter, and that is has fresh AA data
+      2) Get the role's current permissions, repoable permissions, and the new policy if it will change
+      3) If include_managed_policies is set, get the role's current managed permissions, repoable managed permissions,
+         and the new policy if it will change
+      4) Make the changes if commit is set
+    Args:
+        account_number (string)
+        role_name (string)
+        commit (bool)
+
+    Returns:
+        None
+    """
+    errors = []
+
+    role_id = find_role_in_cache(dynamo_table, account_number, role_name)
+    # only load partial data that we need to determine if we should keep going
+    role_data = get_role_data(
+        dynamo_table,
+        role_id,
+        fields=["DisqualifiedBy", "AAData", "RepoablePermissions", "RepoableManagedPermissions", "RoleName"],
+    )
+    if not role_data:
+        LOGGER.warn("Could not find role with name {}".format(role_name))
+        return
+    else:
+        role = Role(role_data)
+
+    continuing = True
+
+    if len(role.disqualified_by) > 0:
+        LOGGER.info(
+            "Cannot repo role {} in account {} because it is being disqualified by: {}".format(
+                role_name, account_number, role.disqualified_by
+            )
+        )
+        continuing = False
+
+    if not role.aa_data:
+        LOGGER.warning("ARN not found in Access Advisor: {}".format(role.arn))
+        continuing = False
+
+    permissionsToDo = []
+    if not role.repoable_permissions:
+        LOGGER.info(
+            "No permissions to repo for role {} in account {}".format(
+                role_name, account_number
+            )
+        )
+    else:
+        permissionsToDo.append("inline")
+
+    if include_managed_policies:
+        if not role.repoable_managed_permissions:
+            LOGGER.info(
+                "No managed permissions to repo for role {} in account {}".format(
+                    role_name, account_number
+                )
+            )
+        else:
+            permissionsToDo.append("managed")
+
+    if not permissionsToDo:
+        continuing = False
+
+    # if we've gotten to this point, load the rest of the role
+    role = Role(get_role_data(dynamo_table, role_id))
+
+    fiveDaysAgo = datetime.datetime.now() - datetime.timedelta(days=config["repo_requirements"]["oldest_aa_data_days"])
+    old_aa_data_services = []
+    for aa_service in role.aa_data:
+        if datetime.datetime.strptime(aa_service["lastUpdated"], "%a, %d %b %Y %H:%M:%S %Z") < fiveDaysAgo:
+            old_aa_data_services.append(aa_service["serviceName"])
+
+    if old_aa_data_services:
+        LOGGER.error(
+            "AAData older than threshold for these services: {} (role: {}, account {})".format(
+                old_aa_data_services, role_name, account_number
+            ),
+            exc_info=True,
+        )
+        continuing = False
+
+    if "inline" in permissionsToDo:
+        errors.append(
+            _deal_with_policies(role, account_number, config, hooks, scheduled, role_name, dynamo_table, commit,
+                                continuing)
+        )
+
+    if "managed" in permissionsToDo:
+        errors.append(
+            _deal_with_managed_policies(role, account_number, config, hooks, scheduled, role_name, dynamo_table, commit,
+                                        continuing)
+        )
+    return errors
+
+
 def _rollback_role(
-    account_number, role_name, dynamo_table, config, hooks, selection=None, commit=None
+        account_number, role_name, dynamo_table, config, hooks, selection=None, commit=None
 ):
     """
     Display the historical policy versions for a roll as a numbered list.  Restore to a specific version if selected.
@@ -366,6 +492,7 @@ def _rollback_role(
     return errors
 
 
+# Doesn't support managed policies yet
 def _repo_all_roles(
     account_number, dynamo_table, config, hooks, commit=False, scheduled=True, limit=-1
 ):
