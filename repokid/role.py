@@ -12,9 +12,39 @@
 #     See the License for the specific language governing permissions and
 #     limitations under the License.
 from __future__ import annotations
-
 import datetime
 from typing import Dict, List, Optional
+
+dict_to_attr = {
+    "AAData": {"attribute": "aa_data", "default": dict()},
+    "Account": {"attribute": "account", "default": None},
+    "Active": {"attribute": "active", "default": True},
+    "Arn": {"attribute": "arn", "default": None},
+    "AssumeRolePolicyDocument": {
+        "attribute": "assume_role_policy_document",
+        "default": None,
+    },
+    "CreateDate": {"attribute": "create_date", "default": None},
+    "DisqualifiedBy": {"attribute": "disqualified_by", "default": list()},
+    "NoRepoPermissions": {"attribute": "no_repo_permissions", "default": dict()},
+    "OptOut": {"attribute": "opt_out", "default": dict()},
+    "Policies": {"attribute": "policies", "default": list()},
+    "ManagedPolicies": {"attribute": "managed_policies", "default": list()},
+    "Refreshed": {"attribute": "refreshed", "default": str()},
+    "RepoablePermissions": {"attribute": "repoable_permissions", "default": int()},
+    "RepoableManagedPermissions": {"attribute": "repoable_managed_permissions", "default": int()},
+    "RepoableServices": {"attribute": "repoable_services", "default": list()},
+    "RepoableManagedServices": {"attribute": "repoable_managed_services", "default": list()},
+    "Repoed": {"attribute": "repoed", "default": str()},
+    "RepoScheduled": {"attribute": "repo_scheduled", "default": int()},
+    "RoleId": {"attribute": "role_id", "default": None},
+    "RoleName": {"attribute": "role_name", "default": None},
+    "ScheduledPerms": {"attribute": "scheduled_perms", "default": dict()},
+    "Stats": {"attribute": "stats", "default": list()},
+    "Tags": {"attribute": "tags", "default": list()},
+    "TotalPermissions": {"attribute": "total_permissions", "default": int()},
+    "TotalManagedPermissions": {"attribute": "total_managed_permissions", "default": int()},
+}
 
 from pydantic import BaseModel, Field
 

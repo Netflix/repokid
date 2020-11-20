@@ -285,6 +285,7 @@ def store_initial_role_data(
     role_name,
     account_number,
     current_policy,
+    current_managed_policy,
     tags,
 ):
     """
@@ -293,6 +294,7 @@ def store_initial_role_data(
     Args:
         role (Role)
         current_policy (dict)
+        current_managed_policy (dict)
 
     Returns:
         None
@@ -303,6 +305,12 @@ def store_initial_role_data(
         "Policy": current_policy,
     }
 
+    managed_policy_entry = {
+        "Source": "Scan",
+        "Discovered": datetime.datetime.utcnow().isoformat(),
+        "Policy": current_managed_policy,
+    }
+
     role_dict = {
         "Arn": arn,
         "CreateDate": create_date.isoformat(),
@@ -310,6 +318,7 @@ def store_initial_role_data(
         "RoleName": role_name,
         "Account": account_number,
         "Policies": [policy_entry],
+        "ManagedPolicies": [managed_policy_entry],
         "Refreshed": datetime.datetime.utcnow().isoformat(),
         "Active": True,
         "Repoed": "Never",

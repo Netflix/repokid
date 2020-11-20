@@ -14,6 +14,7 @@
 import logging
 
 from cloudaux.aws.iam import get_account_authorization_details
+from cloudaux.aws.iam import get_managed_policy_document
 from repokid.filters import FilterPlugins
 from repokid.role import Role, Roles
 from repokid.utils import roledata as roledata
@@ -66,6 +67,14 @@ def _update_role_cache(account_number, dynamo_table, config, hooks):
             item["PolicyName"]: item["PolicyDocument"]
             for item in data["RolePolicyList"]
         }
+    LOGGER.info("DONE INLINE POLICIES!")
+    # get managed policies in the same format as inline policies
+    for _, data in role_data_by_id.items():
+        data["AttachedManagedPolicies"] = {
+            managed_policy["PolicyName"]: get_managed_policy_document(managed_policy["PolicyArn"])
+            for managed_policy in data["AttachedManagedPolicies"]
+        }
+    LOGGER.info("DONE MANAGED POLICIES!")
 
     roles = Roles([Role.parse_obj(rd) for rd in role_data])
 
@@ -75,6 +84,9 @@ def _update_role_cache(account_number, dynamo_table, config, hooks):
     for role in tqdm(roles):
         role.account = account_number
         current_policies = role_data_by_id[role.role_id]["RolePolicyList"]
+        LOGGER.info(current_policies)
+        current_managed_policies = role_data_by_id[role.role_id]["AttachedManagedPolicies"]
+        LOGGER.info(current_managed_policies)
         active_roles.append(role.role_id)
         role = roledata.update_role_data(
             dynamo_table, account_number, role, current_policies
@@ -163,6 +175,8 @@ def _update_role_cache(account_number, dynamo_table, config, hooks):
                 account_number,
                 role.repoable_permissions,
                 role.repoable_services,
+                role.repoable_managed_permissions,
+                role.repoable_managed_services,
             )
         )
         set_role_data(
@@ -172,8 +186,10 @@ def _update_role_cache(account_number, dynamo_table, config, hooks):
                 "TotalPermissions": role.total_permissions,
                 "RepoablePermissions": role.repoable_permissions,
                 "RepoableServices": role.repoable_services,
+                "RepoableManagedPermissions": role.repoable_managed_permissions,
+                "RepoableManagedServices": role.repoable_managed_services,
             },
         )
 
     LOGGER.info("Updating stats in account {}".format(account_number))
-    roledata.update_stats(dynamo_table, roles, source="Scan")
+    roledata.update_stats(dynamo_table, roles, source="Scan")  # TODO
