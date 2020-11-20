@@ -217,3 +217,17 @@ Repokid will respond on a configurable SNS topic with information about any succ
 component exists to help with operationalization of the repo lifecycle across your organization. You may choose
 to expose the queue directly to developers, but more likely this should be guarded because rolling back can be
 a destructive action if not done carefully.
+
+## Development
+
+### Releasing
+
+Versioning is handled by [setupmeta](https://github.com/zsimic/setupmeta). To create a new release:
+
+```bash
+python setup.py version --bump patch --push
+
+# Inspect output and make sure it's what you expect
+# If all is well, commit and push the new tag:
+python setup.py version --bump patch --push --commit
+```
