@@ -187,7 +187,7 @@ def _generate_default_config(filename=None):
 
 
 def main():
-    args = docopt(__doc__, version="Repokid {version}".format(version=__version__))
+    args = docopt(__doc__, version=f"Repokid {__version__}")
 
     if args.get("config"):
         config_filename = args.get("<config_filename>")

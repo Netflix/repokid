@@ -723,6 +723,7 @@ class TestRepokidCLI(object):
         repokid.utils.logging.LOGGER = logging.getLogger("test")
         mock_logger = MockLoggingHandler()
         repokid.utils.logging.LOGGER.addHandler(mock_logger)
+        repokid.utils.logging.LOGGER.setLevel(logging.DEBUG)
 
         policy_names = ["policy1", "policy2"]
         repoed_policies = [ROLE_POLICIES]
