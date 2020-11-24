@@ -13,8 +13,9 @@
 #     limitations under the License.
 import logging
 
-from repokid.exceptions import AardvarkError
 import requests
+
+from repokid.exceptions import AardvarkError
 
 LOGGER = logging.getLogger("repokid")
 

@@ -19,30 +19,26 @@ import pprint
 import time
 
 import botocore
-from cloudaux.aws.iam import (
-    delete_role_policy,
-    get_role_inline_policies,
-    put_role_policy,
-)
+from cloudaux.aws.iam import delete_role_policy
+from cloudaux.aws.iam import get_role_inline_policies
+from cloudaux.aws.iam import put_role_policy
+from tabulate import tabulate
+
 import repokid.hooks
-from repokid.role import Role, Roles
+from repokid.role import Role
+from repokid.role import Roles
 from repokid.utils import roledata as roledata
-from repokid.utils.dynamo import (
-    find_role_in_cache,
-    get_role_data,
-    role_ids_for_account,
-    role_ids_for_all_accounts,
-    set_role_data,
-)
-from repokid.utils.iam import (
-    delete_policy,
-    inline_policies_size_exceeds_maximum,
-    replace_policies,
-    update_repoed_description,
-)
+from repokid.utils.dynamo import find_role_in_cache
+from repokid.utils.dynamo import get_role_data
+from repokid.utils.dynamo import role_ids_for_account
+from repokid.utils.dynamo import role_ids_for_all_accounts
+from repokid.utils.dynamo import set_role_data
+from repokid.utils.iam import delete_policy
+from repokid.utils.iam import inline_policies_size_exceeds_maximum
+from repokid.utils.iam import replace_policies
+from repokid.utils.iam import update_repoed_description
 from repokid.utils.logging import log_deleted_and_repoed_policies
 from repokid.utils.roledata import partial_update_role_data
-from tabulate import tabulate
 
 LOGGER = logging.getLogger("repokid")
 
@@ -318,8 +314,10 @@ def _rollback_role(
             )
 
         except botocore.exceptions.ClientError as e:
-            message = "Unable to push policy {}.  Error: {} (role: {} account {})".format(
-                policy_name, e.message, role.role_name, account_number
+            message = (
+                "Unable to push policy {}.  Error: {} (role: {} account {})".format(
+                    policy_name, e.message, role.role_name, account_number
+                )
             )
             LOGGER.error(message, exc_info=True)
             errors.append(message)

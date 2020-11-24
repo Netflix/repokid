@@ -2,16 +2,17 @@ language: python
 matrix:
   include:
   - python: '3.7'
+  - python: '3.8'
+  - python: '3.9'
 before_install:
 - sudo rm -f /etc/boto.cfg
 install:
+- pip install -r requirements.txt -r requirements-test.txt
 - pip install .
-- pip install -r requirements-test.txt
 script:
 - coverage run --source repokid -m py.test
 - bandit -r . -ll -ii -x repokid/tests/
-- flake8 .
-- black .
+- pre-commit run
 after_success:
 - coveralls
 deploy:

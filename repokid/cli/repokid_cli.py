@@ -19,24 +19,18 @@ import click
 
 from repokid import CONFIG
 from repokid import get_hooks
-from repokid.commands.repo import (
-    _repo_all_roles,
-    _repo_role,
-    _repo_stats,
-    _rollback_role,
-)
-from repokid.commands.role import (
-    _display_role,
-    _display_roles,
-    _find_roles_with_permissions,
-    _remove_permissions_from_roles,
-)
+from repokid.commands.repo import _repo_all_roles
+from repokid.commands.repo import _repo_role
+from repokid.commands.repo import _repo_stats
+from repokid.commands.repo import _rollback_role
+from repokid.commands.role import _display_role
+from repokid.commands.role import _display_roles
+from repokid.commands.role import _find_roles_with_permissions
+from repokid.commands.role import _remove_permissions_from_roles
 from repokid.commands.role_cache import _update_role_cache
-from repokid.commands.schedule import (
-    _cancel_scheduled_repo,
-    _schedule_repo,
-    _show_scheduled_roles,
-)
+from repokid.commands.schedule import _cancel_scheduled_repo
+from repokid.commands.schedule import _schedule_repo
+from repokid.commands.schedule import _show_scheduled_roles
 from repokid.utils.dynamo import dynamo_get_or_create_table
 
 logger = logging.getLogger("repokid")

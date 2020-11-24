@@ -1,12 +1,13 @@
 import copy
 import datetime
 
-from marshmallow import ValidationError
-from mock import call, patch
 import pytest
+from marshmallow import ValidationError
+from mock import call
+from mock import patch
+
 import repokid.cli.dispatcher_cli as dispatcher_cli
 import repokid.dispatcher as dispatcher
-
 
 DYNAMO_TABLE = None
 MESSAGE = dispatcher_cli.Message(

@@ -11,27 +11,28 @@
 #     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #     See the License for the specific language governing permissions and
 #     limitations under the License.
-from collections import defaultdict
 import copy
 import datetime
 import logging
 import time
+from collections import defaultdict
 from typing import Dict
 
 from cloudaux.aws.iam import get_role_inline_policies
 from dateutil.tz import tzlocal
-from policyuniverse import all_permissions, expand_policy, get_actions_from_statement
-from repokid import CONFIG as CONFIG
+from policyuniverse import all_permissions
+from policyuniverse import expand_policy
+from policyuniverse import get_actions_from_statement
+
 import repokid.hooks
+from repokid import CONFIG as CONFIG
 from repokid.role import Role
 from repokid.utils.aardvark import get_aardvark_data
-from repokid.utils.dynamo import (
-    add_to_end_of_list,
-    get_role_data,
-    role_ids_for_account,
-    set_role_data,
-    store_initial_role_data,
-)
+from repokid.utils.dynamo import add_to_end_of_list
+from repokid.utils.dynamo import get_role_data
+from repokid.utils.dynamo import role_ids_for_account
+from repokid.utils.dynamo import set_role_data
+from repokid.utils.dynamo import store_initial_role_data
 
 LOGGER = logging.getLogger("repokid")
 BEGINNING_OF_2015_MILLI_EPOCH = 1420113600000

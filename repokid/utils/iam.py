@@ -18,11 +18,10 @@ import re
 
 import botocore
 from cloudaux import sts_conn
-from cloudaux.aws.iam import (
-    delete_role_policy,
-    get_role_inline_policies,
-    put_role_policy,
-)
+from cloudaux.aws.iam import delete_role_policy
+from cloudaux.aws.iam import get_role_inline_policies
+from cloudaux.aws.iam import put_role_policy
+
 from repokid.utils import roledata as roledata
 from repokid.utils.dynamo import set_role_data
 from repokid.utils.logging import log_deleted_and_repoed_policies

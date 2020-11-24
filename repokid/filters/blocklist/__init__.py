@@ -3,6 +3,7 @@ import logging
 
 import botocore
 from cloudaux.aws.sts import boto3_cached_conn
+
 from repokid.exceptions import BlocklistError
 from repokid.filters import Filter
 

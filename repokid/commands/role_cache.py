@@ -14,12 +14,14 @@
 import logging
 
 from cloudaux.aws.iam import get_account_authorization_details
+from tqdm import tqdm
+
 from repokid.filters import FilterPlugins
-from repokid.role import Role, Roles
+from repokid.role import Role
+from repokid.role import Roles
 from repokid.utils import roledata as roledata
 from repokid.utils.aardvark import get_aardvark_data
 from repokid.utils.dynamo import set_role_data
-from tqdm import tqdm
 
 LOGGER = logging.getLogger("repokid")
 
