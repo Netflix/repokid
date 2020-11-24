@@ -10,11 +10,10 @@ boto==2.49.0              # via cloudaux
 botocore==1.19.22         # via boto3, cloudaux, s3transfer
 certifi==2020.11.8        # via requests
 chardet==3.0.4            # via requests
-click==7.1.2              # via pip-tools
+click==7.1.2              # via -r requirements.in, pip-tools
 cloudaux==1.9.0           # via -r requirements.in
 colorama==0.4.4           # via twine
 defusedxml==0.6.0         # via cloudaux
-docopt==0.6.2             # via -r requirements.in
 docutils==0.16            # via readme-renderer
 flagpole==1.1.1           # via cloudaux
 idna==2.10                # via requests

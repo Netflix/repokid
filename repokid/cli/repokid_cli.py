@@ -11,36 +11,11 @@
 #     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #     See the License for the specific language governing permissions and
 #     limitations under the License.
-"""
-Usage:
-    repokid config <config_filename>
-    repokid update_role_cache <account_number>
-    repokid display_role_cache <account_number> [--inactive]
-    repokid find_roles_with_permissions <permission>... [--output=ROLE_FILE]
-    repokid remove_permissions_from_roles --role-file=ROLE_FILE <permission>... [-c]
-    repokid display_role <account_number> <role_name>
-    repokid schedule_repo <account_number>
-    repokid repo_role <account_number> <role_name> [-c]
-    repokid rollback_role <account_number> <role_name> [--selection=NUMBER] [-c]
-    repokid repo_all_roles <account_number> [-c]
-    repokid show_scheduled_roles <account_number>
-    repokid cancel_scheduled_repo <account_number> [--role=ROLE_NAME] [--all]
-    repokid repo_scheduled_roles <account_number> [-c]
-    repokid repo_stats <output_filename> [--account=ACCOUNT_NUMBER]
 
-
-Options:
-    -h --help       Show this screen
-    --version       Show Version
-    -c --commit     Actually do things.
-"""
-
+import click
 import json
 import logging
-import sys
 
-from docopt import docopt
-from repokid import __version__ as __version__
 from repokid import CONFIG
 from repokid import get_hooks
 from repokid.commands.repo import (
@@ -63,10 +38,7 @@ from repokid.commands.schedule import (
 )
 from repokid.utils.dynamo import dynamo_get_or_create_table
 
-
-# http://docs.aws.amazon.com/IAM/latest/UserGuide/reference_iam-limits.html
-
-LOGGER = logging.getLogger("repokid")
+logger = logging.getLogger("repokid")
 
 
 def _generate_default_config(filename=None):
@@ -186,121 +158,197 @@ def _generate_default_config(filename=None):
     return config_dict
 
 
-def main():
-    args = docopt(__doc__, version=f"Repokid {__version__}")
+class AliasedGroup(click.Group):
+    """AliasedGroup provides backward compatibility with the previous Repokid CLI commands"""
 
-    if args.get("config"):
-        config_filename = args.get("<config_filename>")
-        _generate_default_config(filename=config_filename)
-        sys.exit(0)
+    def get_command(self, ctx, cmd_name):
+        rv = click.Group.get_command(self, ctx, cmd_name)
+        if rv:
+            return rv
+        dashed = cmd_name.replace("_", "-")
+        for cmd in self.list_commands(ctx):
+            if cmd == dashed:
+                return click.Group.get_command(self, ctx, cmd)
 
-    account_number = args.get("<account_number>")
+
+@click.group(cls=AliasedGroup)
+@click.pass_context
+def cli(ctx):
+    ctx.ensure_object(dict)
 
     if not CONFIG:
         config = _generate_default_config()
     else:
         config = CONFIG
 
-    LOGGER.debug("Repokid cli called with args {}".format(args))
+    ctx.obj["config"] = config
+    ctx.obj["hooks"] = get_hooks(config.get("hooks", ["repokid.hooks.loggers"]))
+    ctx.obj["dynamo_table"] = dynamo_get_or_create_table(**config["dynamo_db"])
 
-    hooks = get_hooks(config.get("hooks", ["repokid.hooks.loggers"]))
-    dynamo_table = dynamo_get_or_create_table(**config["dynamo_db"])
 
-    if args.get("update_role_cache"):
-        return _update_role_cache(account_number, dynamo_table, config, hooks)
+@cli.command()
+@click.argument("filename",)
+@click.pass_context
+def config(ctx, filename):
+    _generate_default_config(filename=filename)
 
-    if args.get("display_role_cache"):
-        inactive = args.get("--inactive")
-        return _display_roles(account_number, dynamo_table, inactive=inactive)
 
-    if args.get("find_roles_with_permissions"):
-        permissions = args.get("<permission>")
-        output_file = args.get("--output")
-        return _find_roles_with_permissions(permissions, dynamo_table, output_file)
+@cli.command()
+@click.argument("account_number",)
+@click.pass_context
+def update_role_cache(ctx, account_number):
+    dynamo_table = ctx.obj["dynamo_table"]
+    config = ctx.obj["config"]
+    hooks = ctx.obj["hooks"]
+    _update_role_cache(account_number, dynamo_table, config, hooks)
 
-    if args.get("remove_permissions_from_roles"):
-        permissions = args.get("<permission>")
-        role_filename = args.get("--role-file")
-        commit = args.get("--commit")
-        return _remove_permissions_from_roles(
-            permissions, role_filename, dynamo_table, config, hooks, commit=commit
-        )
 
-    if args.get("display_role"):
-        role_name = args.get("<role_name>")
-        return _display_role(account_number, role_name, dynamo_table, config, hooks)
+@cli.command()
+@click.argument("account_number",)
+@click.option("--inactive", default=False, help="Include inactive roles")
+@click.pass_context
+def display_role_cache(ctx, account_number, inactive):
+    dynamo_table = ctx.obj["dynamo_table"]
+    _display_roles(account_number, dynamo_table, inactive=inactive)
 
-    if args.get("repo_role"):
-        role_name = args.get("<role_name>")
-        commit = args.get("--commit")
-        return _repo_role(
-            account_number, role_name, dynamo_table, config, hooks, commit=commit
-        )
 
-    if args.get("rollback_role"):
-        role_name = args.get("<role_name>")
-        commit = args.get("--commit")
-        selection = args.get("--selection")
-        return _rollback_role(
-            account_number,
-            role_name,
-            dynamo_table,
-            config,
-            hooks,
-            selection=selection,
-            commit=commit,
-        )
+@cli.command()
+@click.argument(
+    "permissions", nargs=-1,
+)
+@click.option("--output", "-o", required=False, help="File to write results to")
+@click.pass_context
+def find_roles_with_permissions(ctx, permissions, output):
+    dynamo_table = ctx.obj["dynamo_table"]
+    _find_roles_with_permissions(permissions, dynamo_table, output)
 
-    if args.get("repo_all_roles"):
-        LOGGER.info("Updating role data")
-        _update_role_cache(account_number, dynamo_table, config, hooks)
-        LOGGER.info("Repoing all roles")
-        commit = args.get("--commit")
-        return _repo_all_roles(
-            account_number, dynamo_table, config, hooks, commit=commit, scheduled=False
-        )
 
-    if args.get("schedule_repo"):
-        LOGGER.info("Updating role data")
-        _update_role_cache(account_number, dynamo_table, config, hooks)
-        return _schedule_repo(account_number, dynamo_table, config, hooks)
+@cli.command()
+@click.argument(
+    "permissions", nargs=-1,
+)
+@click.option("--role-file", "-f", required=True, help="File to read roles from")
+@click.option("--commit", "-c", default=False, help="Commit changes")
+@click.pass_context
+def remove_permissions_from_roles(ctx, permissions, role_file, commit):
+    dynamo_table = ctx.obj["dynamo_table"]
+    hooks = ctx.obj["hooks"]
+    _remove_permissions_from_roles(
+        permissions, role_file, dynamo_table, config, hooks, commit=commit
+    )
 
-    if args.get("show_scheduled_roles"):
-        LOGGER.info("Showing scheduled roles")
-        return _show_scheduled_roles(account_number, dynamo_table)
 
-    if args.get("cancel_scheduled_repo"):
-        role_name = args.get("--role")
-        is_all = args.get("--all")
-        if not is_all:
-            LOGGER.info(
-                "Cancelling scheduled repo for role: {} in account {}".format(
-                    role_name, account_number
-                )
-            )
-        else:
-            LOGGER.info(
-                "Cancelling scheduled repo for all roles in account {}".format(
-                    account_number
-                )
-            )
-        return _cancel_scheduled_repo(
-            account_number, dynamo_table, role_name=role_name, is_all=is_all
-        )
+@cli.command()
+@click.argument("account_number",)
+@click.argument("role_name",)
+@click.pass_context
+def display_role(ctx, account_number, role_name):
+    dynamo_table = ctx.obj["dynamo_table"]
+    config = ctx.obj["config"]
+    hooks = ctx.obj["hooks"]
+    _display_role(account_number, role_name, dynamo_table, config, hooks)
 
-    if args.get("repo_scheduled_roles"):
-        _update_role_cache(account_number, dynamo_table, config, hooks)
-        LOGGER.info("Repoing scheduled roles")
-        commit = args.get("--commit")
-        return _repo_all_roles(
-            account_number, dynamo_table, config, hooks, commit=commit, scheduled=True
-        )
 
-    if args.get("repo_stats"):
-        output_file = args.get("<output_filename>")
-        account_number = args.get("--account")
-        return _repo_stats(output_file, dynamo_table, account_number=account_number)
+@cli.command()
+@click.argument("account_number",)
+@click.argument("role_name",)
+@click.option("--commit", "-c", default=False, help="Commit changes")
+@click.pass_context
+def repo_role(ctx, account_number, role_name, commit):
+    dynamo_table = ctx.obj["dynamo_table"]
+    config = ctx.obj["config"]
+    hooks = ctx.obj["hooks"]
+    _repo_role(account_number, role_name, dynamo_table, config, hooks, commit=commit)
+
+
+@cli.command()
+@click.argument("account_number",)
+@click.argument("role_name",)
+@click.option("--selection", "-s", required=True, type=int)
+@click.option("--commit", "-c", default=False, help="Commit changes")
+@click.pass_context
+def rollback_role(ctx, account_number, role_name, selection, commit):
+    dynamo_table = ctx.obj["dynamo_table"]
+    config = ctx.obj["config"]
+    hooks = ctx.obj["hooks"]
+    _rollback_role(
+        account_number,
+        role_name,
+        dynamo_table,
+        config,
+        hooks,
+        selection=selection,
+        commit=commit,
+    )
+
+
+@cli.command()
+@click.argument("account_number",)
+@click.option("--commit", "-c", default=False, help="Commit changes")
+@click.pass_context
+def repo_all_roles(ctx, account_number, commit):
+    dynamo_table = ctx.obj["dynamo_table"]
+    config = ctx.obj["config"]
+    hooks = ctx.obj["hooks"]
+    logger.info("Updating role data")
+    _update_role_cache(account_number, dynamo_table, config, hooks)
+    _repo_all_roles(
+        account_number, dynamo_table, config, hooks, commit=commit, scheduled=False
+    )
+
+
+@cli.command()
+@click.argument("account_number",)
+@click.pass_context
+def schedule_repo(ctx, account_number):
+    dynamo_table = ctx.obj["dynamo_table"]
+    config = ctx.obj["config"]
+    hooks = ctx.obj["hooks"]
+    logger.info("Updating role data")
+    _update_role_cache(account_number, dynamo_table, config, hooks)
+    _schedule_repo(account_number, dynamo_table, config, hooks)
+
+
+@cli.command()
+@click.argument("account_number",)
+@click.pass_context
+def show_scheduled_roles(ctx, account_number):
+    dynamo_table = ctx.obj["dynamo_table"]
+    _show_scheduled_roles(account_number, dynamo_table)
+
+
+@cli.command()
+@click.argument("account_number",)
+@click.option("--role", "-r", required=False, type=str)
+@click.option("--all", "-a", default=False, help="Commit changes")
+@click.pass_context
+def cancel_scheduled_repo(ctx, account_number, role, all):
+    dynamo_table = ctx.obj["dynamo_table"]
+    _cancel_scheduled_repo(account_number, dynamo_table, role_name=role, is_all=all)
+
+
+@cli.command()
+@click.argument("account_number",)
+@click.option("--commit", "-c", default=False, help="Commit changes")
+@click.pass_context
+def repo_scheduled_roles(ctx, account_number, commit):
+    dynamo_table = ctx.obj["dynamo_table"]
+    config = ctx.obj["config"]
+    hooks = ctx.obj["hooks"]
+    _update_role_cache(account_number, dynamo_table, config, hooks)
+    _repo_all_roles(
+        account_number, dynamo_table, config, hooks, commit=commit, scheduled=True
+    )
+
+
+@cli.command()
+@click.argument("account_number",)
+@click.option("--output", "-o", required=True, help="File to write results to")
+@click.pass_context
+def repo_stats(ctx, account_number, output):
+    dynamo_table = ctx.obj["dynamo_table"]
+    _repo_stats(output, dynamo_table, account_number=account_number)
 
 
 if __name__ == "__main__":
-    main()
+    cli()
