@@ -24,6 +24,5 @@ deploy:
     tags: true
 notifications:
   email:
-  - tmcpeak@netflix.com
   - ccastrapel@netflix.com
   - psanders@netflix.com

@@ -188,14 +188,14 @@ def cli(ctx):
 
 
 @cli.command()
-@click.argument("filename",)
+@click.argument("filename")
 @click.pass_context
 def config(ctx, filename):
     _generate_default_config(filename=filename)
 
 
 @cli.command()
-@click.argument("account_number",)
+@click.argument("account_number")
 @click.pass_context
 def update_role_cache(ctx, account_number):
     dynamo_table = ctx.obj["dynamo_table"]
@@ -205,7 +205,7 @@ def update_role_cache(ctx, account_number):
 
 
 @cli.command()
-@click.argument("account_number",)
+@click.argument("account_number")
 @click.option("--inactive", default=False, help="Include inactive roles")
 @click.pass_context
 def display_role_cache(ctx, account_number, inactive):
@@ -214,9 +214,7 @@ def display_role_cache(ctx, account_number, inactive):
 
 
 @cli.command()
-@click.argument(
-    "permissions", nargs=-1,
-)
+@click.argument("permissions", nargs=-1)
 @click.option("--output", "-o", required=False, help="File to write results to")
 @click.pass_context
 def find_roles_with_permissions(ctx, permissions, output):
@@ -225,9 +223,7 @@ def find_roles_with_permissions(ctx, permissions, output):
 
 
 @cli.command()
-@click.argument(
-    "permissions", nargs=-1,
-)
+@click.argument("permissions", nargs=-1)
 @click.option("--role-file", "-f", required=True, help="File to read roles from")
 @click.option("--commit", "-c", default=False, help="Commit changes")
 @click.pass_context
@@ -240,8 +236,8 @@ def remove_permissions_from_roles(ctx, permissions, role_file, commit):
 
 
 @cli.command()
-@click.argument("account_number",)
-@click.argument("role_name",)
+@click.argument("account_number")
+@click.argument("role_name")
 @click.pass_context
 def display_role(ctx, account_number, role_name):
     dynamo_table = ctx.obj["dynamo_table"]
@@ -251,8 +247,8 @@ def display_role(ctx, account_number, role_name):
 
 
 @cli.command()
-@click.argument("account_number",)
-@click.argument("role_name",)
+@click.argument("account_number")
+@click.argument("role_name")
 @click.option("--commit", "-c", default=False, help="Commit changes")
 @click.pass_context
 def repo_role(ctx, account_number, role_name, commit):
@@ -263,8 +259,8 @@ def repo_role(ctx, account_number, role_name, commit):
 
 
 @cli.command()
-@click.argument("account_number",)
-@click.argument("role_name",)
+@click.argument("account_number")
+@click.argument("role_name")
 @click.option("--selection", "-s", required=True, type=int)
 @click.option("--commit", "-c", default=False, help="Commit changes")
 @click.pass_context
@@ -284,7 +280,7 @@ def rollback_role(ctx, account_number, role_name, selection, commit):
 
 
 @cli.command()
-@click.argument("account_number",)
+@click.argument("account_number")
 @click.option("--commit", "-c", default=False, help="Commit changes")
 @click.pass_context
 def repo_all_roles(ctx, account_number, commit):
@@ -299,7 +295,7 @@ def repo_all_roles(ctx, account_number, commit):
 
 
 @cli.command()
-@click.argument("account_number",)
+@click.argument("account_number")
 @click.pass_context
 def schedule_repo(ctx, account_number):
     dynamo_table = ctx.obj["dynamo_table"]
@@ -311,7 +307,7 @@ def schedule_repo(ctx, account_number):
 
 
 @cli.command()
-@click.argument("account_number",)
+@click.argument("account_number")
 @click.pass_context
 def show_scheduled_roles(ctx, account_number):
     dynamo_table = ctx.obj["dynamo_table"]
@@ -319,7 +315,7 @@ def show_scheduled_roles(ctx, account_number):
 
 
 @cli.command()
-@click.argument("account_number",)
+@click.argument("account_number")
 @click.option("--role", "-r", required=False, type=str)
 @click.option("--all", "-a", default=False, help="Commit changes")
 @click.pass_context
@@ -329,7 +325,7 @@ def cancel_scheduled_repo(ctx, account_number, role, all):
 
 
 @cli.command()
-@click.argument("account_number",)
+@click.argument("account_number")
 @click.option("--commit", "-c", default=False, help="Commit changes")
 @click.pass_context
 def repo_scheduled_roles(ctx, account_number, commit):
@@ -343,7 +339,7 @@ def repo_scheduled_roles(ctx, account_number, commit):
 
 
 @cli.command()
-@click.argument("account_number",)
+@click.argument("account_number")
 @click.option("--output", "-o", required=True, help="File to write results to")
 @click.pass_context
 def repo_stats(ctx, account_number, output):
