@@ -1,3 +1,5 @@
+default_language_version:
+    python: python3
 repos:
 -   repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v1.4.0  # Use the ref you want to point at
@@ -23,7 +25,6 @@ repos:
     rev: stable
     hooks:
     - id: black
-      language_version: python3.7
 
 -   repo: local
     hooks:
