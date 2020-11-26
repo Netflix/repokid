@@ -16,17 +16,20 @@ import datetime
 import json
 import logging
 import pprint
-import time
+from typing import List
 
 import botocore
 from cloudaux.aws.iam import delete_role_policy
 from cloudaux.aws.iam import get_role_inline_policies
 from cloudaux.aws.iam import put_role_policy
+from mypy_boto3_dynamodb.service_resource import Table
 from tabulate import tabulate
 
 import repokid.hooks
 from repokid.role import Role
-from repokid.role import Roles
+from repokid.role import RoleList
+from repokid.types import RepokidConfig
+from repokid.types import RepokidHooks
 from repokid.utils import roledata as roledata
 from repokid.utils.dynamo import find_role_in_cache
 from repokid.utils.dynamo import get_role_data
@@ -44,14 +47,14 @@ LOGGER = logging.getLogger("repokid")
 
 
 def _repo_role(
-    account_number,
-    role_name,
-    dynamo_table,
-    config,
-    hooks,
-    commit=False,
-    scheduled=False,
-):
+    account_number: str,
+    role_name: str,
+    dynamo_table: Table,
+    config: RepokidConfig,
+    hooks: RepokidHooks,
+    commit: bool = False,
+    scheduled: bool = False,
+) -> List[str]:
     """
     Calculate what repoing can be done for a role and then actually do it if commit is set
       1) Check that a role exists, it isn't being disqualified by a filter, and that is has fresh AA data
@@ -65,7 +68,7 @@ def _repo_role(
     Returns:
         None
     """
-    errors = []
+    errors: List[str] = []
 
     role_id = find_role_in_cache(dynamo_table, account_number, role_name)
     # only load partial data that we need to determine if we should keep going
@@ -75,8 +78,8 @@ def _repo_role(
         fields=["DisqualifiedBy", "AAData", "RepoablePermissions", "RoleName"],
     )
     if not role_data:
-        LOGGER.warn("Could not find role with name {}".format(role_name))
-        return
+        LOGGER.warning("Could not find role with name {}".format(role_name))
+        return errors
     else:
         role = Role.parse_obj(role_data)
 
@@ -106,24 +109,25 @@ def _repo_role(
     role = Role.parse_obj(get_role_data(dynamo_table, role_id))
 
     old_aa_data_services = []
-    for aa_service in role.aa_data:
-        if datetime.datetime.strptime(
-            aa_service["lastUpdated"], "%a, %d %b %Y %H:%M:%S %Z"
-        ) < datetime.datetime.now() - datetime.timedelta(
-            days=config["repo_requirements"]["oldest_aa_data_days"]
-        ):
-            old_aa_data_services.append(aa_service["serviceName"])
+    if role.aa_data:
+        for aa_service in role.aa_data:
+            if datetime.datetime.strptime(
+                aa_service["lastUpdated"], "%a, %d %b %Y %H:%M:%S %Z"
+            ) < datetime.datetime.now() - datetime.timedelta(
+                days=config["repo_requirements"]["oldest_aa_data_days"]
+            ):
+                old_aa_data_services.append(aa_service["serviceName"])
 
-    if old_aa_data_services:
-        LOGGER.error(
-            "AAData older than threshold for these services: {} (role: {}, account {})".format(
-                old_aa_data_services, role_name, account_number
-            ),
-            exc_info=True,
-        )
-        continuing = False
+        if old_aa_data_services:
+            LOGGER.error(
+                "AAData older than threshold for these services: {} (role: {}, account {})".format(
+                    old_aa_data_services, role_name, account_number
+                ),
+                exc_info=True,
+            )
+            continuing = False
 
-    total_permissions, eligible_permissions = roledata.get_role_permissions(role)
+    total_permissions, eligible_permissions = roledata._get_role_permissions(role)
     repoable_permissions = roledata._get_repoable_permissions(
         account_number,
         role.role_name,
@@ -159,13 +163,13 @@ def _repo_role(
         set_role_data(
             dynamo_table, role.role_id, {"RepoScheduled": 0, "ScheduledPerms": []}
         )
-        return
+        return errors
 
     if not commit:
         log_deleted_and_repoed_policies(
             deleted_policy_names, repoed_policies, role_name, account_number
         )
-        return
+        return errors
 
     conn = config["connection_iam"]
     conn["account_number"] = account_number
@@ -219,7 +223,13 @@ def _repo_role(
 
 
 def _rollback_role(
-    account_number, role_name, dynamo_table, config, hooks, selection=None, commit=None
+    account_number: str,
+    role_name: str,
+    dynamo_table: Table,
+    config: RepokidConfig,
+    hooks: RepokidHooks,
+    selection: int = 0,
+    commit: bool = False,
 ):
     """
     Display the historical policy versions for a roll as a numbered list.  Restore to a specific version if selected.
@@ -252,7 +262,7 @@ def _rollback_role(
         headers = ["Number", "Source", "Discovered", "Permissions", "Services"]
         rows = []
         for index, policies_version in enumerate(role.policies):
-            policy_permissions, _ = roledata._get_permissions_in_policy(
+            policy_permissions, _ = roledata.get_permissions_in_policy(
                 policies_version["Policy"]
             )
             rows.append(
@@ -281,10 +291,10 @@ def _rollback_role(
         print("Current policies:")
         pp.pprint(current_policies)
 
-        current_permissions, _ = roledata._get_permissions_in_policy(
+        current_permissions, _ = roledata.get_permissions_in_policy(
             role.policies[-1]["Policy"]
         )
-        selected_permissions, _ = roledata._get_permissions_in_policy(
+        selected_permissions, _ = roledata.get_permissions_in_policy(
             role.policies[int(selection)]["Policy"]
         )
         restored_permissions = selected_permissions - current_permissions
@@ -366,7 +376,13 @@ def _rollback_role(
 
 
 def _repo_all_roles(
-    account_number, dynamo_table, config, hooks, commit=False, scheduled=True, limit=-1
+    account_number: str,
+    dynamo_table: Table,
+    config: RepokidConfig,
+    hooks: RepokidHooks,
+    commit: bool = False,
+    scheduled: bool = True,
+    limit: int = -1,
 ):
     """
     Repo all scheduled or eligible roles in an account.  Collect any errors and display them at the end.
@@ -385,7 +401,7 @@ def _repo_all_roles(
     errors = []
 
     role_ids_in_account = role_ids_for_account(dynamo_table, account_number)
-    roles = Roles([])
+    roles = RoleList([])
     for role_id in role_ids_in_account:
         roles.append(
             Role.parse_obj(
@@ -397,16 +413,10 @@ def _repo_all_roles(
             )
         )
 
-    roles = roles.filter(active=True)
-
-    cur_time = int(time.time())
+    roles = roles.get_active()
 
     if scheduled:
-        roles = [
-            role
-            for role in roles
-            if (role.repo_scheduled and cur_time > role.repo_scheduled)
-        ]
+        roles = roles.get_scheduled()
 
     LOGGER.info(
         "Repoing these {}roles from account {}:\n\t{}".format(
@@ -421,7 +431,7 @@ def _repo_all_roles(
     )
 
     count = 0
-    repoed = Roles([])
+    repoed = RoleList([])
     for role in roles:
         if limit >= 0 and count == limit:
             break
@@ -440,7 +450,7 @@ def _repo_all_roles(
         count += 1
 
     if errors:
-        LOGGER.error(f"Error(s) during repo: \n{errors} (account: {account_number})")
+        LOGGER.error(f"Error(s) during repo: {errors} (account: {account_number})")
     else:
         LOGGER.info(f"Successfully repoed {count} roles in account {account_number}")
 
@@ -451,7 +461,7 @@ def _repo_all_roles(
     )
 
 
-def _repo_stats(output_file, dynamo_table, account_number=None):
+def _repo_stats(output_file: str, dynamo_table: Table, account_number: str = ""):
     """
     Create a csv file with stats about roles, total permissions, and applicable filters over time
 

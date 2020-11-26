@@ -15,12 +15,15 @@ import logging
 import time
 from datetime import datetime as dt
 
+from mypy_boto3_dynamodb.service_resource import Table
 from tabulate import tabulate
 from tqdm import tqdm
 
 import repokid.hooks
 from repokid.role import Role
-from repokid.role import Roles
+from repokid.role import RoleList
+from repokid.types import RepokidConfig
+from repokid.types import RepokidHooks
 from repokid.utils.dynamo import find_role_in_cache
 from repokid.utils.dynamo import get_role_data
 from repokid.utils.dynamo import role_ids_for_account
@@ -29,14 +32,19 @@ from repokid.utils.dynamo import set_role_data
 LOGGER = logging.getLogger("repokid")
 
 
-def _schedule_repo(account_number, dynamo_table, config, hooks):
+def _schedule_repo(
+    account_number: str,
+    dynamo_table: Table,
+    config: RepokidConfig,
+    hooks: RepokidHooks,
+):
     """
     Schedule a repo for a given account.  Schedule repo for a time in the future (default 7 days) for any roles in
     the account with repoable permissions.
     """
     scheduled_roles = []
 
-    roles = Roles(
+    roles = RoleList(
         [
             Role.parse_obj(get_role_data(dynamo_table, roleID))
             for roleID in tqdm(role_ids_for_account(dynamo_table, account_number))
@@ -85,11 +93,11 @@ def _schedule_repo(account_number, dynamo_table, config, hooks):
     repokid.hooks.call_hooks(hooks, "AFTER_SCHEDULE_REPO", {"roles": scheduled_roles})
 
 
-def _show_scheduled_roles(account_number, dynamo_table):
+def _show_scheduled_roles(account_number: str, dynamo_table: Table):
     """
     Show scheduled repos for a given account.  For each scheduled show whether scheduled time is elapsed or not.
     """
-    roles = Roles(
+    roles = RoleList(
         [
             Role.parse_obj(get_role_data(dynamo_table, roleID))
             for roleID in tqdm(role_ids_for_account(dynamo_table, account_number))
@@ -98,7 +106,7 @@ def _show_scheduled_roles(account_number, dynamo_table):
 
     # filter to show only roles that are scheduled
     roles = roles.filter(active=True)
-    roles = [role for role in roles if (role.repo_scheduled)]
+    roles = roles.get_scheduled()
 
     header = ["Role name", "Scheduled", "Scheduled Time Elapsed?"]
     rows = []
@@ -117,7 +125,9 @@ def _show_scheduled_roles(account_number, dynamo_table):
     print(tabulate(rows, headers=header))
 
 
-def _cancel_scheduled_repo(account_number, dynamo_table, role_name=None, is_all=None):
+def _cancel_scheduled_repo(
+    account_number: str, dynamo_table: Table, role_name: str = "", is_all: bool = False
+):
     """
     Cancel scheduled repo for a role in an account
     """
@@ -126,7 +136,7 @@ def _cancel_scheduled_repo(account_number, dynamo_table, role_name=None, is_all=
         return
 
     if is_all:
-        roles = Roles(
+        roles = RoleList(
             [
                 Role.parse_obj(get_role_data(dynamo_table, roleID))
                 for roleID in role_ids_for_account(dynamo_table, account_number)
@@ -134,7 +144,7 @@ def _cancel_scheduled_repo(account_number, dynamo_table, role_name=None, is_all=
         )
 
         # filter to show only roles that are scheduled
-        roles = [role for role in roles if (role.repo_scheduled)]
+        roles = roles.get_scheduled()
 
         for role in roles:
             set_role_data(

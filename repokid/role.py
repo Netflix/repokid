@@ -14,50 +14,53 @@
 from __future__ import annotations
 
 import datetime
+import time
+from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Set
 
 from pydantic import BaseModel
 from pydantic import Field
 
 
 class Role(BaseModel):
-    aa_data: Optional[List] = Field(alias="AAData")
+    aa_data: Optional[List[Dict[str, Any]]] = Field(alias="AAData")
     account: Optional[str] = Field(alias="Account")
     active: Optional[bool] = Field(alias="Active")
-    arn: Optional[str] = Field(alias="Arn")
-    assume_role_policy_document: Dict = Field(
+    arn: str = Field(alias="Arn")
+    assume_role_policy_document: Dict[str, Any] = Field(
         alias="AssumeRolePolicyDocument", default={}
     )
     create_date: Optional[datetime.datetime] = Field(alias="CreateDate")
-    disqualified_by: List = Field(alias="DisqualifiedBy", default=[])
-    no_repo_permissions: Dict = Field(alias="NoRepoPermissions", default={})
-    opt_out: Dict = Field(alias="OptOut", default={})
-    policies: List = Field(alias="Policies", default=[])
+    disqualified_by: List[str] = Field(alias="DisqualifiedBy", default=[])
+    no_repo_permissions: Dict[str, Any] = Field(alias="NoRepoPermissions", default={})
+    opt_out: Dict[str, int] = Field(alias="OptOut", default={})
+    policies: List[Dict[str, Any]] = Field(alias="Policies", default=[])
     refreshed: Optional[str] = Field(alias="Refreshed")
     repoable_permissions: Optional[int] = Field(alias="RepoablePermissions")
-    repoable_services: List = Field(alias="RepoableServices", default=[])
+    repoable_services: List[str] = Field(alias="RepoableServices", default=[])
     repoed: Optional[str] = Field(alias="Repoed")
     repo_scheduled: Optional[int] = Field(alias="RepoScheduled")
-    role_id: Optional[str] = Field(alias="RoleId")
+    role_id: str = Field(alias="RoleId")
     role_name: Optional[str] = Field(alias="RoleName")
-    scheduled_perms: List = Field(alias="ScheduledPerms", default=[])
-    stats: List = Field(alias="Stats", default=[])
-    tags: List = Field(alias="Tags", default=[])
+    scheduled_perms: Set[str] = Field(alias="ScheduledPerms", default=[])
+    stats: List[Dict[str, Any]] = Field(alias="Stats", default=[])
+    tags: List[Dict[str, Any]] = Field(alias="Tags", default=[])
     total_permissions: Optional[int] = Field(alias="TotalPermissions")
 
-    def __eq__(self, other: str) -> bool:
+    def __eq__(self, other: object) -> bool:
         return self.role_id == other
 
     def __hash__(self) -> int:
         return hash(self.role_id)
 
     def __repr__(self) -> str:
-        return self.role_id
+        return f"<Role {self.role_id}>"
 
 
-class Roles(object):
+class RoleList(object):
     def __init__(self, role_object_list: List[Role]):
         self.roles: List[Role] = role_object_list
 
@@ -70,25 +73,52 @@ class Roles(object):
     def __repr__(self) -> str:
         return str([role.role_id for role in self.roles])
 
-    def __eq__(self, other: Roles) -> bool:
-        return all(role.role_id in other for role in self.roles) and all(
-            role.role_id in self.roles for role in other
-        )
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, RoleList):
+            return False
 
-    def append(self, role: Role):
+        return repr(self) == repr(other)
+
+    def __iter__(self) -> RoleList:
+        self._iter_index = 0
+        self._len = len(self)
+        return self
+
+    def __next__(self) -> Role:
+        if self._iter_index < self._len:
+            result = self[self._iter_index]
+            self._iter_index += 1
+            return result
+        else:
+            raise StopIteration
+
+    def append(self, role: Role) -> None:
         self.roles.append(role)
 
     def role_id_list(self) -> List[str]:
         return [role.role_id for role in self.roles]
 
-    def get_by_id(self, id) -> Optional[Role]:
+    def get_active(self) -> RoleList:
+        return self.filter(active=True)
+
+    def get_by_id(self, id: str) -> Optional[Role]:
         try:
             return self.filter(role_id=id)[0]
         except IndexError:
             return None
 
-    def filter(self, **kwargs) -> List[Role]:
+    def get_scheduled(self) -> RoleList:
+        cur_time = int(time.time())
+        return RoleList(
+            [
+                role
+                for role in self.roles
+                if (role.repo_scheduled and cur_time > role.repo_scheduled)
+            ]
+        )
+
+    def filter(self, **kwargs: Any) -> RoleList:
         roles = self.roles
         for arg, value in kwargs.items():
             roles = [role for role in roles if getattr(role, arg, None) == value]
-        return roles
+        return RoleList(roles)

@@ -13,45 +13,19 @@
 #     limitations under the License.
 import json
 import logging
-import traceback
-from datetime import datetime
-from socket import gethostname
+from typing import Any
+from typing import Dict
+from typing import List
 
 LOGGER = logging.getLogger("repokid")
 
 
-class JSONFormatter(logging.Formatter):
-    """Custom formatter to output log records as JSON."""
-
-    hostname = gethostname()
-
-    def format(self, record):
-        """Format the given record into JSON."""
-        message = {
-            "time": datetime.utcfromtimestamp(record.created).isoformat(),
-            "level": record.levelname,
-            "name": record.name,
-            "message": record.getMessage(),
-            "process": record.process,
-            "thread": record.threadName,
-            "hostname": self.hostname,
-            "filename": record.filename,
-            "function": record.funcName,
-            "lineNo": record.lineno,
-        }
-
-        if record.exc_info:
-            message[
-                "exception"
-            ] = f"{record.exc_info[0].__name__}: {record.exc_info[1]}"
-            message["traceback"] = traceback.format_exc()
-
-        return json.dumps(message, ensure_ascii=False)
-
-
 def log_deleted_and_repoed_policies(
-    deleted_policy_names, repoed_policies, role_name, account_number
-):
+    deleted_policy_names: List[str],
+    repoed_policies: List[Dict[str, Any]],
+    role_name: str,
+    account_number: str,
+) -> None:
     """Logs data on policies that would otherwise be modified or deleted if the commit flag were set.
 
     Args:

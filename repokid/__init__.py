@@ -17,13 +17,17 @@ import json
 import logging
 import logging.config
 import os
+from typing import List
 
 import import_string
+
+from repokid.types import RepokidConfig
+from repokid.types import RepokidHooks
 
 __version__ = "0.15.0"
 
 
-def init_config():
+def init_config() -> RepokidConfig:
     """
     Try to find config by searching for it in a few paths, load it, and store it in the global CONFIG
 
@@ -39,11 +43,13 @@ def init_config():
         "/etc/repokid/config.json",
         "/apps/repokid/config.json",
     ]
+    config: RepokidConfig
     for path in load_config_paths:
         try:
             with open(path, "r") as f:
                 print("Loaded config from {}".format(path))
-                return json.load(f)
+                config = json.load(f)
+                return config
 
         except IOError:
             print("Unable to load config from {}, trying next location".format(path))
@@ -51,7 +57,7 @@ def init_config():
     print("Config not found in any path, using defaults")
 
 
-def init_logging():
+def init_logging() -> logging.Logger:
     """
     Initialize global LOGGER object with config defined in the global CONFIG object
 
@@ -80,7 +86,7 @@ def init_logging():
     return log
 
 
-def get_hooks(hooks_list):
+def get_hooks(hooks_list: List[str]) -> RepokidHooks:
     """
     Output should be a dictionary with keys as the names of hooks and values as a list of functions (in order) to call
 
@@ -109,11 +115,12 @@ def get_hooks(hooks_list):
     for k in hooks.keys():
         hooks[k] = sorted(hooks[k], key=lambda priority: priority[0])
     # get rid of the priority - we don't need it anymore
+    final_hooks: RepokidHooks = RepokidHooks()
     for k in hooks.keys():
-        hooks[k] = [func_tuple[1] for func_tuple in hooks[k]]
+        final_hooks[k] = [func_tuple[1] for func_tuple in hooks[k]]
 
-    return hooks
+    return final_hooks
 
 
-CONFIG = init_config()
-LOGGER = init_logging()
+CONFIG: RepokidConfig = init_config()
+LOGGER: logging.Logger = init_logging()

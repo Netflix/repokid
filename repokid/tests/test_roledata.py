@@ -55,7 +55,7 @@ class TestRoledata(object):
         (
             total_permissions,
             eligible_permissions,
-        ) = repokid.utils.roledata.get_role_permissions(test_role)
+        ) = repokid.utils.roledata._get_role_permissions(test_role)
         assert total_permissions == set(ROLE_POLICIES["unused_ec2"]["ec2_perms"])
         assert eligible_permissions == set(ROLE_POLICIES["unused_ec2"]["ec2_perms"])
 
@@ -262,7 +262,7 @@ class TestRoledata(object):
             )
         )
 
-    @patch("repokid.utils.roledata.get_role_permissions")
+    @patch("repokid.utils.roledata._get_role_permissions")
     @patch("repokid.utils.roledata._get_repoable_permissions")
     @patch("repokid.hooks.call_hooks")
     def test_calculate_repo_scores(
@@ -326,7 +326,7 @@ class TestRoledata(object):
         assert roles[2].repoable_permissions == 0
         assert roles[2].repoable_services == []
 
-    @patch("repokid.utils.roledata.get_role_permissions")
+    @patch("repokid.utils.roledata._get_role_permissions")
     @patch("repokid.utils.roledata._get_repoable_permissions_batch")
     @patch("repokid.hooks.call_hooks")
     def test_calculate_repo_scores_batch(
@@ -620,7 +620,7 @@ class TestRoledata(object):
             "norepo_sid": TestPolicy(sid=sid, actions=["sns:createtopic"]).to_dict(),
         }
 
-        total, eligible = repokid.utils.roledata._get_permissions_in_policy(policies)
+        total, eligible = repokid.utils.roledata.get_permissions_in_policy(policies)
 
         # eligible is a subset of total
         assert eligible < total

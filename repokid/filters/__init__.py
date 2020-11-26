@@ -1,6 +1,12 @@
+from __future__ import annotations
+
 import logging
+from typing import List
 
 import import_string
+
+from repokid.role import RoleList
+from repokid.types import RepokidFilterConfig
 
 LOGGER = logging.getLogger("repokid")
 
@@ -12,11 +18,11 @@ class FilterPlugins(object):
     of active plugins that can be iterated.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize empty list"""
-        self.filter_plugins = []
+        self.filter_plugins: List[Filter] = []
 
-    def load_plugin(self, module, config=None):
+    def load_plugin(self, module: str, config: RepokidFilterConfig = None) -> None:
         """Import a module by path, instantiate it with plugin specific config and add to the list of active plugins"""
         cls = None
         try:
@@ -24,7 +30,6 @@ class FilterPlugins(object):
         except ImportError as e:
             LOGGER.warn("Unable to find plugin {}, exception: {}".format(module, e))
         else:
-            plugin = None
             try:
                 plugin = cls(config=config)
             except KeyError:
@@ -36,8 +41,8 @@ class FilterPlugins(object):
 class Filter(object):
     """Base class for filter plugins to inherit.  Passes config if supplied and requires the apply method be defined"""
 
-    def __init__(self, config=None):
+    def __init__(self, config: RepokidFilterConfig = None) -> None:
         self.config = config
 
-    def apply(self, input_list):
+    def apply(self, input_list: RoleList) -> RoleList:
         raise NotImplementedError

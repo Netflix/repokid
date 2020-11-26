@@ -2,17 +2,22 @@ import copy
 import datetime
 import logging
 from functools import wraps
+from typing import Callable
+from typing import Dict
+from typing import Optional
 
 import boto3
 from botocore.exceptions import ClientError as BotoClientError
 from cloudaux.aws.sts import boto3_cached_conn as boto3_cached_conn
+from mypy_boto3_dynamodb.service_resource import Table
+from mypy_boto3_dynamodb.type_defs import GlobalSecondaryIndexTypeDef
 
 LOGGER = logging.getLogger("repokid")
 # used as a placeholder for empty SID to work around this: https://github.com/aws/aws-sdk-js/issues/833
 DYNAMO_EMPTY_STRING = "---DYNAMO-EMPTY-STRING---"
 
 
-def catch_boto_error(func):
+def catch_boto_error(func: Callable):
     @wraps(func)
     def decorated_func(*args, **kwargs):
         try:
@@ -25,7 +30,12 @@ def catch_boto_error(func):
 
 @catch_boto_error
 def add_to_end_of_list(
-    dynamo_table, role_id, field_name, object_to_add, max_retries=5, _retries=0
+    dynamo_table: Table,
+    role_id: str,
+    field_name: str,
+    object_to_add: Dict,
+    max_retries=5,
+    _retries=0,
 ):
     """Append object to DynamoDB list, removing the first element if item exceeds max size."""
     try:
@@ -68,52 +78,56 @@ def add_to_end_of_list(
             raise
 
 
-def dynamo_get_or_create_table(**dynamo_config):
+def dynamo_get_or_create_table(
+    account_number: str,
+    assume_role: Optional[str],
+    session_name: str,
+    region: str,
+    endpoint: str,
+) -> Table:
     """
     Create a new table or get a reference to an existing Dynamo table named 'repokid_roles' that will store data all
     data for Repokid.  Return a table with a reference to the dynamo resource
 
     Args:
-        dynamo_config (kwargs):
-            account_number (string)
-            assume_role (string) optional
-            session_name (string)
-            region (string)
-            endpoint (string)
+        account_number (string)
+        assume_role (string) optional
+        session_name (string)
+        region (string)
+        endpoint (string)
 
     Returns:
         dynamo_table object
     """
-    if "localhost" in dynamo_config["endpoint"]:
+    if "localhost" in endpoint:
         resource = boto3.resource(
-            "dynamodb", region_name="us-east-1", endpoint_url=dynamo_config["endpoint"]
+            "dynamodb", region_name="us-east-1", endpoint_url=endpoint
         )
     else:
         resource = boto3_cached_conn(
             "dynamodb",
             service_type="resource",
-            account_number=dynamo_config["account_number"],
-            assume_role=dynamo_config.get("assume_role", None),
-            session_name=dynamo_config["session_name"],
-            region=dynamo_config["region"],
+            account_number=account_number,
+            assume_role=assume_role or None,
+            session_name=session_name,
+            region=region,
         )
 
     for table in resource.tables.all():
         if table.name == "repokid_roles":
             return table
 
-    table = None
-    try:
-        table = resource.create_table(
-            TableName="repokid_roles",
-            KeySchema=[{"AttributeName": "RoleId", "KeyType": "HASH"}],  # Partition key
-            AttributeDefinitions=[
-                {"AttributeName": "RoleId", "AttributeType": "S"},
-                {"AttributeName": "RoleName", "AttributeType": "S"},
-                {"AttributeName": "Account", "AttributeType": "S"},
-            ],
-            ProvisionedThroughput={"ReadCapacityUnits": 50, "WriteCapacityUnits": 50},
-            GlobalSecondaryIndexes=[
+    table = resource.create_table(
+        TableName="repokid_roles",
+        KeySchema=[{"AttributeName": "RoleId", "KeyType": "HASH"}],  # Partition key
+        AttributeDefinitions=[
+            {"AttributeName": "RoleId", "AttributeType": "S"},
+            {"AttributeName": "RoleName", "AttributeType": "S"},
+            {"AttributeName": "Account", "AttributeType": "S"},
+        ],
+        ProvisionedThroughput={"ReadCapacityUnits": 50, "WriteCapacityUnits": 50},
+        GlobalSecondaryIndexes=[
+            GlobalSecondaryIndexTypeDef(
                 {
                     "IndexName": "Account",
                     "KeySchema": [{"AttributeName": "Account", "KeyType": "HASH"}],
@@ -122,7 +136,9 @@ def dynamo_get_or_create_table(**dynamo_config):
                         "ReadCapacityUnits": 10,
                         "WriteCapacityUnits": 10,
                     },
-                },
+                }
+            ),
+            GlobalSecondaryIndexTypeDef(
                 {
                     "IndexName": "RoleName",
                     "KeySchema": [{"AttributeName": "RoleName", "KeyType": "HASH"}],
@@ -131,12 +147,11 @@ def dynamo_get_or_create_table(**dynamo_config):
                         "ReadCapacityUnits": 10,
                         "WriteCapacityUnits": 10,
                     },
-                },
-            ],
-        )
+                }
+            ),
+        ],
+    )
 
-    except BotoClientError as e:
-        LOGGER.error(e, exc_info=True)
     return table
 
 

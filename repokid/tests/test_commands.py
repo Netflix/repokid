@@ -30,7 +30,8 @@ import repokid.utils.iam
 import repokid.utils.logging
 import repokid.utils.roledata
 from repokid.role import Role
-from repokid.role import Roles
+from repokid.role import RoleList
+from repokid.types import RepokidHooks
 
 AARDVARK_DATA = {
     "arn:aws:iam::123456789012:role/all_services_used": [
@@ -306,7 +307,7 @@ class TestRepokidCLI(object):
             account_number, dynamo_table, config, hooks
         )
 
-        roles = Roles(
+        roles = RoleList(
             [
                 Role.parse_obj(ROLES[0]),
                 Role.parse_obj(ROLES[1]),
@@ -450,7 +451,7 @@ class TestRepokidCLI(object):
         mock_get_role_data,
         mock_call_hooks,
     ):
-        hooks = {}
+        hooks = RepokidHooks
         mock_role_ids_for_account.return_value = [
             "AROAABCDEFGHIJKLMNOPA",
             "AROAABCDEFGHIJKLMNOPB",
@@ -458,7 +459,7 @@ class TestRepokidCLI(object):
         # first role is not repoable, second role is repoable
         ROLES_FOR_DISPLAY[0].update({"RoleId": "AROAABCDEFGHIJKLMNOPA"})
         ROLES_FOR_DISPLAY[1].update({"RoleId": "AROAABCDEFGHIJKLMNOPB"})
-        ROLES_FOR_DISPLAY[1].update({"AAData": ["foo"]})
+        ROLES_FOR_DISPLAY[1].update({"AAData": [{"foo": "bar"}]})
 
         mock_get_role_data.side_effect = [ROLES_FOR_DISPLAY[0], ROLES_FOR_DISPLAY[1]]
         mock_time.return_value = 1
@@ -495,7 +496,7 @@ class TestRepokidCLI(object):
         mock_get_role_data,
         mock_call_hooks,
     ):
-        hooks = {}
+        hooks = RepokidHooks()
         mock_role_ids_for_account.return_value = [
             "AROAABCDEFGHIJKLMNOPA",
             "AROAABCDEFGHIJKLMNOPB",
@@ -503,18 +504,21 @@ class TestRepokidCLI(object):
         ]
         roles = [
             {
+                "Arn": "arn:aws:iam::123456789012:role/ROLE_A",
                 "RoleId": "AROAABCDEFGHIJKLMNOPA",
                 "Active": True,
                 "RoleName": "ROLE_A",
                 "RepoScheduled": 100,
             },
             {
+                "Arn": "arn:aws:iam::123456789012:role/ROLE_B",
                 "RoleId": "AROAABCDEFGHIJKLMNOPB",
                 "Active": True,
                 "RoleName": "ROLE_B",
                 "RepoScheduled": 0,
             },
             {
+                "Arn": "arn:aws:iam::123456789012:role/ROLE_C",
                 "RoleId": "AROAABCDEFGHIJKLMNOPC",
                 "Active": True,
                 "RoleName": "ROLE_C",
@@ -537,43 +541,43 @@ class TestRepokidCLI(object):
         mock_repo_role.return_value = None
 
         # repo all roles in the account, should call repo with all roles
-        repokid.commands.repo._repo_all_roles(None, None, None, hooks, scheduled=False)
+        repokid.commands.repo._repo_all_roles("", None, {}, hooks, scheduled=False)
         # repo only scheduled, should only call repo role with role C
-        repokid.commands.repo._repo_all_roles(None, None, None, hooks, scheduled=True)
+        repokid.commands.repo._repo_all_roles("", None, {}, hooks, scheduled=True)
 
         assert mock_repo_role.mock_calls == [
-            call(None, "ROLE_A", None, None, hooks, commit=False, scheduled=False),
-            call(None, "ROLE_B", None, None, hooks, commit=False, scheduled=False),
-            call(None, "ROLE_C", None, None, hooks, commit=False, scheduled=False),
-            call(None, "ROLE_C", None, None, hooks, commit=False, scheduled=True),
+            call("", "ROLE_A", None, {}, hooks, commit=False, scheduled=False),
+            call("", "ROLE_B", None, {}, hooks, commit=False, scheduled=False),
+            call("", "ROLE_C", None, {}, hooks, commit=False, scheduled=False),
+            call("", "ROLE_C", None, {}, hooks, commit=False, scheduled=True),
         ]
 
-        roles_items = [
-            Role.parse_obj(roles[0]),
-            Role.parse_obj(roles[1]),
-            Role.parse_obj(roles[2]),
-        ]
+        roles_items = RoleList([Role.parse_obj(r) for r in roles])
 
         assert mock_call_hooks.mock_calls == [
             call(
                 hooks,
                 "BEFORE_REPO_ROLES",
-                {"account_number": None, "roles": roles_items},
+                {"account_number": "", "roles": roles_items},
             ),
             call(
                 hooks,
                 "AFTER_REPO_ROLES",
-                {"account_number": None, "roles": roles_items, "errors": []},
+                {"account_number": "", "roles": roles_items, "errors": []},
             ),
             call(
                 hooks,
                 "BEFORE_REPO_ROLES",
-                {"account_number": None, "roles": [roles_items[2]]},
+                {"account_number": "", "roles": RoleList([roles_items[2]])},
             ),
             call(
                 hooks,
                 "AFTER_REPO_ROLES",
-                {"account_number": None, "roles": [roles_items[2]], "errors": []},
+                {
+                    "account_number": "",
+                    "roles": RoleList([roles_items[2]]),
+                    "errors": [],
+                },
             ),
         ]
 
@@ -595,18 +599,21 @@ class TestRepokidCLI(object):
         ]
         roles = [
             {
+                "Arn": "arn:aws:iam::123456789012:role/ROLE_A",
                 "RoleId": "AROAABCDEFGHIJKLMNOPA",
                 "Active": True,
                 "RoleName": "ROLE_A",
                 "RepoScheduled": 100,
             },
             {
+                "Arn": "arn:aws:iam::123456789012:role/ROLE_B",
                 "RoleId": "AROAABCDEFGHIJKLMNOPB",
                 "Active": True,
                 "RoleName": "ROLE_B",
                 "RepoScheduled": 0,
             },
             {
+                "Arn": "arn:aws:iam::123456789012:role/ROLE_C",
                 "RoleId": "AROAABCDEFGHIJKLMNOPC",
                 "Active": True,
                 "RoleName": "ROLE_C",

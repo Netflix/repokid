@@ -11,9 +11,11 @@ from repokid import get_hooks
 ResponderReturn = namedtuple("ResponderReturn", "successful, return_message")
 
 if CONFIG:
-    hooks = get_hooks(CONFIG.get("hooks", ["repokid.hooks.loggers"]))
+    hooks_list = CONFIG.get("hooks", ["repokid.hooks.loggers"])
 else:
-    hooks = ["repokid.hooks.loggers"]
+    hooks_list = ["repokid.hooks.loggers"]
+
+hooks = get_hooks(hooks_list)
 
 
 def implements_command(command):
@@ -83,7 +85,7 @@ def list_role_rollbacks(dynamo_table, message):
             message.role_name, message.account
         )
         for index, policy_version in enumerate(role_data["Policies"]):
-            total_permissions, _ = roledata._get_permissions_in_policy(
+            total_permissions, _ = roledata.get_permissions_in_policy(
                 policy_version["Policy"]
             )
             return_val += "({:>3}):  {:<5}     {:<15}  {}\n".format(

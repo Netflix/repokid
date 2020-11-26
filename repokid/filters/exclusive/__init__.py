@@ -1,14 +1,23 @@
 import fnmatch
 import logging
+from typing import cast
 
 from repokid.filters import Filter
+from repokid.role import RoleList
+from repokid.types import RepokidFilterConfig
 
 LOGGER = logging.getLogger("repokid")
 
 
 class ExclusiveFilter(Filter):
-    def __init__(self, config=None):
-        current_account = config.get("current_account") or None
+    def __init__(self, config: RepokidFilterConfig = None):
+        super().__init__(config=config)
+        if not config:
+            LOGGER.error(
+                "No configuration provided, cannot initialize Exclusive Filter"
+            )
+        config = cast(RepokidFilterConfig, config)
+        current_account = config.get("current_account", "")
         if not current_account:
             LOGGER.error("Unable to get current account for Exclusive Filter")
 
@@ -22,9 +31,8 @@ class ExclusiveFilter(Filter):
 
         self.exclusive_role_globs = exclusive_role_globs
 
-    def apply(self, input_list):
+    def apply(self, input_list: RoleList) -> RoleList:
         exclusive_roles = []
-        filtered_roles = []
 
         for role_glob in self.exclusive_role_globs:
             exclusive_roles += [
@@ -33,4 +41,4 @@ class ExclusiveFilter(Filter):
                 if fnmatch.fnmatch(role.role_name.lower(), role_glob)
             ]
         filtered_roles = list(set(input_list) - set(exclusive_roles))
-        return filtered_roles
+        return RoleList(filtered_roles)

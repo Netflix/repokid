@@ -1,16 +1,20 @@
 import json
 import logging
+from typing import Any
+from typing import Dict
 
 import botocore
 from cloudaux.aws.sts import boto3_cached_conn
 
 from repokid.exceptions import BlocklistError
 from repokid.filters import Filter
+from repokid.role import RoleList
+from repokid.types import RepokidFilterConfig
 
 LOGGER = logging.getLogger("repokid")
 
 
-def get_blocklist_from_bucket(bucket_config):
+def get_blocklist_from_bucket(bucket_config: Dict[str, Any]):
     try:
         s3_resource = boto3_cached_conn(
             "s3",
@@ -46,8 +50,8 @@ def get_blocklist_from_bucket(bucket_config):
 class BlocklistFilter(Filter):
     blocklist_json = None
 
-    def __init__(self, config=None):
-        super().__init__(config)
+    def __init__(self, config: RepokidFilterConfig = None) -> None:
+        super().__init__(config=config)
         current_account = config.get("current_account") or None
         if not current_account:
             LOGGER.error("Unable to get current account for Blocklist Filter")
@@ -79,7 +83,7 @@ class BlocklistFilter(Filter):
         self.blocklisted_role_names = blocklisted_role_names
 
     @classmethod
-    def init_blocklist(cls, config):
+    def init_blocklist(cls, config: RepokidFilterConfig) -> None:
         if not cls.blocklist_json:
             bucket_config = config.get(
                 "blocklist_bucket", config.get("blacklist_bucket", None)
@@ -87,8 +91,8 @@ class BlocklistFilter(Filter):
             if bucket_config:
                 cls.blocklist_json = get_blocklist_from_bucket(bucket_config)
 
-    def apply(self, input_list):
-        blocklisted_roles = []
+    def apply(self, input_list: RoleList) -> RoleList:
+        blocklisted_roles = RoleList([])
 
         for role in input_list:
             if (
