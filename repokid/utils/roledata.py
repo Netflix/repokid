@@ -20,6 +20,7 @@ from typing import Any
 from typing import Dict
 from typing import Iterable
 from typing import List
+from typing import Optional
 from typing import Set
 from typing import Tuple
 
@@ -54,8 +55,8 @@ STATEMENT_SKIP_SID = "NOREPO"
 # permission decisions have the form repoable - boolean, and decider - string
 class RepoablePermissionDecision(object):
     def __init__(self) -> None:
-        self.repoable = None
-        self.decider = ""
+        self.repoable: Optional[bool] = None
+        self.decider: str = ""
 
     def __repr__(self) -> str:
         return "Is repoable: {}, Decider: {}".format(self.repoable, self.decider)
@@ -107,13 +108,13 @@ def find_and_mark_inactive(
         None
     """
 
-    active_roles = set(active_roles)
+    active_roles_set = set(active_roles)
     known_roles = set(role_ids_for_account(dynamo_table, account_number))
-    inactive_roles = known_roles - active_roles
+    inactive_roles = known_roles - active_roles_set
 
     for roleID in inactive_roles:
         role_dict = get_role_data(dynamo_table, roleID, fields=["Active", "Arn"])
-        if role_dict.get("Active"):
+        if role_dict.active:
             set_role_data(dynamo_table, roleID, {"Active": False})
 
 
@@ -133,7 +134,7 @@ def find_newly_added_permissions(
     """
     old_permissions, _ = get_permissions_in_policy(old_policy)
     new_permissions, _ = get_permissions_in_policy(new_policy)
-    return new_permissions - old_permissions
+    return set(new_permissions) - set(old_permissions)
 
 
 def update_no_repo_permissions(
@@ -248,7 +249,7 @@ def update_role_data(
         return role
     else:
         # is the policy list the same as the last we had?
-        old_policy = stored_role["Policies"][-1]["Policy"]
+        old_policy = stored_role.policies[-1]["Policy"]
         if current_policy != old_policy:
             add_new_policy_version(dynamo_table, role, current_policy, source)
             LOGGER.info(
@@ -324,7 +325,7 @@ def update_stats(dynamo_table: Table, roles: RoleList, source: str = "Scan") -> 
 
 
 def _update_repoable_services(
-    role: Role, repoable_permissions: List[str], eligible_permissions: List[str]
+    role: Role, repoable_permissions: Set[str], eligible_permissions: Set[str]
 ) -> None:
     (
         repoable_permissions_set,
@@ -334,7 +335,7 @@ def _update_repoable_services(
     )
 
     # we're going to store both repoable permissions and repoable services in the field "RepoableServices"
-    role.repoable_services = repoable_services_set + repoable_permissions_set
+    role.repoable_services = list(repoable_services_set.union(repoable_permissions_set))
     role.repoable_permissions = len(repoable_permissions)
     # TODO(psanders): return new role instead of mutating
 
@@ -363,7 +364,7 @@ def _calculate_repo_scores(
     Returns:
         None
     """
-    repo_able_roles = []
+    repo_able_roles = RoleList([])
     eligible_permissions_dict = {}
     for role in roles:
         total_permissions, eligible_permissions = _get_role_permissions(role)
@@ -395,7 +396,7 @@ def _calculate_repo_scores(
                 role.account,
                 role.role_name,
                 eligible_permissions_dict[role.arn],
-                role.aa_data,
+                role.aa_data or [],
                 role.no_repo_permissions,
                 role.role_id,
                 minimum_age,
@@ -409,23 +410,23 @@ def _calculate_repo_scores(
 
 
 def _convert_repoable_perms_to_perms_and_services(
-    total_permissions: List[str], repoable_permissions: List[str]
-) -> Tuple[List[str], List[str]]:
+    total_permissions: Set[str], repoable_permissions: Set[str]
+) -> Tuple[Set[str], Set[str]]:
     """
     Take a list of total permissions and repoable permissions and determine whether only a few permissions are being
     repoed or if the entire service (all permissions from that service) are being removed.
 
     Args:
-        total_permissions (list): A list of the total permissions a role has
-        repoable_permissions (list): A list of repoable permissions suggested to be removed
+        total_permissions (set): A list of the total permissions a role has
+        repoable_permissions (set): A list of repoable permissions suggested to be removed
 
     Returns:
-        list: Sorted list of permissions that will be individually removed but other permissions from the service will
+        set: Set of permissions that will be individually removed but other permissions from the service will
               be kept
-        list: Sorted list of services that will be completely removed
+        set: Set of services that will be completely removed
     """
-    repoed_permissions = set()
-    repoed_services = set()
+    repoed_permissions: Set[str] = set()
+    repoed_services: Set[str] = set()
 
     total_perms_by_service = defaultdict(list)
     repoable_perms_by_service = defaultdict(list)
@@ -448,7 +449,7 @@ def _convert_repoable_perms_to_perms_and_services(
                 perm for perm in repoable_perms_by_service[service]
             )
 
-    return sorted(repoed_permissions), sorted(repoed_services)
+    return repoed_permissions, repoed_services
 
 
 def _convert_repoed_service_to_sorted_perms_and_services(
@@ -495,11 +496,12 @@ def _filter_scheduled_repoable_perms(
         scheduled_permissions,
         scheduled_services,
     ) = _convert_repoed_service_to_sorted_perms_and_services(scheduled_perms)
-    return [
+    filtered = [
         perm
         for perm in repoable_permissions
         if (perm in scheduled_permissions or perm.split(":")[0] in scheduled_services)
     ]
+    return sorted(filtered)
 
 
 def _get_epoch_authenticated(service_authenticated: int) -> Tuple[int, bool]:
@@ -532,7 +534,7 @@ def _get_potentially_repoable_permissions(
     role_name: str,
     account_number: str,
     aa_data: List[Dict[str, Any]],
-    permissions: List[str],
+    permissions: Set[str],
     no_repo_permissions: Dict[str, int],
     minimum_age: int,
 ) -> Dict[str, Any]:
@@ -547,7 +549,7 @@ def _get_potentially_repoable_permissions(
     ]
 
     # cast all permissions to lowercase
-    permissions = [permission.lower() for permission in permissions]
+    permissions = {permission.lower() for permission in permissions}
     potentially_repoable_permissions = {
         permission: RepoablePermissionDecision()
         for permission in permissions
@@ -575,13 +577,14 @@ def _get_potentially_repoable_permissions(
             )
             used_services.add(service["serviceNamespace"])
 
-        accessed = datetime.datetime.fromtimestamp(accessed, tzlocal())
-        if accessed > now - ago:
+        accessed_dt = datetime.datetime.fromtimestamp(accessed, tzlocal())
+        if accessed_dt > now - ago:
             used_services.add(service["serviceNamespace"])
 
-    for permission_name, permission_decision in list(
-        potentially_repoable_permissions.items()
-    ):
+    for (
+        permission_name,
+        permission_decision,
+    ) in potentially_repoable_permissions.items():
         if permission_name.split(":")[0] in IAM_ACCESS_ADVISOR_UNSUPPORTED_SERVICES:
             LOGGER.info("skipping {}".format(permission_name))
             continue
@@ -601,7 +604,7 @@ def _get_potentially_repoable_permissions(
 def _get_repoable_permissions(
     account_number: str,
     role_name: str,
-    permissions: List[str],
+    permissions: Set[str],
     aa_data: List[Dict[str, Any]],
     no_repo_permissions: Dict[str, Any],
     role_id: str,
@@ -665,15 +668,13 @@ def _get_repoable_permissions(
         )
     )
 
-    return set(
-        [
-            permission_name
-            for permission_name, permission_value in list(
-                hooks_output["potentially_repoable_permissions"].items()
-            )
-            if permission_value.repoable
-        ]
-    )
+    return {
+        permission_name
+        for permission_name, permission_value in list(
+            hooks_output["potentially_repoable_permissions"].items()
+        )
+        if permission_value.repoable
+    }
 
 
 def _get_repoable_permissions_batch(
@@ -707,7 +708,7 @@ def _get_repoable_permissions_batch(
 
     repo_able_roles_batches = copy.deepcopy(repo_able_roles)
     potentially_repoable_permissions_dict = {}
-    repoable_set_dict = {}
+    repoable_dict = {}
     repoable_log_dict = {}
 
     for role in repo_able_roles:
@@ -716,7 +717,7 @@ def _get_repoable_permissions_batch(
         ] = _get_potentially_repoable_permissions(
             role.role_name,
             role.account,
-            role.aa_data,
+            role.aa_data or [],
             permissions_dict[role.arn],
             role.no_repo_permissions,
             minimum_age,
@@ -736,16 +737,14 @@ def _get_repoable_permissions_batch(
             },
         )
         for role_arn, output in list(hooks_output.items()):
-            repoable_set = set(
-                [
-                    permission_name
-                    for permission_name, permission_value in list(
-                        output["potentially_repoable_permissions"].items()
-                    )
-                    if permission_value.repoable
-                ]
-            )
-            repoable_set_dict[role_arn] = repoable_set
+            repoable = {
+                permission_name
+                for permission_name, permission_value in list(
+                    output["potentially_repoable_permissions"].items()
+                )
+                if permission_value.repoable
+            }
+            repoable_dict[role_arn] = repoable
             repoable_log_dict[role_arn] = "".join(
                 "{}: {}\n".format(perm, decision.decider)
                 for perm, decision in list(
@@ -761,7 +760,7 @@ def _get_repoable_permissions_batch(
                 repoable=repoable_log_dict[role.arn],
             )
         )
-    return repoable_set_dict
+    return repoable_dict
 
 
 def _get_repoed_policy(

@@ -49,15 +49,19 @@ class TestRoledata(object):
         mock_all_permissions.return_value = all_permissions
         mock_get_actions_from_statement.return_value = ROLE_POLICIES["unused_ec2"][
             "ec2_perms"
-        ]
+        ]["Statement"][0]["Action"]
         mock_expand_policy.return_value = ROLE_POLICIES["unused_ec2"]["ec2_perms"]
 
         (
             total_permissions,
             eligible_permissions,
         ) = repokid.utils.roledata._get_role_permissions(test_role)
-        assert total_permissions == set(ROLE_POLICIES["unused_ec2"]["ec2_perms"])
-        assert eligible_permissions == set(ROLE_POLICIES["unused_ec2"]["ec2_perms"])
+        assert total_permissions == set(
+            ROLE_POLICIES["unused_ec2"]["ec2_perms"]["Statement"][0]["Action"]
+        )
+        assert eligible_permissions == set(
+            ROLE_POLICIES["unused_ec2"]["ec2_perms"]["Statement"][0]["Action"]
+        )
 
     @patch("repokid.hooks.call_hooks")
     def test_get_repoable_permissions(self, mock_call_hooks):
@@ -71,7 +75,7 @@ class TestRoledata(object):
         hooks = {}
 
         role_id = "ARIOTHISISAROLE"
-        permissions = [
+        permissions = {
             "service_1:action_1",
             "service_1:action_2",
             "service_1:action_3",
@@ -81,7 +85,7 @@ class TestRoledata(object):
             "service_3:action_2",
             "service_4:action_1",
             "service_4:action_2",
-        ]
+        }
 
         # service_1 and service_2 both used more than a day ago, which is outside of our test filter for age
         aa_data = [
@@ -466,23 +470,23 @@ class TestRoledata(object):
         assert new_perms == {"ec2:allocatehosts", "ec2:associateaddress"}
 
     def test_convert_repoable_perms_to_perms_and_services(self):
-        all_perms = ["a:j", "a:k", "b:l", "c:m", "c:n"]
-        repoable_perms = ["b:l", "c:m"]
-        expected_repoed_services = ["b"]
-        expected_repoed_permissions = ["c:m"]
+        all_perms = {"a:j", "a:k", "b:l", "c:m", "c:n"}
+        repoable_perms = {"b:l", "c:m"}
+        expected_repoed_services = {"b"}
+        expected_repoed_permissions = {"c:m"}
         assert repokid.utils.roledata._convert_repoable_perms_to_perms_and_services(
             all_perms, repoable_perms
         ) == (expected_repoed_permissions, expected_repoed_services)
 
     def test_convert_repoed_service_to_sorted_perms_and_services(self):
-        repoed_services = [
+        repoed_services = {
             "route53",
             "ec2",
             "s3:abc",
             "dynamodb:def",
             "ses:ghi",
             "ses:jkl",
-        ]
+        }
         expected_services = ["ec2", "route53"]
         expected_permissions = ["dynamodb:def", "s3:abc", "ses:ghi", "ses:jkl"]
         assert (
@@ -505,19 +509,19 @@ class TestRoledata(object):
             True,
         )
         assert repokid.utils.roledata._get_epoch_authenticated(154578762) == (
-            None,
+            -1,
             False,
         )
 
     def test_filter_scheduled_repoable_perms(self):
         assert repokid.utils.roledata._filter_scheduled_repoable_perms(
-            ["a:b", "a:c", "b:a"], ["a:c", "b"]
+            {"a:b", "a:c", "b:a"}, {"a:c", "b"}
         ) == ["a:c", "b:a"]
         assert repokid.utils.roledata._filter_scheduled_repoable_perms(
-            ["a:b", "a:c", "b:a"], ["a", "b"]
+            {"a:b", "a:c", "b:a"}, {"a", "b"}
         ) == ["a:b", "a:c", "b:a"]
         assert repokid.utils.roledata._filter_scheduled_repoable_perms(
-            ["a:b", "a:c", "b:a"], ["a:b", "a:c"]
+            {"a:b", "a:c", "b:a"}, {"a:b", "a:c"}
         ) == ["a:b", "a:c"]
 
     def test_get_repoed_policy_sid(self):

@@ -17,11 +17,14 @@ import json
 import logging
 import logging.config
 import os
+from typing import DefaultDict
 from typing import List
+from typing import Tuple
 
 import import_string
 
 from repokid.types import RepokidConfig
+from repokid.types import RepokidHook
 from repokid.types import RepokidHooks
 
 __version__ = "0.15.0"
@@ -55,6 +58,7 @@ def init_config() -> RepokidConfig:
             print("Unable to load config from {}, trying next location".format(path))
 
     print("Config not found in any path, using defaults")
+    return config
 
 
 def init_logging() -> logging.Logger:
@@ -96,7 +100,11 @@ def get_hooks(hooks_list: List[str]) -> RepokidHooks:
     Returns:
         dict: Keys are hooks by name (AFTER_SCHEDULE_REPO) and values are a list of functions to execute
     """
-    hooks = collections.defaultdict(list)
+    # hooks is a temporary dictionary of priority/RepokidHook tuples
+    hooks: DefaultDict[str, List[Tuple[int, RepokidHook]]] = collections.defaultdict(
+        list
+    )
+
     for hook in hooks_list:
         module = import_string(hook)
         # get members retrieves all the functions from a given module
@@ -105,16 +113,16 @@ def get_hooks(hooks_list: List[str]) -> RepokidHooks:
         for (_, func) in all_funcs:
             # we only look at functions that have been decorated with _implements_hook
             if hasattr(func, "_implements_hook"):
+                h: Tuple[int, RepokidHook] = (func._implements_hook["priority"], func)
                 # append to the dictionary in whatever order we see them, we'll sort later. Dictionary value should be
                 # a list of tuples (priority, function)
-                hooks[func._implements_hook["hook_name"]].append(
-                    (func._implements_hook["priority"], func)
-                )
+                hooks[func._implements_hook["hook_name"]].append(h)
 
     # sort by priority
     for k in hooks.keys():
-        hooks[k] = sorted(hooks[k], key=lambda priority: priority[0])
+        hooks[k] = sorted(hooks[k], key=lambda priority: int(priority[0]))
     # get rid of the priority - we don't need it anymore
+    # save to a new dict that conforms to the RepokidHooks spec
     final_hooks: RepokidHooks = RepokidHooks()
     for k in hooks.keys():
         final_hooks[k] = [func_tuple[1] for func_tuple in hooks[k]]

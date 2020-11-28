@@ -8,3 +8,11 @@ class BlocklistError(Exception):
 
 class AardvarkError(Exception):
     pass
+
+
+class RoleNotFoundError(Exception):
+    pass
+
+
+class IAMError(Exception):
+    pass

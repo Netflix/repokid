@@ -1,10 +1,9 @@
 boto3
-boto3-stubs[dynamodb]
+boto3-stubs[dynamodb,iam,sns,sqs]
 cloudaux
 click
 import_string
 json_log_formatter
-marshmallow
 policyuniverse
 requests
 tabulate

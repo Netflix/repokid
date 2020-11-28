@@ -15,13 +15,22 @@ import datetime
 import json
 import logging
 import re
+from typing import Any
+from typing import Dict
+from typing import List
 
 import botocore
 from cloudaux import sts_conn
 from cloudaux.aws.iam import delete_role_policy
 from cloudaux.aws.iam import get_role_inline_policies
 from cloudaux.aws.iam import put_role_policy
+from mypy_boto3_dynamodb.service_resource import Table
+from mypy_boto3_iam.client import IAMClient
 
+from repokid.exceptions import IAMError
+from repokid.role import Role
+from repokid.types import RepokidConfig
+from repokid.types import RepokidHooks
 from repokid.utils import roledata as roledata
 from repokid.utils.dynamo import set_role_data
 from repokid.utils.logging import log_deleted_and_repoed_policies
@@ -31,9 +40,8 @@ LOGGER = logging.getLogger("repokid")
 MAX_AWS_POLICY_SIZE = 10240
 
 
-@sts_conn("iam")
-def update_repoed_description(role_name, client=None):
-    description = None
+def update_repoed_description(role_name: str, conn_details: Dict[str, Any]) -> None:
+    client: IAMClient = sts_conn("iam", **conn_details)
     try:
         description = client.get_role(RoleName=role_name)["Role"].get("Description", "")
     except KeyError:
@@ -42,7 +50,7 @@ def update_repoed_description(role_name, client=None):
     if "; Repokid repoed" in description:
         new_description = re.sub(
             r"; Repokid repoed [0-9]{2}\/[0-9]{2}\/[0-9]{2}",
-            "; Repokid repoed {}".format(date_string),
+            f"; Repokid repoed {date_string}",
             description,
         )
     else:
@@ -58,7 +66,7 @@ def update_repoed_description(role_name, client=None):
         )
 
 
-def inline_policies_size_exceeds_maximum(policies):
+def inline_policies_size_exceeds_maximum(policies: Dict[str, Any]) -> bool:
     """Validate the policies, when converted to JSON without whitespace, remain under the size limit.
 
     Args:
@@ -72,7 +80,9 @@ def inline_policies_size_exceeds_maximum(policies):
     return False
 
 
-def delete_policy(name, role, account_number, conn):
+def delete_policy(
+    name: str, role: Role, account_number: str, conn: Dict[str, Any]
+) -> None:
     """Deletes the specified IAM Role inline policy.
 
     Args:
@@ -92,12 +102,17 @@ def delete_policy(name, role, account_number, conn):
     try:
         delete_role_policy(RoleName=role.role_name, PolicyName=name, **conn)
     except botocore.exceptions.ClientError as e:
-        return "Error deleting policy: {} from role: {} in account {}.  Exception: {}".format(
-            name, role.role_name, account_number, e
-        )
+        raise IAMError(
+            f"Error deleting policy: {name} from role: {role.role_name} in account {account_number}"
+        ) from e
 
 
-def replace_policies(repoed_policies, role, account_number, conn):
+def replace_policies(
+    repoed_policies: Dict[str, Any],
+    role: Role,
+    account_number: str,
+    conn: Dict[str, Any],
+) -> None:
     """Overwrite IAM Role inline policies with those supplied.
 
     Args:
@@ -127,25 +142,24 @@ def replace_policies(repoed_policies, role, account_number, conn):
             )
 
         except botocore.exceptions.ClientError as e:
-            error = "Exception calling PutRolePolicy on {role}/{policy} in account {account}\n{e}\n".format(
+            error = "Exception calling PutRolePolicy on {role}/{policy} in account {account}".format(
                 role=role.role_name,
                 policy=policy_name,
                 account=account_number,
-                e=str(e),
             )
-            return error
+            raise IAMError(error) from e
 
 
 def remove_permissions_from_role(
-    account_number,
-    permissions,
-    role,
-    role_id,
-    dynamo_table,
-    config,
-    hooks,
-    commit=False,
-):
+    account_number: str,
+    permissions: List[str],
+    role: Role,
+    role_id: str,
+    dynamo_table: Table,
+    config: RepokidConfig,
+    hooks: RepokidHooks,
+    commit: bool = False,
+) -> None:
     """Remove the list of permissions from the provided role.
 
     Args:
@@ -159,7 +173,7 @@ def remove_permissions_from_role(
         None
     """
     repoed_policies, deleted_policy_names = roledata._get_repoed_policy(
-        role.policies[-1]["Policy"], permissions
+        role.policies[-1]["Policy"], set(permissions)
     )
 
     if inline_policies_size_exceeds_maximum(repoed_policies):
@@ -179,22 +193,24 @@ def remove_permissions_from_role(
     conn["account_number"] = account_number
 
     for name in deleted_policy_names:
-        error = delete_policy(name, role, account_number, conn)
-        if error:
-            LOGGER.error(error)
+        try:
+            delete_policy(name, role, account_number, conn)
+        except IAMError as e:
+            LOGGER.error(e)
 
     if repoed_policies:
-        error = replace_policies(repoed_policies, role, account_number, conn)
-        if error:
-            LOGGER.error(error)
+        try:
+            replace_policies(repoed_policies, role, account_number, conn)
+        except IAMError as e:
+            LOGGER.error(e)
 
-    current_policies = get_role_inline_policies(role.as_dict(), **conn) or {}
+    current_policies = get_role_inline_policies(role.dict(), **conn) or {}
     roledata.add_new_policy_version(dynamo_table, role, current_policies, "Repo")
 
     set_role_data(
         dynamo_table, role.role_id, {"Repoed": datetime.datetime.utcnow().isoformat()}
     )
-    update_repoed_description(role.role_name, **conn)
+    update_repoed_description(role.role_name, conn)
     partial_update_role_data(
         role,
         dynamo_table,

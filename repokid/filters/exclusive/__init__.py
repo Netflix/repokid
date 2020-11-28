@@ -1,6 +1,5 @@
 import fnmatch
 import logging
-from typing import cast
 
 from repokid.filters import Filter
 from repokid.role import RoleList
@@ -16,7 +15,7 @@ class ExclusiveFilter(Filter):
             LOGGER.error(
                 "No configuration provided, cannot initialize Exclusive Filter"
             )
-        config = cast(RepokidFilterConfig, config)
+            return
         current_account = config.get("current_account", "")
         if not current_account:
             LOGGER.error("Unable to get current account for Exclusive Filter")

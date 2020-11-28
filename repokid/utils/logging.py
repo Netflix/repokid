@@ -22,7 +22,7 @@ LOGGER = logging.getLogger("repokid")
 
 def log_deleted_and_repoed_policies(
     deleted_policy_names: List[str],
-    repoed_policies: List[Dict[str, Any]],
+    repoed_policies: Dict[str, Any],
     role_name: str,
     account_number: str,
 ) -> None:

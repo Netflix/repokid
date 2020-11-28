@@ -12,6 +12,8 @@
 #     See the License for the specific language governing permissions and
 #     limitations under the License.
 import logging
+from typing import Any
+from typing import Dict
 
 import requests
 
@@ -20,7 +22,9 @@ from repokid.exceptions import AardvarkError
 LOGGER = logging.getLogger("repokid")
 
 
-def get_aardvark_data(aardvark_api_location, account_number=None, arn=None):
+def get_aardvark_data(
+    aardvark_api_location: str, account_number: str = "", arn: str = ""
+) -> Dict[str, Any]:
     """
     Make a request to the Aardvark server to get all data about a given account or ARN.
     We'll request in groups of PAGE_SIZE and check the current count to see if we're done. Keep requesting as long as
@@ -40,12 +44,13 @@ def get_aardvark_data(aardvark_api_location, account_number=None, arn=None):
     PAGE_SIZE = 1000
     page_num = 1
 
+    payload: Dict[str, Any]
     if account_number:
-        payload = {"phrase": "{}".format(account_number)}
+        payload = {"phrase": account_number}
     elif arn:
         payload = {"arn": [arn]}
     else:
-        return
+        return {}
     while True:
         params = {"count": PAGE_SIZE, "page": page_num}
         try:

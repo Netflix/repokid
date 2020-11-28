@@ -2,9 +2,13 @@ import copy
 import datetime
 import logging
 from functools import wraps
+from typing import Any
 from typing import Callable
 from typing import Dict
+from typing import List
 from typing import Optional
+from typing import Set
+from typing import Union
 
 import boto3
 from botocore.exceptions import ClientError as BotoClientError
@@ -12,14 +16,17 @@ from cloudaux.aws.sts import boto3_cached_conn as boto3_cached_conn
 from mypy_boto3_dynamodb.service_resource import Table
 from mypy_boto3_dynamodb.type_defs import GlobalSecondaryIndexTypeDef
 
+from repokid.exceptions import RoleNotFoundError
+from repokid.role import Role
+
 LOGGER = logging.getLogger("repokid")
 # used as a placeholder for empty SID to work around this: https://github.com/aws/aws-sdk-js/issues/833
 DYNAMO_EMPTY_STRING = "---DYNAMO-EMPTY-STRING---"
 
 
-def catch_boto_error(func: Callable):
+def catch_boto_error(func: Callable[..., Any]) -> Callable[..., Any]:
     @wraps(func)
-    def decorated_func(*args, **kwargs):
+    def decorated_func(*args: Any, **kwargs: Any) -> Any:
         try:
             return func(*args, **kwargs)
         except BotoClientError as e:
@@ -33,10 +40,10 @@ def add_to_end_of_list(
     dynamo_table: Table,
     role_id: str,
     field_name: str,
-    object_to_add: Dict,
-    max_retries=5,
-    _retries=0,
-):
+    object_to_add: Dict[str, Any],
+    max_retries: int = 5,
+    _retries: int = 0,
+) -> None:
     """Append object to DynamoDB list, removing the first element if item exceeds max size."""
     try:
         dynamo_table.update_item(
@@ -155,7 +162,7 @@ def dynamo_get_or_create_table(
     return table
 
 
-def find_role_in_cache(dynamo_table, account_number, role_name):
+def find_role_in_cache(dynamo_table: Table, account_number: str, role_name: str) -> str:
     """Return role dictionary for active role with name in account
 
     Args:
@@ -170,23 +177,33 @@ def find_role_in_cache(dynamo_table, account_number, role_name):
         KeyConditionExpression="RoleName = :rn",
         ExpressionAttributeValues={":rn": role_name},
     )
-    role_id_candidates = [return_dict["RoleId"] for return_dict in results.get("Items")]
+    items = results.get("Items")
+    if not items:
+        return ""
+
+    role_id_candidates = [str(return_dict["RoleId"]) for return_dict in items]
 
     if len(role_id_candidates) > 1:
         for role_id in role_id_candidates:
-            role_data = get_role_data(
-                dynamo_table, role_id, fields=["Account", "Active"]
-            )
-            if role_data["Account"] == account_number and role_data["Active"]:
+            try:
+                role_data = get_role_data(
+                    dynamo_table, role_id, fields=["Account", "Active"]
+                )
+            except RoleNotFoundError as e:
+                LOGGER.debug(e)
+                continue
+            if role_data.account == account_number and role_data.active:
                 return role_id
     elif len(role_id_candidates) == 1:
         return role_id_candidates[0]
-    else:
-        return None
+
+    return ""
 
 
 @catch_boto_error
-def get_role_data(dynamo_table, roleID, fields=None):
+def get_role_data(
+    dynamo_table: Table, roleID: str, fields: Optional[List[str]] = None
+) -> Role:
     """
     Get role data as a dictionary for a given role by ID
 
@@ -202,11 +219,13 @@ def get_role_data(dynamo_table, roleID, fields=None):
         response = dynamo_table.get_item(Key={"RoleId": roleID})
 
     if response and "Item" in response:
-        return _empty_string_from_dynamo_replace(response["Item"])
+        return Role.parse_obj(_empty_string_from_dynamo_replace(response["Item"]))
+    else:
+        raise RoleNotFoundError(f"Role ID {roleID} not found in DynamoDB")
 
 
 @catch_boto_error
-def role_ids_for_account(dynamo_table, account_number):
+def role_ids_for_account(dynamo_table: Table, account_number: str) -> Set[str]:
     """
     Get a list of all role IDs in a given account by querying the Dynamo secondary index 'account'
 
@@ -216,28 +235,35 @@ def role_ids_for_account(dynamo_table, account_number):
     Returns:
         list: role ids in given account
     """
-    role_ids = set()
+    role_ids: Set[str] = set()
 
     results = dynamo_table.query(
         IndexName="Account",
         KeyConditionExpression="Account = :act",
         ExpressionAttributeValues={":act": account_number},
     )
-    role_ids.update([return_dict["RoleId"] for return_dict in results.get("Items")])
+    items = results.get("Items")
+    if not items:
+        return set()
+
+    role_ids.update([str(return_dict["RoleId"]) for return_dict in items])
 
     while "LastEvaluatedKey" in results:
         results = dynamo_table.query(
             IndexName="Account",
             KeyConditionExpression="Account = :act",
             ExpressionAttributeValues={":act": account_number},
-            ExclusiveStartKey=results.get("LastEvaluatedKey"),
+            ExclusiveStartKey=results.get("LastEvaluatedKey") or {},
         )
-        role_ids.update([return_dict["RoleId"] for return_dict in results.get("Items")])
+        items = results.get("Items")
+        if not items:
+            continue
+        role_ids.update([str(return_dict["RoleId"]) for return_dict in items])
     return role_ids
 
 
 @catch_boto_error
-def role_ids_for_all_accounts(dynamo_table):
+def role_ids_for_all_accounts(dynamo_table: Table) -> List[str]:
     """
     Get a list of all role IDs for all accounts by scanning the Dynamo table
 
@@ -247,22 +273,24 @@ def role_ids_for_all_accounts(dynamo_table):
     Returns:
         list: role ids in all accounts
     """
-    role_ids = []
+    role_ids: List[str] = []
 
     response = dynamo_table.scan(ProjectionExpression="RoleId")
-    role_ids.extend([role_dict["RoleId"] for role_dict in response["Items"]])
+    role_ids.extend([str(role_dict["RoleId"]) for role_dict in response["Items"]])
 
     while "LastEvaluatedKey" in response:
         response = dynamo_table.scan(
             ProjectionExpression="RoleId",
             ExclusiveStartKey=response["LastEvaluatedKey"],
         )
-        role_ids.extend([role_dict["RoleId"] for role_dict in response["Items"]])
+        role_ids.extend([str(role_dict["RoleId"]) for role_dict in response["Items"]])
     return role_ids
 
 
 @catch_boto_error
-def set_role_data(dynamo_table, role_id, update_keys):
+def set_role_data(
+    dynamo_table: Table, role_id: str, update_keys: Dict[str, Any]
+) -> None:
     if not update_keys:
         return
 
@@ -289,19 +317,25 @@ def set_role_data(dynamo_table, role_id, update_keys):
         "ExpressionAttributeValues": expression_attribute_values,
     }
     LOGGER.debug("updating dynamodb with inputs %s", update_item_inputs)
-    dynamo_table.update_item(**update_item_inputs)
+    dynamo_table.update_item(
+        Key={"RoleId": role_id},
+        UpdateExpression=update_expression,
+        ExpressionAttributeNames=expression_attribute_names,
+        ExpressionAttributeValues=expression_attribute_values,
+    )
 
 
+# TODO(psanders): should this return a Role object instead of a dict?
 def store_initial_role_data(
-    dynamo_table,
-    arn,
-    create_date,
-    role_id,
-    role_name,
-    account_number,
-    current_policy,
-    tags,
-):
+    dynamo_table: Table,
+    arn: str,
+    create_date: datetime.datetime,
+    role_id: str,
+    role_name: str,
+    account_number: str,
+    current_policy: Dict[str, Any],
+    tags: List[Dict[str, Any]],
+) -> Dict[str, Any]:
     """
     Store the initial version of a role in Dynamo
 
@@ -332,14 +366,17 @@ def store_initial_role_data(
     }
 
     store_dynamo = copy.copy(role_dict)
+    item = dict(_empty_string_to_dynamo_replace(store_dynamo))
 
-    dynamo_table.put_item(Item=_empty_string_to_dynamo_replace(store_dynamo))
+    dynamo_table.put_item(Item=item)
     # we want to store CreateDate as a string but keep it as a datetime, so put it back here
     role_dict["CreateDate"] = create_date
     return role_dict
 
 
-def _empty_string_from_dynamo_replace(obj):
+def _empty_string_from_dynamo_replace(
+    obj: Union[Dict[str, Any], List[Any]]
+) -> Union[Dict[str, Any], List[Any]]:
     """
     Traverse a potentially nested object and replace all Dynamo placeholders with actual empty strings
 
@@ -359,7 +396,9 @@ def _empty_string_from_dynamo_replace(obj):
         return obj
 
 
-def _empty_string_to_dynamo_replace(obj):
+def _empty_string_to_dynamo_replace(
+    obj: Union[Dict[str, Any], List[Any]]
+) -> Union[Dict[str, Any], List[Any]]:
     """
     Traverse a potentially nested object and replace all instances of an empty string with a placeholder
 

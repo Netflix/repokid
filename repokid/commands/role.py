@@ -14,6 +14,7 @@
 import csv
 import json
 import logging
+from typing import Any
 from typing import List
 
 import tabview as t
@@ -38,7 +39,9 @@ from repokid.utils.iam import remove_permissions_from_role
 LOGGER = logging.getLogger("repokid")
 
 
-def _display_roles(account_number: str, dynamo_table: Table, inactive: bool = False):
+def _display_roles(
+    account_number: str, dynamo_table: Table, inactive: bool = False
+) -> None:
     """
     Display a table with data about all roles in an account and write a csv file with the data.
 
@@ -60,7 +63,7 @@ def _display_roles(account_number: str, dynamo_table: Table, inactive: bool = Fa
         "Services",
     ]
 
-    rows = list()
+    rows: List[List[Any]] = []
 
     roles = RoleList(
         [
@@ -99,7 +102,7 @@ def _display_roles(account_number: str, dynamo_table: Table, inactive: bool = Fa
 
 def _find_roles_with_permissions(
     permissions: List[str], dynamo_table: Table, output_file: str
-):
+) -> None:
     """
     Search roles in all accounts for a policy with any of the provided permissions, log the ARN of each role.
 
@@ -145,7 +148,7 @@ def _display_role(
     dynamo_table: Table,
     config: RepokidConfig,
     hooks: RepokidHooks,
-):
+) -> None:
     """
     Displays data about a role in a given account:
       1) Name, which filters are disqualifying it from repo, if it's repoable, total/repoable permissions,
@@ -234,7 +237,6 @@ def _display_role(
     warn_unknown_permissions = config.get("warnings", {}).get(
         "unknown_permissions", False
     )
-    repoable_permissions = set([])
 
     permissions, eligible_permissions = roledata._get_role_permissions(
         role, warn_unknown_perms=warn_unknown_permissions
@@ -250,6 +252,8 @@ def _display_role(
             config["filter_config"]["AgeFilter"]["minimum_age"],
             hooks,
         )
+    else:
+        repoable_permissions = set()
 
     print("Repoable services and permissions")
     headers = ["Service", "Action", "Repoable"]
@@ -291,7 +295,7 @@ def _remove_permissions_from_roles(
     config: RepokidConfig,
     hooks: RepokidHooks,
     commit: bool = False,
-):
+) -> None:
     """Loads roles specified in file and calls _remove_permissions_from_role() for each one.
 
     Args:

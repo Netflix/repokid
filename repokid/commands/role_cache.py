@@ -34,7 +34,7 @@ def _update_role_cache(
     dynamo_table: Table,
     config: RepokidConfig,
     hooks: RepokidHooks,
-):
+) -> None:
     """
     Update data about all roles in a given account:
       1) list all the roles and initiate a role object with basic data including name and roleID
@@ -85,7 +85,7 @@ def _update_role_cache(
     for role in tqdm(roles):
         role.account = account_number
         current_policies = role_data_by_id[role.role_id]["RolePolicyList"]
-        active_roles.append(role.role_id)
+        active_roles.append(role)
         role = roledata.update_role_data(
             dynamo_table, account_number, role, current_policies
         )

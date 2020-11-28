@@ -15,6 +15,7 @@
 import json
 import logging
 from typing import List
+from typing import Optional
 
 import click
 
@@ -32,12 +33,13 @@ from repokid.commands.role_cache import _update_role_cache
 from repokid.commands.schedule import _cancel_scheduled_repo
 from repokid.commands.schedule import _schedule_repo
 from repokid.commands.schedule import _show_scheduled_roles
+from repokid.types import RepokidConfig
 from repokid.utils.dynamo import dynamo_get_or_create_table
 
 logger = logging.getLogger("repokid")
 
 
-def _generate_default_config(filename: str = None):
+def _generate_default_config(filename: str = "") -> RepokidConfig:
     """
     Generate and return a config dict; will write the config to a file if a filename is provided
 
@@ -157,7 +159,7 @@ def _generate_default_config(filename: str = None):
 class AliasedGroup(click.Group):
     """AliasedGroup provides backward compatibility with the previous Repokid CLI commands"""
 
-    def get_command(self, ctx: click.Context, cmd_name):
+    def get_command(self, ctx: click.Context, cmd_name: str) -> Optional[click.Command]:
         rv = click.Group.get_command(self, ctx, cmd_name)
         if rv:
             return rv
@@ -165,11 +167,12 @@ class AliasedGroup(click.Group):
         for cmd in self.list_commands(ctx):
             if cmd == dashed:
                 return click.Group.get_command(self, ctx, cmd)
+        return None
 
 
 @click.group(cls=AliasedGroup)
 @click.pass_context
-def cli(ctx: click.Context):
+def cli(ctx: click.Context) -> None:
     ctx.ensure_object(dict)
 
     if not CONFIG:
@@ -185,14 +188,14 @@ def cli(ctx: click.Context):
 @cli.command()
 @click.argument("filename")
 @click.pass_context
-def config(ctx: click.Context, filename: str):
+def config(ctx: click.Context, filename: str) -> None:
     _generate_default_config(filename=filename)
 
 
 @cli.command()
 @click.argument("account_number")
 @click.pass_context
-def update_role_cache(ctx: click.Context, account_number: str):
+def update_role_cache(ctx: click.Context, account_number: str) -> None:
     dynamo_table = ctx.obj["dynamo_table"]
     config = ctx.obj["config"]
     hooks = ctx.obj["hooks"]
@@ -203,7 +206,7 @@ def update_role_cache(ctx: click.Context, account_number: str):
 @click.argument("account_number")
 @click.option("--inactive", default=False, help="Include inactive roles")
 @click.pass_context
-def display_role_cache(ctx: click.Context, account_number: str, inactive: bool):
+def display_role_cache(ctx: click.Context, account_number: str, inactive: bool) -> None:
     dynamo_table = ctx.obj["dynamo_table"]
     _display_roles(account_number, dynamo_table, inactive=inactive)
 
@@ -214,7 +217,7 @@ def display_role_cache(ctx: click.Context, account_number: str, inactive: bool):
 @click.pass_context
 def find_roles_with_permissions(
     ctx: click.Context, permissions: List[str], output: str
-):
+) -> None:
     dynamo_table = ctx.obj["dynamo_table"]
     _find_roles_with_permissions(permissions, dynamo_table, output)
 
@@ -226,7 +229,7 @@ def find_roles_with_permissions(
 @click.pass_context
 def remove_permissions_from_roles(
     ctx: click.Context, permissions: List[str], role_file: str, commit: bool
-):
+) -> None:
     dynamo_table = ctx.obj["dynamo_table"]
     config = ctx.obj["config"]
     hooks = ctx.obj["hooks"]
@@ -239,7 +242,7 @@ def remove_permissions_from_roles(
 @click.argument("account_number")
 @click.argument("role_name")
 @click.pass_context
-def display_role(ctx: click.Context, account_number: str, role_name: str):
+def display_role(ctx: click.Context, account_number: str, role_name: str) -> None:
     dynamo_table = ctx.obj["dynamo_table"]
     config = ctx.obj["config"]
     hooks = ctx.obj["hooks"]
@@ -251,7 +254,9 @@ def display_role(ctx: click.Context, account_number: str, role_name: str):
 @click.argument("role_name")
 @click.option("--commit", "-c", default=False, help="Commit changes")
 @click.pass_context
-def repo_role(ctx: click.Context, account_number: str, role_name: str, commit: bool):
+def repo_role(
+    ctx: click.Context, account_number: str, role_name: str, commit: bool
+) -> None:
     dynamo_table = ctx.obj["dynamo_table"]
     config = ctx.obj["config"]
     hooks = ctx.obj["hooks"]
@@ -270,7 +275,7 @@ def rollback_role(
     role_name: str,
     selection: int,
     commit: bool,
-):
+) -> None:
     dynamo_table = ctx.obj["dynamo_table"]
     config = ctx.obj["config"]
     hooks = ctx.obj["hooks"]
@@ -289,7 +294,7 @@ def rollback_role(
 @click.argument("account_number")
 @click.option("--commit", "-c", default=False, help="Commit changes")
 @click.pass_context
-def repo_all_roles(ctx: click.Context, account_number: str, commit: bool):
+def repo_all_roles(ctx: click.Context, account_number: str, commit: bool) -> None:
     dynamo_table = ctx.obj["dynamo_table"]
     config = ctx.obj["config"]
     hooks = ctx.obj["hooks"]
@@ -303,7 +308,7 @@ def repo_all_roles(ctx: click.Context, account_number: str, commit: bool):
 @cli.command()
 @click.argument("account_number")
 @click.pass_context
-def schedule_repo(ctx: click.Context, account_number: str):
+def schedule_repo(ctx: click.Context, account_number: str) -> None:
     dynamo_table = ctx.obj["dynamo_table"]
     config = ctx.obj["config"]
     hooks = ctx.obj["hooks"]
@@ -315,7 +320,7 @@ def schedule_repo(ctx: click.Context, account_number: str):
 @cli.command()
 @click.argument("account_number")
 @click.pass_context
-def show_scheduled_roles(ctx: click.Context, account_number: str):
+def show_scheduled_roles(ctx: click.Context, account_number: str) -> None:
     dynamo_table = ctx.obj["dynamo_table"]
     _show_scheduled_roles(account_number, dynamo_table)
 
@@ -327,7 +332,7 @@ def show_scheduled_roles(ctx: click.Context, account_number: str):
 @click.pass_context
 def cancel_scheduled_repo(
     ctx: click.Context, account_number: str, role: str, all: bool
-):
+) -> None:
     dynamo_table = ctx.obj["dynamo_table"]
     _cancel_scheduled_repo(account_number, dynamo_table, role_name=role, is_all=all)
 
@@ -336,7 +341,7 @@ def cancel_scheduled_repo(
 @click.argument("account_number")
 @click.option("--commit", "-c", default=False, help="Commit changes")
 @click.pass_context
-def repo_scheduled_roles(ctx: click.Context, account_number: str, commit: bool):
+def repo_scheduled_roles(ctx: click.Context, account_number: str, commit: bool) -> None:
     dynamo_table = ctx.obj["dynamo_table"]
     config = ctx.obj["config"]
     hooks = ctx.obj["hooks"]
@@ -350,7 +355,7 @@ def repo_scheduled_roles(ctx: click.Context, account_number: str, commit: bool):
 @click.argument("account_number")
 @click.option("--output", "-o", required=True, help="File to write results to")
 @click.pass_context
-def repo_stats(ctx: click.Context, account_number: str, output: str):
+def repo_stats(ctx: click.Context, account_number: str, output: str) -> None:
     dynamo_table = ctx.obj["dynamo_table"]
     _repo_stats(output, dynamo_table, account_number=account_number)
 

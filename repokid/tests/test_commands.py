@@ -20,6 +20,7 @@ from mock import MagicMock
 from mock import call
 from mock import mock_open
 from mock import patch
+from pytest import raises
 
 import repokid.cli.repokid_cli
 import repokid.commands.repo
@@ -29,6 +30,7 @@ import repokid.commands.schedule
 import repokid.utils.iam
 import repokid.utils.logging
 import repokid.utils.roledata
+from repokid.exceptions import IAMError
 from repokid.role import Role
 from repokid.role import RoleList
 from repokid.types import RepokidHooks
@@ -151,6 +153,7 @@ ROLE_POLICIES = {
 
 ROLES = [
     {
+        "Account": "123456789012",
         "Arn": "arn:aws:iam::123456789012:role/all_services_used",
         "CreateDate": datetime.datetime(2017, 1, 31, 12, 0, 0, tzinfo=tzlocal()),
         "RoleId": "AROAABCDEFGHIJKLMNOPA",
@@ -158,6 +161,7 @@ ROLES = [
         "Active": True,
     },
     {
+        "Account": "123456789012",
         "Arn": "arn:aws:iam::123456789012:role/unused_ec2",
         "CreateDate": datetime.datetime(2017, 1, 31, 12, 0, 0, tzinfo=tzlocal()),
         "RoleId": "AROAABCDEFGHIJKLMNOPB",
@@ -165,6 +169,7 @@ ROLES = [
         "Active": True,
     },
     {
+        "Account": "123456789012",
         "Arn": "arn:aws:iam::123456789012:role/young_role",
         "CreateDate": datetime.datetime.now(tzlocal()) - datetime.timedelta(5),
         "RoleId": "AROAABCDEFGHIJKLMNOPC",
@@ -172,6 +177,7 @@ ROLES = [
         "Active": True,
     },
     {
+        "Account": "123456789012",
         "Arn": "arn:aws:iam::123456789012:role/inactive_role",
         "CreateDate": datetime.datetime.now(tzlocal()) - datetime.timedelta(5),
         "RoleId": "AROAABCDEFGHIJKLMNOPD",
@@ -179,6 +185,7 @@ ROLES = [
         "Active": False,
     },
     {
+        "Account": "123456789012",
         "Arn": "arn:aws:iam::123456789012:role/additional_unused_ec2",
         "CreateDate": datetime.datetime(2017, 1, 31, 12, 0, 0, tzinfo=tzlocal()),
         "RoleId": "AROAXYZDEFGHIJKLMNOPB",
@@ -186,6 +193,7 @@ ROLES = [
         "Active": True,
     },
     {
+        "Account": "123456789012",
         "Arn": "arn:aws:iam::123456789012:role/unused_iam",
         "CreateDate": datetime.datetime(2017, 1, 31, 12, 0, 0, tzinfo=tzlocal()),
         "RoleId": "AROAXYZDEFGHIJKLMNABC",
@@ -346,11 +354,13 @@ class TestRepokidCLI(object):
             call(
                 dynamo_table,
                 account_number,
-                [
-                    Role.parse_obj(ROLES[0]),
-                    Role.parse_obj(ROLES[1]),
-                    Role.parse_obj(ROLES[2]),
-                ],
+                RoleList(
+                    [
+                        Role.parse_obj(ROLES[0]),
+                        Role.parse_obj(ROLES[1]),
+                        Role.parse_obj(ROLES[2]),
+                    ]
+                ),
             )
         ]
 
@@ -509,6 +519,7 @@ class TestRepokidCLI(object):
                 "Active": True,
                 "RoleName": "ROLE_A",
                 "RepoScheduled": 100,
+                "CreateDate": datetime.datetime.now() - datetime.timedelta(days=100),
             },
             {
                 "Arn": "arn:aws:iam::123456789012:role/ROLE_B",
@@ -516,6 +527,7 @@ class TestRepokidCLI(object):
                 "Active": True,
                 "RoleName": "ROLE_B",
                 "RepoScheduled": 0,
+                "CreateDate": datetime.datetime.now() - datetime.timedelta(days=100),
             },
             {
                 "Arn": "arn:aws:iam::123456789012:role/ROLE_C",
@@ -523,6 +535,7 @@ class TestRepokidCLI(object):
                 "Active": True,
                 "RoleName": "ROLE_C",
                 "RepoScheduled": 5,
+                "CreateDate": datetime.datetime.now() - datetime.timedelta(days=100),
             },
         ]
 
@@ -604,6 +617,7 @@ class TestRepokidCLI(object):
                 "Active": True,
                 "RoleName": "ROLE_A",
                 "RepoScheduled": 100,
+                "CreateDate": datetime.datetime.now() - datetime.timedelta(days=100),
             },
             {
                 "Arn": "arn:aws:iam::123456789012:role/ROLE_B",
@@ -611,6 +625,7 @@ class TestRepokidCLI(object):
                 "Active": True,
                 "RoleName": "ROLE_B",
                 "RepoScheduled": 0,
+                "CreateDate": datetime.datetime.now() - datetime.timedelta(days=100),
             },
             {
                 "Arn": "arn:aws:iam::123456789012:role/ROLE_C",
@@ -618,6 +633,7 @@ class TestRepokidCLI(object):
                 "Active": True,
                 "RoleName": "ROLE_C",
                 "RepoScheduled": 5,
+                "CreateDate": datetime.datetime.now() - datetime.timedelta(days=100),
             },
         ]
         mock_get_role_data.side_effect = [roles[0], roles[2], roles[0]]
@@ -762,10 +778,10 @@ class TestRepokidCLI(object):
         iam.delete_role_policy = mock_delete_role_policy
         mock_role = MockRole()
 
-        error = repokid.utils.iam.delete_policy(
-            "PolicyName", mock_role, "123456789012", dict()
-        )
-        assert "Error deleting policy:" in error
+        with raises(IAMError):
+            repokid.utils.iam.delete_policy(
+                "PolicyName", mock_role, "123456789012", dict()
+            )
 
     def test_replace_policies(self):
         iam = repokid.utils.iam
@@ -783,10 +799,10 @@ class TestRepokidCLI(object):
         iam.put_role_policy = mock_put_role_policy
         mock_role = MockRole()
 
-        error = repokid.utils.iam.replace_policies(
-            ROLE_POLICIES, mock_role, "123456789012", {}
-        )
-        assert "Exception calling PutRolePolicy" in error
+        with raises(IAMError):
+            repokid.utils.iam.replace_policies(
+                ROLE_POLICIES, mock_role, "123456789012", {}
+            )
 
     @patch("repokid.utils.iam.delete_policy", MagicMock(return_value=None))
     @patch("repokid.utils.iam.replace_policies", MagicMock(return_value=None))

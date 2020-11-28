@@ -20,6 +20,8 @@ from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Set
+from typing import Union
+from typing import overload
 
 from pydantic import BaseModel
 from pydantic import Field
@@ -27,24 +29,24 @@ from pydantic import Field
 
 class Role(BaseModel):
     aa_data: Optional[List[Dict[str, Any]]] = Field(alias="AAData")
-    account: Optional[str] = Field(alias="Account")
+    account: str = Field(alias="Account", default="")
     active: Optional[bool] = Field(alias="Active")
     arn: str = Field(alias="Arn")
     assume_role_policy_document: Dict[str, Any] = Field(
         alias="AssumeRolePolicyDocument", default={}
     )
-    create_date: Optional[datetime.datetime] = Field(alias="CreateDate")
+    create_date: datetime.datetime = Field(alias="CreateDate")
     disqualified_by: List[str] = Field(alias="DisqualifiedBy", default=[])
     no_repo_permissions: Dict[str, Any] = Field(alias="NoRepoPermissions", default={})
     opt_out: Dict[str, int] = Field(alias="OptOut", default={})
     policies: List[Dict[str, Any]] = Field(alias="Policies", default=[])
     refreshed: Optional[str] = Field(alias="Refreshed")
-    repoable_permissions: Optional[int] = Field(alias="RepoablePermissions")
+    repoable_permissions: int = Field(alias="RepoablePermissions", default=0)
     repoable_services: List[str] = Field(alias="RepoableServices", default=[])
     repoed: Optional[str] = Field(alias="Repoed")
-    repo_scheduled: Optional[int] = Field(alias="RepoScheduled")
+    repo_scheduled: float = Field(alias="RepoScheduled", default=0.0)
     role_id: str = Field(alias="RoleId")
-    role_name: Optional[str] = Field(alias="RoleName")
+    role_name: str = Field(alias="RoleName", default="")
     scheduled_perms: Set[str] = Field(alias="ScheduledPerms", default=[])
     stats: List[Dict[str, Any]] = Field(alias="Stats", default=[])
     tags: List[Dict[str, Any]] = Field(alias="Tags", default=[])
@@ -64,7 +66,21 @@ class RoleList(object):
     def __init__(self, role_object_list: List[Role]):
         self.roles: List[Role] = role_object_list
 
+    @overload
+    def __getitem__(self, index: slice) -> RoleList:
+        # type info for retrieving a slice of contained roles
+        ...
+
+    @overload
     def __getitem__(self, index: int) -> Role:
+        # type info for retrieving a single contained role
+        ...
+
+    def __getitem__(self, index: Union[int, slice]) -> Union[Role, RoleList]:
+        if isinstance(index, slice):
+            # return a RoleList if the call was for a slice of contained roles
+            return RoleList(self.roles[index])
+
         return self.roles[index]
 
     def __len__(self) -> int:
@@ -93,6 +109,8 @@ class RoleList(object):
             raise StopIteration
 
     def append(self, role: Role) -> None:
+        if not isinstance(role, Role):
+            raise AttributeError("cannot add non-Role to RoleList")
         self.roles.append(role)
 
     def role_id_list(self) -> List[str]:

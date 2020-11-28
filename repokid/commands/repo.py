@@ -26,6 +26,7 @@ from mypy_boto3_dynamodb.service_resource import Table
 from tabulate import tabulate
 
 import repokid.hooks
+from repokid.exceptions import IAMError
 from repokid.role import Role
 from repokid.role import RoleList
 from repokid.types import RepokidConfig
@@ -128,22 +129,25 @@ def _repo_role(
             continuing = False
 
     total_permissions, eligible_permissions = roledata._get_role_permissions(role)
-    repoable_permissions = roledata._get_repoable_permissions(
+    repoable_permissions_list = roledata._get_repoable_permissions(
         account_number,
         role.role_name,
         eligible_permissions,
-        role.aa_data,
+        role.aa_data or [],
         role.no_repo_permissions,
         role.role_id,
         config["filter_config"]["AgeFilter"]["minimum_age"],
         hooks,
     )
 
+    repoable_permissions = set(repoable_permissions_list)
+
     # if this is a scheduled repo we need to filter out permissions that weren't previously scheduled
     if scheduled:
-        repoable_permissions = roledata._filter_scheduled_repoable_perms(
+        repoable_permissions_filtered = roledata._filter_scheduled_repoable_perms(
             repoable_permissions, role.scheduled_perms
         )
+        repoable_permissions = set(repoable_permissions_filtered)
 
     repoed_policies, deleted_policy_names = roledata._get_repoed_policy(
         role.policies[-1]["Policy"], repoable_permissions
@@ -175,16 +179,18 @@ def _repo_role(
     conn["account_number"] = account_number
 
     for name in deleted_policy_names:
-        error = delete_policy(name, role, account_number, conn)
-        if error:
-            LOGGER.error(error)
-            errors.append(error)
+        try:
+            delete_policy(name, role, account_number, conn)
+        except IAMError as e:
+            LOGGER.error(e)
+            errors.append(str(e))
 
     if repoed_policies:
-        error = replace_policies(repoed_policies, role, account_number, conn)
-        if error:
-            LOGGER.error(error)
-            errors.append(error)
+        try:
+            replace_policies(repoed_policies, role, account_number, conn)
+        except IAMError as e:
+            LOGGER.error(e)
+            errors.append(str(e))
 
     current_policies = get_role_inline_policies(role.dict(), **conn) or {}
     roledata.add_new_policy_version(dynamo_table, role, current_policies, "Repo")
@@ -203,7 +209,7 @@ def _repo_role(
             role.role_id,
             {"Repoed": datetime.datetime.utcnow().isoformat()},
         )
-        update_repoed_description(role.role_name, **conn)
+        update_repoed_description(role.role_name, conn)
         partial_update_role_data(
             role,
             dynamo_table,
@@ -230,7 +236,7 @@ def _rollback_role(
     hooks: RepokidHooks,
     selection: int = 0,
     commit: bool = False,
-):
+) -> List[str]:
     """
     Display the historical policy versions for a roll as a numbered list.  Restore to a specific version if selected.
     Indicate changes that will be made and then actually make them if commit is selected.
@@ -275,7 +281,7 @@ def _rollback_role(
                 ]
             )
         print(tabulate(rows, headers=headers))
-        return
+        return errors
 
     conn = config["connection_iam"]
     conn["account_number"] = account_number
@@ -297,13 +303,13 @@ def _rollback_role(
         selected_permissions, _ = roledata.get_permissions_in_policy(
             role.policies[int(selection)]["Policy"]
         )
-        restored_permissions = selected_permissions - current_permissions
+        restored_permissions = set(selected_permissions) - set(current_permissions)
 
         print("\nResore will return these permissions:")
         print("\n".join([perm for perm in sorted(restored_permissions)]))
 
     if not commit:
-        return False
+        return errors
 
     # if we're restoring from a version with fewer policies than we have now, we need to remove them to
     # complete the restore.  To do so we'll store all the policy names we currently have and remove them
@@ -349,7 +355,7 @@ def _rollback_role(
                     RoleName=role.role_name, PolicyName=policy_name, **conn
                 )
 
-            except botocore.excpetions.ClientError as e:
+            except botocore.exceptions.ClientError as e:
                 message = "Unable to delete policy {}.  Error: {} (role: {} account {})".format(
                     policy_name, e.message, role.role_name, account_number
                 )
@@ -383,7 +389,7 @@ def _repo_all_roles(
     commit: bool = False,
     scheduled: bool = True,
     limit: int = -1,
-):
+) -> None:
     """
     Repo all scheduled or eligible roles in an account.  Collect any errors and display them at the end.
 
@@ -461,7 +467,9 @@ def _repo_all_roles(
     )
 
 
-def _repo_stats(output_file: str, dynamo_table: Table, account_number: str = ""):
+def _repo_stats(
+    output_file: str, dynamo_table: Table, account_number: str = ""
+) -> None:
     """
     Create a csv file with stats about roles, total permissions, and applicable filters over time
 
@@ -496,17 +504,17 @@ def _repo_stats(output_file: str, dynamo_table: Table, account_number: str = "")
             roleID,
             fields=["RoleId", "RoleName", "Account", "Active", "Stats"],
         )
-        for stats_entry in role_data.get("Stats", []):
+        for stats_entry in role_data.stats:
             rows.append(
                 [
-                    role_data["RoleId"],
-                    role_data["RoleName"],
-                    role_data["Account"],
-                    role_data["Active"],
+                    role_data.role_id,
+                    role_data.role_name,
+                    role_data.account,
+                    role_data.active,
                     stats_entry["Date"],
                     stats_entry["Source"],
                     stats_entry["PermissionsCount"],
-                    stats_entry.get("RepoablePermissionsCount"),
+                    stats_entry.get("RepoablePermissionsCount", 0),
                     stats_entry.get("DisqualifiedBy", []),
                 ]
             )

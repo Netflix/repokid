@@ -2,19 +2,19 @@ import copy
 import datetime
 
 import pytest
-from marshmallow import ValidationError
 from mock import call
 from mock import patch
+from pydantic.error_wrappers import ValidationError
 
-import repokid.cli.dispatcher_cli as dispatcher_cli
 import repokid.dispatcher as dispatcher
+from repokid.dispatcher.types import Message
 
 DYNAMO_TABLE = None
-MESSAGE = dispatcher_cli.Message(
-    "command",
-    "account",
-    "role",
-    "respond_channel",
+MESSAGE = Message(
+    command="command",
+    account="account",
+    role_name="role",
+    respond_channel="respond_channel",
     respond_user="some_user",
     requestor="a_requestor",
     reason="some_reason",
@@ -35,7 +35,6 @@ class TestDispatcherCLI(object):
         assert test_message.selection == "some_selection"
 
     def test_schema(self):
-        schema = dispatcher_cli.MessageSchema()
 
         # happy path
         test_message = {
@@ -45,7 +44,7 @@ class TestDispatcherCLI(object):
             "respond_channel": "channel",
             "respond_user": "user",
         }
-        result = schema.load(test_message)
+        result = Message.parse_obj(test_message)
         assert result.command == "list_repoable_services"
 
         # missing required field command
@@ -56,7 +55,7 @@ class TestDispatcherCLI(object):
             "respond_user": "user",
         }
         with pytest.raises(ValidationError):
-            _ = schema.load(test_message)
+            _ = Message.parse_obj(test_message)
 
     @patch("repokid.utils.dynamo.find_role_in_cache")
     @patch("repokid.utils.dynamo.get_role_data")
@@ -88,13 +87,22 @@ class TestDispatcherCLI(object):
         self, mock_set_role_data, mock_get_role_data, mock_find_role_in_cache, mock_time
     ):
         mock_find_role_in_cache.side_effect = [None, "ROLE_ID_A"]
-        GET_ROLE_DATA_FOR_FIND = {}
+
+        class MockRoleNoOptOut:
+            opt_out = None
+
+        class MockRoleOptOut:
+            opt_out = {"owner": "somebody", "reason": "because"}
+
+        class MockRoleEmptyOptOut:
+            opt_out = {}
+
         mock_get_role_data.side_effect = [
-            GET_ROLE_DATA_FOR_FIND,  # role not found
-            GET_ROLE_DATA_FOR_FIND,  # opt out exists
-            {"OptOut": {"owner": "somebody", "reason": "because"}},
-            GET_ROLE_DATA_FOR_FIND,
-            {"OptOut": {}},  # success
+            MockRoleNoOptOut(),  # role not found
+            MockRoleNoOptOut(),  # opt out exists
+            MockRoleOptOut(),
+            MockRoleNoOptOut(),
+            MockRoleEmptyOptOut(),  # success
         ]
 
         mock_time.return_value = 0
@@ -103,7 +111,7 @@ class TestDispatcherCLI(object):
         expire_dt = current_dt + datetime.timedelta(90)
         expire_epoch = int((expire_dt - datetime.datetime(1970, 1, 1)).total_seconds())
 
-        bad_message = copy.copy(MESSAGE)
+        bad_message = copy.deepcopy(MESSAGE)
         bad_message.reason = None
         # message missing reason
         (success, _) = dispatcher.opt_out(DYNAMO_TABLE, bad_message)
@@ -115,16 +123,14 @@ class TestDispatcherCLI(object):
 
         (success, msg) = dispatcher.opt_out(DYNAMO_TABLE, MESSAGE)
         assert success
-        assert mock_set_role_data.mock_calls == [
-            call(
-                DYNAMO_TABLE,
-                "ROLE_ID_A",
-                {
-                    "OptOut": {
-                        "owner": MESSAGE.requestor,
-                        "reason": MESSAGE.reason,
-                        "expire": expire_epoch,
-                    }
-                },
-            )
-        ]
+        assert mock_set_role_data.mock_calls[0] == call(
+            DYNAMO_TABLE,
+            "ROLE_ID_A",
+            {
+                "OptOut": {
+                    "owner": MESSAGE.requestor,
+                    "reason": MESSAGE.reason,
+                    "expire": expire_epoch,
+                }
+            },
+        )

@@ -37,7 +37,7 @@ def _schedule_repo(
     dynamo_table: Table,
     config: RepokidConfig,
     hooks: RepokidHooks,
-):
+) -> None:
     """
     Schedule a repo for a given account.  Schedule repo for a time in the future (default 7 days) for any roles in
     the account with repoable permissions.
@@ -93,7 +93,7 @@ def _schedule_repo(
     repokid.hooks.call_hooks(hooks, "AFTER_SCHEDULE_REPO", {"roles": scheduled_roles})
 
 
-def _show_scheduled_roles(account_number: str, dynamo_table: Table):
+def _show_scheduled_roles(account_number: str, dynamo_table: Table) -> None:
     """
     Show scheduled repos for a given account.  For each scheduled show whether scheduled time is elapsed or not.
     """
@@ -127,7 +127,7 @@ def _show_scheduled_roles(account_number: str, dynamo_table: Table):
 
 def _cancel_scheduled_repo(
     account_number: str, dynamo_table: Table, role_name: str = "", is_all: bool = False
-):
+) -> None:
     """
     Cancel scheduled repo for a role in an account
     """

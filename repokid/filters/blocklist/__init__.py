@@ -2,6 +2,7 @@ import json
 import logging
 from typing import Any
 from typing import Dict
+from typing import Set
 
 import botocore
 from cloudaux.aws.sts import boto3_cached_conn
@@ -14,7 +15,8 @@ from repokid.types import RepokidFilterConfig
 LOGGER = logging.getLogger("repokid")
 
 
-def get_blocklist_from_bucket(bucket_config: Dict[str, Any]):
+def get_blocklist_from_bucket(bucket_config: Dict[str, Any]) -> Dict[str, Any]:
+    blocklist_json: Dict[str, Any]
     try:
         s3_resource = boto3_cached_conn(
             "s3",
@@ -48,11 +50,16 @@ def get_blocklist_from_bucket(bucket_config: Dict[str, Any]):
 
 
 class BlocklistFilter(Filter):
-    blocklist_json = None
+    blocklist_json: Dict[str, Any] = {}
 
     def __init__(self, config: RepokidFilterConfig = None) -> None:
         super().__init__(config=config)
-        current_account = config.get("current_account") or None
+        if not config:
+            LOGGER.error(
+                "No configuration provided, cannot initialize Blocklist Filter"
+            )
+            return
+        current_account = config.get("current_account") or ""
         if not current_account:
             LOGGER.error("Unable to get current account for Blocklist Filter")
 
@@ -75,18 +82,21 @@ class BlocklistFilter(Filter):
                 ]
             )
 
-        self.blocklisted_arns = (
+        self.blocklisted_arns: Set[str] = (
             set()
             if not BlocklistFilter.blocklist_json
-            else BlocklistFilter.blocklist_json.get("arns", [])
+            else set(BlocklistFilter.blocklist_json.get("arns", []))
         )
         self.blocklisted_role_names = blocklisted_role_names
 
     @classmethod
     def init_blocklist(cls, config: RepokidFilterConfig) -> None:
+        if not config:
+            LOGGER.error("No config provided for blocklist filter")
+            raise BlocklistError("No config provided for blocklist filter")
         if not cls.blocklist_json:
             bucket_config = config.get(
-                "blocklist_bucket", config.get("blacklist_bucket", None)
+                "blocklist_bucket", config.get("blacklist_bucket", {})
             )
             if bucket_config:
                 cls.blocklist_json = get_blocklist_from_bucket(bucket_config)
