@@ -87,10 +87,10 @@ def add_to_end_of_list(
 
 def dynamo_get_or_create_table(
     account_number: str,
-    assume_role: Optional[str],
     session_name: str,
     region: str,
     endpoint: str,
+    assume_role: Optional[str] = "",
 ) -> Table:
     """
     Create a new table or get a reference to an existing Dynamo table named 'repokid_roles' that will store data all
@@ -329,7 +329,7 @@ def set_role_data(
 def store_initial_role_data(
     dynamo_table: Table,
     arn: str,
-    create_date: datetime.datetime,
+    create_date: Optional[datetime.datetime],
     role_id: str,
     role_name: str,
     account_number: str,
@@ -352,9 +352,9 @@ def store_initial_role_data(
         "Policy": current_policy,
     }
 
-    role_dict = {
+    role_dict: Dict[str, Any] = {
         "Arn": arn,
-        "CreateDate": create_date.isoformat(),
+        "CreateDate": create_date.isoformat() if create_date else "",
         "RoleId": role_id,
         "RoleName": role_name,
         "Account": account_number,

@@ -31,11 +31,11 @@ class Role(BaseModel):
     aa_data: Optional[List[Dict[str, Any]]] = Field(alias="AAData")
     account: str = Field(alias="Account", default="")
     active: Optional[bool] = Field(alias="Active")
-    arn: str = Field(alias="Arn")
+    arn: str = Field(alias="Arn", default="")
     assume_role_policy_document: Dict[str, Any] = Field(
         alias="AssumeRolePolicyDocument", default={}
     )
-    create_date: datetime.datetime = Field(alias="CreateDate")
+    create_date: Optional[datetime.datetime] = Field(alias="CreateDate")
     disqualified_by: List[str] = Field(alias="DisqualifiedBy", default=[])
     no_repo_permissions: Dict[str, Any] = Field(alias="NoRepoPermissions", default={})
     opt_out: Dict[str, int] = Field(alias="OptOut", default={})
@@ -45,7 +45,7 @@ class Role(BaseModel):
     repoable_services: List[str] = Field(alias="RepoableServices", default=[])
     repoed: Optional[str] = Field(alias="Repoed")
     repo_scheduled: float = Field(alias="RepoScheduled", default=0.0)
-    role_id: str = Field(alias="RoleId")
+    role_id: str = Field(alias="RoleId", default="")
     role_name: str = Field(alias="RoleName", default="")
     scheduled_perms: Set[str] = Field(alias="ScheduledPerms", default=[])
     stats: List[Dict[str, Any]] = Field(alias="Stats", default=[])

@@ -86,9 +86,8 @@ def add_new_policy_version(
     }
 
     add_to_end_of_list(dynamo_table, role.role_id, "Policies", policy_entry)
-    role.policies = get_role_data(dynamo_table, role.role_id, fields=["Policies"])[
-        "Policies"
-    ]
+    temp_role = get_role_data(dynamo_table, role.role_id, fields=["Policies"])
+    role.policies = temp_role.policies
     # TODO(psanders): return new role instead of mutating
 
 
@@ -155,7 +154,7 @@ def update_no_repo_permissions(
     """
     current_ignored_permissions = get_role_data(
         dynamo_table, role.role_id, fields=["NoRepoPermissions"]
-    ).get("NoRepoPermissions", {})
+    ).no_repo_permissions
     new_ignored_permissions = {}
 
     current_time = int(time.time())
@@ -265,7 +264,7 @@ def update_role_data(
             newly_added_permissions = set()
 
         # update tags if needed
-        if role.tags != stored_role.get("Tags", []):
+        if role.tags != stored_role.tags:
             set_role_data(dynamo_table, role.role_id, {"Tags": role.tags})
 
         if add_no_repo:
@@ -278,9 +277,9 @@ def update_role_data(
         )
 
         # Update all data from Dynamo except CreateDate (it's in the wrong format) and DQ_by (we're going to recalc)
-        current_role_data = get_role_data(dynamo_table, role.role_id)
-        current_role_data.pop("CreateDate", None)
-        current_role_data.pop("DisqualifiedBy", None)
+        current_role_data = get_role_data(dynamo_table, role.role_id).dict()
+        current_role_data.pop("create_date", None)
+        current_role_data.pop("disqualified_by", None)
 
         # Create an updated Role model to be returned to the caller
         role_updates = Role.parse_obj(current_role_data)
@@ -896,6 +895,9 @@ def _get_role_permissions(
         set - all permissions allowed by the policies
         set - all permisisons allowed by the policies not marked with STATEMENT_SKIP_SID
     """
+    if not role.policies:
+        return set(), set()
+
     return get_permissions_in_policy(
         role.policies[-1]["Policy"], warn_unknown_perms=warn_unknown_perms
     )
