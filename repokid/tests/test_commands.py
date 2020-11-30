@@ -16,17 +16,21 @@ import logging
 import time
 
 from dateutil.tz import tzlocal
-from mock import call, MagicMock, mock_open, patch
+from mock import MagicMock
+from mock import call
+from mock import mock_open
+from mock import patch
+
 import repokid.cli.repokid_cli
 import repokid.commands.repo
 import repokid.commands.role
 import repokid.commands.role_cache
 import repokid.commands.schedule
-from repokid.role import Role, Roles
 import repokid.utils.iam
 import repokid.utils.logging
 import repokid.utils.roledata
-
+from repokid.role import Role
+from repokid.role import Roles
 
 AARDVARK_DATA = {
     "arn:aws:iam::123456789012:role/all_services_used": [
@@ -790,7 +794,8 @@ class TestRepokidCLI(object):
     @patch("repokid.utils.iam.set_role_data", MagicMock(return_value=None))
     @patch("repokid.utils.iam.set_role_data", MagicMock(return_value=None))
     @patch(
-        "repokid.utils.iam.update_repoed_description", MagicMock(return_value=None),
+        "repokid.utils.iam.update_repoed_description",
+        MagicMock(return_value=None),
     )
     @patch("repokid.utils.iam.roledata.update_role_data", MagicMock(return_value=None))
     def test_remove_permissions_from_role(self):

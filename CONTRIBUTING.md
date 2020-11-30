@@ -8,7 +8,7 @@ Please follow the instructions in Repokid's [getting started](https://github.com
 
 Issue Tags
 ----------
-First time contributors should consider tackling an issue marked with `difficulty:newcomer` first.  These issues are relatively easy and a good way to get started.  
+First time contributors should consider tackling an issue marked with `difficulty:newcomer` first.  These issues are relatively easy and a good way to get started.
 
 We also have some issues tagged with `help wanted`.  These issues are something we'd love help with and are a great way to get significantly involved with the project.
 

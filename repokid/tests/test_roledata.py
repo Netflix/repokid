@@ -14,9 +14,11 @@
 import time
 from unittest.mock import patch
 
-from repokid.role import Role
-from repokid.tests.test_commands import AARDVARK_DATA, ROLE_POLICIES, ROLES
 import repokid.utils.roledata
+from repokid.role import Role
+from repokid.tests.test_commands import AARDVARK_DATA
+from repokid.tests.test_commands import ROLE_POLICIES
+from repokid.tests.test_commands import ROLES
 
 # AARDVARK_DATA maintained in test_repokid_cli
 
@@ -483,11 +485,14 @@ class TestRoledata(object):
         ]
         expected_services = ["ec2", "route53"]
         expected_permissions = ["dynamodb:def", "s3:abc", "ses:ghi", "ses:jkl"]
-        assert repokid.utils.roledata._convert_repoed_service_to_sorted_perms_and_services(
-            repoed_services
-        ) == (
-            expected_permissions,
-            expected_services,
+        assert (
+            repokid.utils.roledata._convert_repoed_service_to_sorted_perms_and_services(
+                repoed_services
+            )
+            == (
+                expected_permissions,
+                expected_services,
+            )
         )
 
     def test_get_epoch_authenticated(self):
@@ -516,7 +521,7 @@ class TestRoledata(object):
         ) == ["a:b", "a:c"]
 
     def test_get_repoed_policy_sid(self):
-        """ roledata._get_repoed_policy(policies, repoable_permissions)
+        """roledata._get_repoed_policy(policies, repoable_permissions)
 
         Cases to consider:
 
@@ -573,7 +578,7 @@ class TestRoledata(object):
         )
 
     def test_get_permissions_in_policy_sid(self):
-        """ roledata._get_permissions_in_policy(policy_dict, warn_unkown_perms=False)
+        """roledata._get_permissions_in_policy(policy_dict, warn_unkown_perms=False)
 
         returns total_permissions, eligible_permissions
 

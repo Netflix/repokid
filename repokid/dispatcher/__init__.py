@@ -1,12 +1,12 @@
-from collections import namedtuple
 import datetime
 import time
+from collections import namedtuple
 
-from repokid import CONFIG
-from repokid import get_hooks
 import repokid.commands.repo
 import repokid.utils.dynamo as dynamo
 import repokid.utils.roledata as roledata
+from repokid import CONFIG
+from repokid import get_hooks
 
 ResponderReturn = namedtuple("ResponderReturn", "successful, return_message")
 

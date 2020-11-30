@@ -11,20 +11,20 @@
 #     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #     See the License for the specific language governing permissions and
 #     limitations under the License.
-from datetime import datetime as dt
 import logging
 import time
+from datetime import datetime as dt
 
-import repokid.hooks
-from repokid.role import Role, Roles
-from repokid.utils.dynamo import (
-    find_role_in_cache,
-    get_role_data,
-    role_ids_for_account,
-    set_role_data,
-)
 from tabulate import tabulate
 from tqdm import tqdm
+
+import repokid.hooks
+from repokid.role import Role
+from repokid.role import Roles
+from repokid.utils.dynamo import find_role_in_cache
+from repokid.utils.dynamo import get_role_data
+from repokid.utils.dynamo import role_ids_for_account
+from repokid.utils.dynamo import set_role_data
 
 LOGGER = logging.getLogger("repokid")
 

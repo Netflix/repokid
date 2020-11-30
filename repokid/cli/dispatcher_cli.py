@@ -3,10 +3,13 @@ import inspect
 import json
 
 from cloudaux.aws.sts import sts_conn
-from marshmallow import fields, post_load, Schema
-from repokid import CONFIG
+from marshmallow import Schema
+from marshmallow import fields
+from marshmallow import post_load
+
 import repokid.dispatcher
 import repokid.utils.dynamo as dynamo
+from repokid import CONFIG
 
 
 class Message(object):

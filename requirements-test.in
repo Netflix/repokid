@@ -3,6 +3,7 @@ black
 coveralls
 flake8
 flake8-import-order
+pre-commit
 python-dateutil
 mock
 pytest

@@ -1,17 +1,19 @@
 language: python
+dist: focal
 matrix:
   include:
   - python: '3.7'
+  - python: '3.8'
+  - python: '3.9'
 before_install:
 - sudo rm -f /etc/boto.cfg
 install:
+- pip install -r requirements.txt -r requirements-test.txt
 - pip install .
-- pip install -r requirements-test.txt
 script:
+- pre-commit run
 - coverage run --source repokid -m py.test
 - bandit -r . -ll -ii -x repokid/tests/
-- flake8 .
-- black .
 after_success:
 - coveralls
 deploy:
@@ -24,6 +26,5 @@ deploy:
     tags: true
 notifications:
   email:
-  - tmcpeak@netflix.com
   - ccastrapel@netflix.com
   - psanders@netflix.com

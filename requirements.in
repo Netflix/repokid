@@ -1,6 +1,6 @@
 boto3
 cloudaux
-docopt
+click
 import_string
 marshmallow
 policyuniverse
