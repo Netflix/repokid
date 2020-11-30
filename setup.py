@@ -20,6 +20,7 @@ setup(
     description="AWS Least Privilege for Distributed, High-Velocity Deployment",
     url="https://github.com/Netflix/repokid",
     packages=find_packages(),
+    package_data={"repokid": ["py.typed"]},
     versioning="dev",
     setup_requires=["setupmeta"],
     python_requires=">=3.7",
