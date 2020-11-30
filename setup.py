@@ -27,7 +27,7 @@ setup(
     keywords=["aws", "iam", "access_advisor"],
     entry_points={
         "console_scripts": [
-            "repokid = repokid.cli.repokid_cli:main",
+            "repokid = repokid.cli.repokid_cli:cli",
             "dispatcher = repokid.cli.dispatcher_cli:main",
         ]
     },
