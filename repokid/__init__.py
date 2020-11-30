@@ -46,7 +46,7 @@ def init_config() -> RepokidConfig:
         "/etc/repokid/config.json",
         "/apps/repokid/config.json",
     ]
-    config: RepokidConfig
+    config: RepokidConfig = {}
     for path in load_config_paths:
         try:
             with open(path, "r") as f:
