@@ -20,10 +20,10 @@ from typing import Dict
 from typing import List
 
 import botocore
-from cloudaux import sts_conn
 from cloudaux.aws.iam import delete_role_policy
 from cloudaux.aws.iam import get_role_inline_policies
 from cloudaux.aws.iam import put_role_policy
+from cloudaux.aws.sts import boto3_cached_conn
 from mypy_boto3_dynamodb.service_resource import Table
 from mypy_boto3_iam.client import IAMClient
 
@@ -41,7 +41,7 @@ MAX_AWS_POLICY_SIZE = 10240
 
 
 def update_repoed_description(role_name: str, conn_details: Dict[str, Any]) -> None:
-    client: IAMClient = sts_conn("iam", **conn_details)
+    client: IAMClient = boto3_cached_conn("iam", **conn_details)
     try:
         description = client.get_role(RoleName=role_name)["Role"].get("Description", "")
     except KeyError:

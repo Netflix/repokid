@@ -6,7 +6,7 @@ from typing import Dict
 from typing import Generator
 from typing import Optional
 
-from cloudaux.aws.sts import sts_conn
+from cloudaux.aws.sts import boto3_cached_conn
 from mypy_boto3_sns.client import SNSClient
 from mypy_boto3_sqs.client import SQSClient
 from mypy_boto3_sqs.type_defs import ReceiveMessageResultTypeDef
@@ -22,14 +22,14 @@ def get_failure_message(channel: str, message: str) -> Dict[str, Any]:
 
 
 def delete_message(receipt_handle: str, conn_details: Dict[str, Any]) -> None:
-    client: SQSClient = sts_conn("sqs", **conn_details)
+    client: SQSClient = boto3_cached_conn("sqs", **conn_details)
     client.delete_message(
         QueueUrl=CONFIG["dispatcher"]["to_rr_queue"], ReceiptHandle=receipt_handle
     )
 
 
 def receive_message(conn_details: Dict[str, Any]) -> ReceiveMessageResultTypeDef:
-    client: SQSClient = sts_conn("sqs", **conn_details)
+    client: SQSClient = boto3_cached_conn("sqs", **conn_details)
     return client.receive_message(
         QueueUrl=CONFIG["dispatcher"]["to_rr_queue"],
         MaxNumberOfMessages=1,
@@ -38,7 +38,7 @@ def receive_message(conn_details: Dict[str, Any]) -> ReceiveMessageResultTypeDef
 
 
 def send_message(message_dict: Dict[str, Any], conn_details: Dict[str, Any]) -> None:
-    client: SNSClient = sts_conn("sns", **conn_details)
+    client: SNSClient = boto3_cached_conn("sns", **conn_details)
     client.publish(
         TopicArn=CONFIG["dispatcher"]["from_rr_sns"], Message=json.dumps(message_dict)
     )
