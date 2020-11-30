@@ -46,6 +46,6 @@ repos:
     -   id: python-bandit-vulnerability-check
         name: bandit
         entry: bandit
-        args: ['--ini', 'tox.ini', '-r', 'consoleme']
+        args: ['--ini', 'tox.ini', '-x', 'repokid/tests/', '-r', 'repokid']
         language: system
         pass_filenames: false
