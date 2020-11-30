@@ -37,6 +37,8 @@ repos:
     rev: v0.790
     hooks:
     -   id: mypy
+        additional_dependencies:
+          - pydantic
 
 -   repo: local
     hooks:
