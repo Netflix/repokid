@@ -112,8 +112,8 @@ def find_and_mark_inactive(
     inactive_roles = known_roles - active_roles_set
 
     for roleID in inactive_roles:
-        role_dict = get_role_data(dynamo_table, roleID, fields=["Active", "Arn"])
-        if role_dict.active:
+        role = get_role_data(dynamo_table, roleID, fields=["Active", "Arn"])
+        if role.active:
             set_role_data(dynamo_table, roleID, {"Active": False})
 
 
@@ -152,9 +152,7 @@ def update_no_repo_permissions(
     Returns:
         None
     """
-    current_ignored_permissions = get_role_data(
-        dynamo_table, role.role_id, fields=["NoRepoPermissions"]
-    ).no_repo_permissions
+    current_ignored_permissions = role.no_repo_permissions
     new_ignored_permissions = {}
 
     current_time = int(time.time())

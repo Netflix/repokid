@@ -24,7 +24,6 @@ from tabulate import tabulate
 from tqdm import tqdm
 
 import repokid.hooks
-from repokid.role import Role
 from repokid.role import RoleList
 from repokid.types import RepokidConfig
 from repokid.types import RepokidHooks
@@ -67,7 +66,7 @@ def _display_roles(
 
     roles = RoleList(
         [
-            Role.parse_obj(get_role_data(dynamo_table, roleID))
+            get_role_data(dynamo_table, roleID)
             for roleID in tqdm(role_ids_for_account(dynamo_table, account_number))
         ]
     )
@@ -115,10 +114,8 @@ def _find_roles_with_permissions(
     """
     arns: List[str] = list()
     for roleID in role_ids_for_all_accounts(dynamo_table):
-        role = Role.parse_obj(
-            get_role_data(
-                dynamo_table, roleID, fields=["Policies", "RoleName", "Arn", "Active"]
-            )
+        role = get_role_data(
+            dynamo_table, roleID, fields=["Policies", "RoleName", "Arn", "Active"]
         )
         role_permissions, _ = roledata._get_role_permissions(role)
 
@@ -170,7 +167,7 @@ def _display_role(
         LOGGER.warning("Could not find role with name {}".format(role_name))
         return
 
-    role = Role.parse_obj(get_role_data(dynamo_table, role_id))
+    role = get_role_data(dynamo_table, role_id)
 
     print("\n\nRole repo data:")
     headers = [
@@ -320,7 +317,7 @@ def _remove_permissions_from_roles(
         role_name = arn.name.split("/")[-1]
 
         role_id = find_role_in_cache(dynamo_table, account_number, role_name)
-        role = Role.parse_obj(get_role_data(dynamo_table, role_id))
+        role = get_role_data(dynamo_table, role_id)
 
         remove_permissions_from_role(
             account_number,

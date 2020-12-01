@@ -20,7 +20,6 @@ from tabulate import tabulate
 from tqdm import tqdm
 
 import repokid.hooks
-from repokid.role import Role
 from repokid.role import RoleList
 from repokid.types import RepokidConfig
 from repokid.types import RepokidHooks
@@ -46,7 +45,7 @@ def _schedule_repo(
 
     roles = RoleList(
         [
-            Role.parse_obj(get_role_data(dynamo_table, roleID))
+            get_role_data(dynamo_table, roleID)
             for roleID in tqdm(role_ids_for_account(dynamo_table, account_number))
         ]
     )
@@ -99,7 +98,7 @@ def _show_scheduled_roles(account_number: str, dynamo_table: Table) -> None:
     """
     roles = RoleList(
         [
-            Role.parse_obj(get_role_data(dynamo_table, roleID))
+            get_role_data(dynamo_table, roleID)
             for roleID in tqdm(role_ids_for_account(dynamo_table, account_number))
         ]
     )
@@ -138,7 +137,7 @@ def _cancel_scheduled_repo(
     if is_all:
         roles = RoleList(
             [
-                Role.parse_obj(get_role_data(dynamo_table, roleID))
+                get_role_data(dynamo_table, roleID)
                 for roleID in role_ids_for_account(dynamo_table, account_number)
             ]
         )
@@ -167,7 +166,7 @@ def _cancel_scheduled_repo(
         )
         return
 
-    role = Role.parse_obj(get_role_data(dynamo_table, role_id))
+    role = get_role_data(dynamo_table, role_id)
 
     if not role.repo_scheduled:
         LOGGER.warn(

@@ -27,7 +27,6 @@ from tabulate import tabulate
 
 import repokid.hooks
 from repokid.exceptions import IAMError
-from repokid.role import Role
 from repokid.role import RoleList
 from repokid.types import RepokidConfig
 from repokid.types import RepokidHooks
@@ -73,16 +72,11 @@ def _repo_role(
 
     role_id = find_role_in_cache(dynamo_table, account_number, role_name)
     # only load partial data that we need to determine if we should keep going
-    role_data = get_role_data(
+    role = get_role_data(
         dynamo_table,
         role_id,
         fields=["DisqualifiedBy", "AAData", "RepoablePermissions", "RoleName"],
     )
-    if not role_data:
-        LOGGER.warning("Could not find role with name {}".format(role_name))
-        return errors
-    else:
-        role = Role.parse_obj(role_data)
 
     continuing = True
 
@@ -107,7 +101,7 @@ def _repo_role(
         continuing = False
 
     # if we've gotten to this point, load the rest of the role
-    role = Role.parse_obj(get_role_data(dynamo_table, role_id))
+    role = get_role_data(dynamo_table, role_id)
 
     old_aa_data_services = []
     if role.aa_data:
@@ -261,7 +255,7 @@ def _rollback_role(
         LOGGER.warning(message)
         return errors
     else:
-        role = Role.parse_obj(get_role_data(dynamo_table, role_id))
+        role = get_role_data(dynamo_table, role_id)
 
     # no option selected, display a table of options
     if not selection:
@@ -410,12 +404,10 @@ def _repo_all_roles(
     roles = RoleList([])
     for role_id in role_ids_in_account:
         roles.append(
-            Role.parse_obj(
-                get_role_data(
-                    dynamo_table,
-                    role_id,
-                    fields=["Active", "RoleName", "RepoScheduled"],
-                )
+            get_role_data(
+                dynamo_table,
+                role_id,
+                fields=["Active", "RoleName", "RepoScheduled"],
             )
         )
 
@@ -499,18 +491,18 @@ def _repo_stats(
     rows = []
 
     for roleID in roleIDs:
-        role_data = get_role_data(
+        role = get_role_data(
             dynamo_table,
             roleID,
             fields=["RoleId", "RoleName", "Account", "Active", "Stats"],
         )
-        for stats_entry in role_data.stats:
+        for stats_entry in role.stats:
             rows.append(
                 [
-                    role_data.role_id,
-                    role_data.role_name,
-                    role_data.account,
-                    role_data.active,
+                    role.role_id,
+                    role.role_name,
+                    role.account,
+                    role.active,
                     stats_entry["Date"],
                     stats_entry["Source"],
                     stats_entry["PermissionsCount"],
