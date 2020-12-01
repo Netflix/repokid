@@ -33,6 +33,7 @@ from policyuniverse import get_actions_from_statement
 
 import repokid.hooks
 from repokid import CONFIG as CONFIG
+from repokid.exceptions import RoleNotFoundError
 from repokid.role import Role
 from repokid.role import RoleList
 from repokid.types import RepokidConfig
@@ -225,9 +226,13 @@ def update_role_data(
     """
 
     # policy_entry: source, discovered, policy
-    stored_role = get_role_data(
-        dynamo_table, role.role_id, fields=["OptOut", "Policies", "Tags"]
-    )
+    try:
+        stored_role = get_role_data(
+            dynamo_table, role.role_id, fields=["OptOut", "Policies", "Tags"]
+        )
+    except RoleNotFoundError:
+        stored_role = None
+
     if not stored_role:
         role_dict = store_initial_role_data(
             dynamo_table,

@@ -43,4 +43,5 @@ setup(
         "Topic :: System",
         "Topic :: System :: Systems Administration",
     ],
+    zip_safe=False,
 )
