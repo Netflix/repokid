@@ -275,13 +275,12 @@ def update_role_data(
         )
 
         # Update all data from Dynamo except CreateDate (it's in the wrong format) and DQ_by (we're going to recalc)
-        current_role_data = get_role_data(dynamo_table, role.role_id).dict()
-        current_role_data.pop("create_date", None)
-        current_role_data.pop("disqualified_by", None)
+        current_role = get_role_data(dynamo_table, role.role_id)
+        current_role.create_date = None
+        current_role.disqualified_by = []
 
         # Create an updated Role model to be returned to the caller
-        role_updates = Role.parse_obj(current_role_data)
-        update_dict = role_updates.dict(exclude_unset=True)
+        update_dict = current_role.dict(exclude_unset=True)
         role = role.copy(update=update_dict)
 
         return role
