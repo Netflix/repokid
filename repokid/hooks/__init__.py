@@ -21,6 +21,9 @@ def call_hooks(
     Returns:
         dict: Outputs of the final function in the chain
     """
+    if hook_name not in hooks_dict:
+        return inputs_dict
+
     for func in hooks_dict[hook_name]:
         inputs_dict = func(inputs_dict)
         if not inputs_dict:
