@@ -17,7 +17,8 @@ modules so developers don't have to worry about passing configs, hooks, and dyna
 clients.
 """
 from typing import List
-from typing import Optional
+
+from mypy_boto3_dynamodb.service_resource import Table
 
 from repokid import CONFIG
 from repokid import get_hooks
@@ -36,10 +37,10 @@ from repokid.commands.schedule import _show_scheduled_roles
 from repokid.utils.dynamo import dynamo_get_or_create_table
 
 hooks = get_hooks(CONFIG.get("hooks", ["repokid.hooks.loggers"]))
-dynamo_table = dynamo_get_or_create_table(**CONFIG["dynamo_db"])
+dynamo_table: Table = dynamo_get_or_create_table(**CONFIG["dynamo_db"])
 
 
-def update_role_cache(account_number: str):
+def update_role_cache(account_number: str) -> None:
     """
     Library wrapper to update data about all roles in a given account.
 
@@ -54,7 +55,7 @@ def update_role_cache(account_number: str):
     return _update_role_cache(account_number, dynamo_table, CONFIG, hooks)
 
 
-def display_role_cache(account_number: str, inactive: bool = False):
+def display_role_cache(account_number: str, inactive: bool = False) -> None:
     """
     Library wrapper to display a table with data about all roles in an account and write a csv file with the data.
 
@@ -70,7 +71,7 @@ def display_role_cache(account_number: str, inactive: bool = False):
     return _display_roles(account_number, dynamo_table, inactive=inactive)
 
 
-def find_roles_with_permissions(permissions: List[str], output_file: str = ""):
+def find_roles_with_permissions(permissions: List[str], output_file: str = "") -> None:
     """
     Library wrapper to search roles in all accounts for a policy with any of the provided permissions, log the ARN of
     each role.
@@ -89,7 +90,7 @@ def find_roles_with_permissions(permissions: List[str], output_file: str = ""):
 
 def remove_permissions_from_roles(
     permissions: List[str], role_filename: str, commit: bool = False
-):
+) -> None:
     """
     Library wrapper to loads role specified in file and call _remove_permissions_from_role() for each one.
 
@@ -108,7 +109,7 @@ def remove_permissions_from_roles(
     )
 
 
-def display_role(account_number: str, role_name: str):
+def display_role(account_number: str, role_name: str) -> None:
     """
     Library wrapper to display data about a role in a given account
 
@@ -126,7 +127,7 @@ def display_role(account_number: str, role_name: str):
 
 def repo_role(
     account_number: str, role_name: str, commit: bool = False, update: bool = True
-):
+) -> List[str]:
     """
     Library wrapper to calculate what repoing can be done for a role and then actually do it if commit is set.
 
@@ -139,7 +140,7 @@ def repo_role(
         update (bool)
 
     Returns:
-        None
+        errors (list): if any
     """
     return _repo_role(
         account_number, role_name, dynamo_table, CONFIG, hooks, commit=commit
@@ -148,7 +149,7 @@ def repo_role(
 
 def rollback_role(
     account_number: str, role_name: str, selection: int = 0, commit: bool = False
-) -> Optional[List[str]]:
+) -> List[str]:
     """
     Library wrapper to display the historical policy versions for a roll as a numbered list.  Restore to a specific
     version if selected. Indicate changes that will be made and then actually make them if commit is selected.
@@ -175,7 +176,7 @@ def rollback_role(
     )
 
 
-def schedule_repo(account_number: str):
+def schedule_repo(account_number: str) -> None:
     """
     Library wrapper to schedule a repo for a given account.  Schedule repo for a time in the future (default 7 days) for
     any roles in the account with repoable permissions.
@@ -194,7 +195,7 @@ def schedule_repo(account_number: str):
 
 def repo_all_roles(
     account_number: str, commit: bool = False, update: bool = True, limit: int = -1
-):
+) -> None:
     """
     Convenience wrapper for repo_roles() with scheduled=False.
 
@@ -216,7 +217,7 @@ def repo_all_roles(
 
 def repo_scheduled_roles(
     account_number: str, commit: bool = False, update: bool = True, limit: int = -1
-):
+) -> None:
     """
     Convenience wrapper for repo_roles() with scheduled=True.
 
@@ -242,7 +243,7 @@ def repo_roles(
     scheduled: bool = False,
     update: bool = True,
     limit: int = -1,
-):
+) -> None:
     """
     Library wrapper to repo all scheduled or eligible roles in an account. Collect any errors and display them at the
     end.
@@ -272,7 +273,7 @@ def repo_roles(
     )
 
 
-def show_scheduled_roles(account_number: str):
+def show_scheduled_roles(account_number: str) -> None:
     """
     Library wrapper to show scheduled repos for a given account.  For each scheduled show whether scheduled time is
     elapsed or not.
@@ -290,7 +291,7 @@ def show_scheduled_roles(account_number: str):
 
 def cancel_scheduled_repo(
     account_number: str, role_name: str = "", is_all: bool = False
-):
+) -> None:
     """
     Library wrapper to cancel scheduled repo for a role in an account.
 
@@ -309,7 +310,7 @@ def cancel_scheduled_repo(
     )
 
 
-def repo_stats(output_filename: str = "", account_number: str = ""):
+def repo_stats(output_filename: str = "", account_number: str = "") -> None:
     """
     Library wrapper to create a csv file with stats about roles, total permissions, and applicable filters over time.
 

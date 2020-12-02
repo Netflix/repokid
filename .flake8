@@ -1,3 +1,0 @@
-[flake8]
-import-order-style = google
-application-import-names = repokid

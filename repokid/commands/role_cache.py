@@ -14,11 +14,14 @@
 import logging
 
 from cloudaux.aws.iam import get_account_authorization_details
+from mypy_boto3_dynamodb.service_resource import Table
 from tqdm import tqdm
 
 from repokid.filters import FilterPlugins
 from repokid.role import Role
-from repokid.role import Roles
+from repokid.role import RoleList
+from repokid.types import RepokidConfig
+from repokid.types import RepokidHooks
 from repokid.utils import roledata as roledata
 from repokid.utils.aardvark import get_aardvark_data
 from repokid.utils.dynamo import set_role_data
@@ -26,7 +29,12 @@ from repokid.utils.dynamo import set_role_data
 LOGGER = logging.getLogger("repokid")
 
 
-def _update_role_cache(account_number, dynamo_table, config, hooks):
+def _update_role_cache(
+    account_number: str,
+    dynamo_table: Table,
+    config: RepokidConfig,
+    hooks: RepokidHooks,
+) -> None:
     """
     Update data about all roles in a given account:
       1) list all the roles and initiate a role object with basic data including name and roleID
@@ -69,22 +77,22 @@ def _update_role_cache(account_number, dynamo_table, config, hooks):
             for item in data["RolePolicyList"]
         }
 
-    roles = Roles([Role.parse_obj(rd) for rd in role_data])
+    roles = RoleList([Role.parse_obj(rd) for rd in role_data])
 
-    active_roles = []
-    updated_roles = []
+    active_roles = RoleList([])
+    updated_roles = RoleList([])
     LOGGER.info("Updating role data for account {}".format(account_number))
     for role in tqdm(roles):
         role.account = account_number
         current_policies = role_data_by_id[role.role_id]["RolePolicyList"]
-        active_roles.append(role.role_id)
+        active_roles.append(role)
         role = roledata.update_role_data(
             dynamo_table, account_number, role, current_policies
         )
         updated_roles.append(role)
 
     # Replace roles list with mutated Role objects
-    roles = Roles(updated_roles)
+    roles = updated_roles
 
     LOGGER.info("Finding inactive roles in account {}".format(account_number))
     roledata.find_and_mark_inactive(dynamo_table, account_number, active_roles)
@@ -99,7 +107,7 @@ def _update_role_cache(account_number, dynamo_table, config, hooks):
     )
     blocklist_filter_config["current_account"] = account_number
 
-    for plugin_path in config.get("active_filters"):
+    for plugin_path in config.get("active_filters", []):
         plugin_name = plugin_path.split(":")[1]
         if plugin_name == "ExclusiveFilter":
             # ExclusiveFilter plugin active; try loading its config. Also, it requires the current account, so add it.

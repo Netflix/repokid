@@ -1,32 +1,41 @@
 import datetime
 import time
 from collections import namedtuple
+from typing import Callable
+
+from mypy_boto3_dynamodb.service_resource import Table
 
 import repokid.commands.repo
 import repokid.utils.dynamo as dynamo
 import repokid.utils.roledata as roledata
 from repokid import CONFIG
 from repokid import get_hooks
+from repokid.dispatcher.types import Message
 
 ResponderReturn = namedtuple("ResponderReturn", "successful, return_message")
 
 if CONFIG:
-    hooks = get_hooks(CONFIG.get("hooks", ["repokid.hooks.loggers"]))
+    hooks_list = CONFIG.get("hooks", ["repokid.hooks.loggers"])
 else:
-    hooks = ["repokid.hooks.loggers"]
+    hooks_list = ["repokid.hooks.loggers"]
+
+hooks = get_hooks(hooks_list)
+DispatcherCommand = Callable[[Table, Message], ResponderReturn]
 
 
-def implements_command(command):
-    def _implements_command(func):
+def implements_command(
+    command: str,
+) -> Callable[[DispatcherCommand], DispatcherCommand]:
+    def _implements_command(func: DispatcherCommand) -> DispatcherCommand:
         if not hasattr(func, "_implements_command"):
-            func._implements_command = command
+            setattr(func, "_implements_command", command)
         return func
 
     return _implements_command
 
 
 @implements_command("list_repoable_services")
-def list_repoable_services(dynamo_table, message):
+def list_repoable_services(dynamo_table: Table, message: Message) -> ResponderReturn:
     role_id = dynamo.find_role_in_cache(
         dynamo_table, message.account, message.role_name
     )
@@ -47,10 +56,10 @@ def list_repoable_services(dynamo_table, message):
             repoable_permissions,
             repoable_services,
         ) = roledata._convert_repoed_service_to_sorted_perms_and_services(
-            role_data["RepoableServices"]
+            set(role_data.repoable_services)
         )
 
-        repoable_services = role_data["RepoableServices"]
+        repoable_services = role_data.repoable_services
         return ResponderReturn(
             successful=True,
             return_message=(
@@ -65,7 +74,7 @@ def list_repoable_services(dynamo_table, message):
 
 
 @implements_command("list_role_rollbacks")
-def list_role_rollbacks(dynamo_table, message):
+def list_role_rollbacks(dynamo_table: Table, message: Message) -> ResponderReturn:
     role_id = dynamo.find_role_in_cache(
         dynamo_table, message.account, message.role_name
     )
@@ -82,8 +91,8 @@ def list_role_rollbacks(dynamo_table, message):
         return_val = "Restorable versions for role {} in account {}\n".format(
             message.role_name, message.account
         )
-        for index, policy_version in enumerate(role_data["Policies"]):
-            total_permissions, _ = roledata._get_permissions_in_policy(
+        for index, policy_version in enumerate(role_data.policies):
+            total_permissions, _ = roledata.get_permissions_in_policy(
                 policy_version["Policy"]
             )
             return_val += "({:>3}):  {:<5}     {:<15}  {}\n".format(
@@ -96,7 +105,7 @@ def list_role_rollbacks(dynamo_table, message):
 
 
 @implements_command("opt_out")
-def opt_out(dynamo_table, message):
+def opt_out(dynamo_table: Table, message: Message) -> ResponderReturn:
     if CONFIG:
         opt_out_period = CONFIG.get("opt_out_period_days", 90)
     else:
@@ -120,11 +129,8 @@ def opt_out(dynamo_table, message):
         )
 
     role_data = dynamo.get_role_data(dynamo_table, role_id, fields=["OptOut"])
-    if "OptOut" in role_data and role_data["OptOut"]:
-
-        timestr = time.strftime(
-            "%m/%d/%y", time.localtime(role_data["OptOut"]["expire"])
-        )
+    if role_data.opt_out:
+        timestr = time.strftime("%m/%d/%y", time.localtime(role_data.opt_out["expire"]))
         return ResponderReturn(
             successful=False,
             return_message=(
@@ -132,13 +138,12 @@ def opt_out(dynamo_table, message):
                 "until {}".format(
                     message.role_name,
                     message.account,
-                    role_data["OptOut"]["owner"],
-                    role_data["OptOut"]["reason"],
+                    role_data.opt_out["owner"],
+                    role_data.opt_out["reason"],
                     timestr,
                 )
             ),
         )
-
     else:
         current_dt = datetime.datetime.fromtimestamp(time.time())
         expire_dt = current_dt + datetime.timedelta(opt_out_period)
@@ -158,7 +163,7 @@ def opt_out(dynamo_table, message):
 
 
 @implements_command("remove_opt_out")
-def remove_opt_out(dynamo_table, message):
+def remove_opt_out(dynamo_table: Table, message: Message) -> ResponderReturn:
     role_id = dynamo.find_role_in_cache(
         dynamo_table, message.account, message.role_name
     )
@@ -173,7 +178,7 @@ def remove_opt_out(dynamo_table, message):
 
     role_data = dynamo.get_role_data(dynamo_table, role_id, fields=["OptOut"])
 
-    if "OptOut" not in role_data or not role_data["OptOut"]:
+    if not role_data.opt_out:
         return ResponderReturn(
             successful=False,
             return_message="Role {} in account {} wasn't opted out".format(
@@ -191,7 +196,7 @@ def remove_opt_out(dynamo_table, message):
 
 
 @implements_command("rollback_role")
-def rollback_role(dynamo_table, message):
+def rollback_role(dynamo_table: Table, message: Message) -> ResponderReturn:
     if not message.selection:
         return ResponderReturn(
             successful=False, return_message="Rollback must contain a selection number"
@@ -203,7 +208,7 @@ def rollback_role(dynamo_table, message):
         dynamo_table,
         CONFIG,
         hooks,
-        selection=message.selection,
+        selection=int(message.selection),
         commit=True,
     )
     if errors:

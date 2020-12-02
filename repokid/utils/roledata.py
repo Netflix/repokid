@@ -16,17 +16,28 @@ import datetime
 import logging
 import time
 from collections import defaultdict
+from typing import Any
 from typing import Dict
+from typing import Iterable
+from typing import List
+from typing import Optional
+from typing import Set
+from typing import Tuple
 
 from cloudaux.aws.iam import get_role_inline_policies
 from dateutil.tz import tzlocal
+from mypy_boto3_dynamodb.service_resource import Table
 from policyuniverse import all_permissions
 from policyuniverse import expand_policy
 from policyuniverse import get_actions_from_statement
 
 import repokid.hooks
 from repokid import CONFIG as CONFIG
+from repokid.exceptions import RoleNotFoundError
 from repokid.role import Role
+from repokid.role import RoleList
+from repokid.types import RepokidConfig
+from repokid.types import RepokidHooks
 from repokid.utils.aardvark import get_aardvark_data
 from repokid.utils.dynamo import add_to_end_of_list
 from repokid.utils.dynamo import get_role_data
@@ -44,15 +55,17 @@ STATEMENT_SKIP_SID = "NOREPO"
 
 # permission decisions have the form repoable - boolean, and decider - string
 class RepoablePermissionDecision(object):
-    def __init__(self):
-        self.repoable = None
-        self.decider = ""
+    def __init__(self) -> None:
+        self.repoable: Optional[bool] = None
+        self.decider: str = ""
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "Is repoable: {}, Decider: {}".format(self.repoable, self.decider)
 
 
-def add_new_policy_version(dynamo_table, role, current_policy, update_source):
+def add_new_policy_version(
+    dynamo_table: Table, role: Role, current_policy: Dict[str, Any], update_source: str
+) -> None:
     """
     Create a new entry in the history of policy versions in Dynamo. The entry contains the source of the new policy:
     (scan, repo, or restore) the current time, and the current policy contents. Updates the role's policies with the
@@ -74,12 +87,14 @@ def add_new_policy_version(dynamo_table, role, current_policy, update_source):
     }
 
     add_to_end_of_list(dynamo_table, role.role_id, "Policies", policy_entry)
-    role.policies = get_role_data(dynamo_table, role.role_id, fields=["Policies"])[
-        "Policies"
-    ]
+    temp_role = get_role_data(dynamo_table, role.role_id, fields=["Policies"])
+    role.policies = temp_role.policies
+    # TODO(psanders): return new role instead of mutating
 
 
-def find_and_mark_inactive(dynamo_table, account_number, active_roles):
+def find_and_mark_inactive(
+    dynamo_table: Table, account_number: str, active_roles: RoleList
+) -> None:
     """
     Mark roles in the account that aren't currently active inactive. Do this by getting all roles in the account and
     subtracting the active roles, any that are left are inactive and should be marked thusly.
@@ -93,17 +108,19 @@ def find_and_mark_inactive(dynamo_table, account_number, active_roles):
         None
     """
 
-    active_roles = set(active_roles)
+    active_roles_set = set(active_roles)
     known_roles = set(role_ids_for_account(dynamo_table, account_number))
-    inactive_roles = known_roles - active_roles
+    inactive_roles = known_roles - active_roles_set
 
     for roleID in inactive_roles:
-        role_dict = get_role_data(dynamo_table, roleID, fields=["Active", "Arn"])
-        if role_dict.get("Active"):
+        role = get_role_data(dynamo_table, roleID, fields=["Active", "Arn"])
+        if role.active:
             set_role_data(dynamo_table, roleID, {"Active": False})
 
 
-def find_newly_added_permissions(old_policy, new_policy):
+def find_newly_added_permissions(
+    old_policy: Dict[str, Any], new_policy: Dict[str, Any]
+) -> Set[str]:
     """
     Compare and old version of policies to a new version and return a set of permissions that were added.  This will
     be used to maintain a list of permissions that were newly added and should not be repoed for a period of time.
@@ -115,16 +132,14 @@ def find_newly_added_permissions(old_policy, new_policy):
     Returns:
         set: Exapnded set of permissions that are in the new policy and not the old one
     """
-    old_permissions, _ = get_role_permissions(
-        Role.parse_obj({"Policies": [{"Policy": old_policy}]})
-    )
-    new_permissions, _ = get_role_permissions(
-        Role.parse_obj({"Policies": [{"Policy": new_policy}]})
-    )
-    return new_permissions - old_permissions
+    old_permissions, _ = get_permissions_in_policy(old_policy)
+    new_permissions, _ = get_permissions_in_policy(new_policy)
+    return set(new_permissions) - set(old_permissions)
 
 
-def update_no_repo_permissions(dynamo_table, role, newly_added_permissions):
+def update_no_repo_permissions(
+    dynamo_table: Table, role: Role, newly_added_permissions: Set[str]
+) -> None:
     """
     Update Dyanmo entry for newly added permissions. Any that were newly detected get added with an expiration
     date of now plus the config setting for 'repo_requirements': 'exclude_new_permissions_for_days'. Expired entries
@@ -138,9 +153,7 @@ def update_no_repo_permissions(dynamo_table, role, newly_added_permissions):
     Returns:
         None
     """
-    current_ignored_permissions = get_role_data(
-        dynamo_table, role.role_id, fields=["NoRepoPermissions"]
-    ).get("NoRepoPermissions", {})
+    current_ignored_permissions = role.no_repo_permissions
     new_ignored_permissions = {}
 
     current_time = int(time.time())
@@ -165,9 +178,10 @@ def update_no_repo_permissions(dynamo_table, role, newly_added_permissions):
     set_role_data(
         dynamo_table, role.role_id, {"NoRepoPermissions": role.no_repo_permissions}
     )
+    # TODO(psanders): return new role instead of mutating
 
 
-def update_opt_out(dynamo_table, role):
+def update_opt_out(dynamo_table: Table, role: Role) -> None:
     """
     Update opt-out object for a role - remove (set to empty dict) any entries that have expired
     Opt-out objects should have the form {'expire': xxx, 'owner': xxx, 'reason': xxx}
@@ -184,8 +198,13 @@ def update_opt_out(dynamo_table, role):
 
 
 def update_role_data(
-    dynamo_table, account_number, role, current_policy, source="Scan", add_no_repo=True
-):
+    dynamo_table: Table,
+    account_number: str,
+    role: Role,
+    current_policy: Dict[str, Any],
+    source: str = "Scan",
+    add_no_repo: bool = True,
+) -> Role:
     """
     Compare the current version of a policy for a role and what has been previously stored in Dynamo.
       - If current and new policy versions are different store the new version in Dynamo. Add any newly added
@@ -203,13 +222,17 @@ def update_role_data(
         add_no_repo (bool)
 
     Returns:
-        None
+        role
     """
 
     # policy_entry: source, discovered, policy
-    stored_role = get_role_data(
-        dynamo_table, role.role_id, fields=["OptOut", "Policies", "Tags"]
-    )
+    try:
+        stored_role = get_role_data(
+            dynamo_table, role.role_id, fields=["OptOut", "Policies", "Tags"]
+        )
+    except RoleNotFoundError:
+        stored_role = None
+
     if not stored_role:
         role_dict = store_initial_role_data(
             dynamo_table,
@@ -228,7 +251,7 @@ def update_role_data(
         return role
     else:
         # is the policy list the same as the last we had?
-        old_policy = stored_role["Policies"][-1]["Policy"]
+        old_policy = stored_role.policies[-1]["Policy"]
         if current_policy != old_policy:
             add_new_policy_version(dynamo_table, role, current_policy, source)
             LOGGER.info(
@@ -244,7 +267,7 @@ def update_role_data(
             newly_added_permissions = set()
 
         # update tags if needed
-        if role.tags != stored_role.get("Tags", []):
+        if role.tags != stored_role.tags:
             set_role_data(dynamo_table, role.role_id, {"Tags": role.tags})
 
         if add_no_repo:
@@ -257,19 +280,18 @@ def update_role_data(
         )
 
         # Update all data from Dynamo except CreateDate (it's in the wrong format) and DQ_by (we're going to recalc)
-        current_role_data = get_role_data(dynamo_table, role.role_id)
-        current_role_data.pop("CreateDate", None)
-        current_role_data.pop("DisqualifiedBy", None)
+        current_role = get_role_data(dynamo_table, role.role_id)
+        current_role.create_date = None
+        current_role.disqualified_by = []
 
         # Create an updated Role model to be returned to the caller
-        role_updates = Role.parse_obj(current_role_data)
-        update_dict = role_updates.dict(exclude_unset=True)
+        update_dict = current_role.dict(exclude_unset=True)
         role = role.copy(update=update_dict)
 
         return role
 
 
-def update_stats(dynamo_table, roles, source="Scan"):
+def update_stats(dynamo_table: Table, roles: RoleList, source: str = "Scan") -> None:
     """
     Create a new stats entry for each role in a set of roles and add it to Dynamo
 
@@ -303,7 +325,9 @@ def update_stats(dynamo_table, roles, source="Scan"):
                 add_to_end_of_list(dynamo_table, role.role_id, "Stats", new_stats)
 
 
-def _update_repoable_services(role, repoable_permissions, eligible_permissions):
+def _update_repoable_services(
+    role: Role, repoable_permissions: Set[str], eligible_permissions: Set[str]
+) -> None:
     (
         repoable_permissions_set,
         repoable_services_set,
@@ -312,11 +336,18 @@ def _update_repoable_services(role, repoable_permissions, eligible_permissions):
     )
 
     # we're going to store both repoable permissions and repoable services in the field "RepoableServices"
-    role.repoable_services = repoable_services_set + repoable_permissions_set
+    role.repoable_services = list(repoable_services_set.union(repoable_permissions_set))
     role.repoable_permissions = len(repoable_permissions)
+    # TODO(psanders): return new role instead of mutating
 
 
-def _calculate_repo_scores(roles, minimum_age, hooks, batch=False, batch_size=100):
+def _calculate_repo_scores(
+    roles: RoleList,
+    minimum_age: int,
+    hooks: RepokidHooks,
+    batch: bool = False,
+    batch_size: int = 100,
+) -> None:
     """
     Get the total and repoable permissions count and set of repoable services for every role in the account.
     For each role:
@@ -334,10 +365,10 @@ def _calculate_repo_scores(roles, minimum_age, hooks, batch=False, batch_size=10
     Returns:
         None
     """
-    repo_able_roles = []
+    repo_able_roles = RoleList([])
     eligible_permissions_dict = {}
     for role in roles:
-        total_permissions, eligible_permissions = get_role_permissions(role)
+        total_permissions, eligible_permissions = _get_role_permissions(role)
         role.total_permissions = len(total_permissions)
 
         # if we don't have any access advisor data for a service than nothing is repoable
@@ -366,7 +397,7 @@ def _calculate_repo_scores(roles, minimum_age, hooks, batch=False, batch_size=10
                 role.account,
                 role.role_name,
                 eligible_permissions_dict[role.arn],
-                role.aa_data,
+                role.aa_data or [],
                 role.no_repo_permissions,
                 role.role_id,
                 minimum_age,
@@ -380,23 +411,23 @@ def _calculate_repo_scores(roles, minimum_age, hooks, batch=False, batch_size=10
 
 
 def _convert_repoable_perms_to_perms_and_services(
-    total_permissions, repoable_permissions
-):
+    total_permissions: Set[str], repoable_permissions: Set[str]
+) -> Tuple[Set[str], Set[str]]:
     """
     Take a list of total permissions and repoable permissions and determine whether only a few permissions are being
     repoed or if the entire service (all permissions from that service) are being removed.
 
     Args:
-        total_permissions (list): A list of the total permissions a role has
-        repoable_permissions (list): A list of repoable permissions suggested to be removed
+        total_permissions (set): A list of the total permissions a role has
+        repoable_permissions (set): A list of repoable permissions suggested to be removed
 
     Returns:
-        list: Sorted list of permissions that will be individually removed but other permissions from the service will
+        set: Set of permissions that will be individually removed but other permissions from the service will
               be kept
-        list: Sorted list of services that will be completely removed
+        set: Set of services that will be completely removed
     """
-    repoed_permissions = set()
-    repoed_services = set()
+    repoed_permissions: Set[str] = set()
+    repoed_services: Set[str] = set()
 
     total_perms_by_service = defaultdict(list)
     repoable_perms_by_service = defaultdict(list)
@@ -419,10 +450,12 @@ def _convert_repoable_perms_to_perms_and_services(
                 perm for perm in repoable_perms_by_service[service]
             )
 
-    return sorted(repoed_permissions), sorted(repoed_services)
+    return repoed_permissions, repoed_services
 
 
-def _convert_repoed_service_to_sorted_perms_and_services(repoed_services):
+def _convert_repoed_service_to_sorted_perms_and_services(
+    repoed_services: Set[str],
+) -> Tuple[List[str], List[str]]:
     """
     Repokid stores a field RepoableServices that historically only stored services (when Access Advisor was only data).
     Now this field is repurposed to store both services and permissions.  We can tell the difference because permissions
@@ -448,7 +481,9 @@ def _convert_repoed_service_to_sorted_perms_and_services(repoed_services):
     return sorted(repoable_permissions), sorted(repoable_services)
 
 
-def _filter_scheduled_repoable_perms(repoable_permissions, scheduled_perms):
+def _filter_scheduled_repoable_perms(
+    repoable_permissions: Set[str], scheduled_perms: Set[str]
+) -> List[str]:
     """
     Take a list of current repoable permissions and filter out any that weren't in the list of scheduled permissions
 
@@ -462,14 +497,15 @@ def _filter_scheduled_repoable_perms(repoable_permissions, scheduled_perms):
         scheduled_permissions,
         scheduled_services,
     ) = _convert_repoed_service_to_sorted_perms_and_services(scheduled_perms)
-    return [
+    filtered = [
         perm
         for perm in repoable_permissions
         if (perm in scheduled_permissions or perm.split(":")[0] in scheduled_services)
     ]
+    return sorted(filtered)
 
 
-def _get_epoch_authenticated(service_authenticated):
+def _get_epoch_authenticated(service_authenticated: int) -> Tuple[int, bool]:
     """
     Ensure service authenticated from Access Advisor is in seconds epoch
 
@@ -486,18 +522,23 @@ def _get_epoch_authenticated(service_authenticated):
 
     # we have an odd timestamp, try to check
     elif BEGINNING_OF_2015_MILLI_EPOCH < service_authenticated < (current_time * 1000):
-        return service_authenticated / 1000, True
+        return int(service_authenticated / 1000), True
 
     elif (BEGINNING_OF_2015_MILLI_EPOCH / 1000) < service_authenticated < current_time:
         return service_authenticated, True
 
     else:
-        return None, False
+        return -1, False
 
 
 def _get_potentially_repoable_permissions(
-    role_name, account_number, aa_data, permissions, no_repo_permissions, minimum_age
-):
+    role_name: str,
+    account_number: str,
+    aa_data: List[Dict[str, Any]],
+    permissions: Set[str],
+    no_repo_permissions: Dict[str, int],
+    minimum_age: int,
+) -> Dict[str, Any]:
     ago = datetime.timedelta(minimum_age)
     now = datetime.datetime.now(tzlocal())
 
@@ -509,7 +550,7 @@ def _get_potentially_repoable_permissions(
     ]
 
     # cast all permissions to lowercase
-    permissions = [permission.lower() for permission in permissions]
+    permissions = {permission.lower() for permission in permissions}
     potentially_repoable_permissions = {
         permission: RepoablePermissionDecision()
         for permission in permissions
@@ -537,13 +578,14 @@ def _get_potentially_repoable_permissions(
             )
             used_services.add(service["serviceNamespace"])
 
-        accessed = datetime.datetime.fromtimestamp(accessed, tzlocal())
-        if accessed > now - ago:
+        accessed_dt = datetime.datetime.fromtimestamp(accessed, tzlocal())
+        if accessed_dt > now - ago:
             used_services.add(service["serviceNamespace"])
 
-    for permission_name, permission_decision in list(
-        potentially_repoable_permissions.items()
-    ):
+    for (
+        permission_name,
+        permission_decision,
+    ) in potentially_repoable_permissions.items():
         if permission_name.split(":")[0] in IAM_ACCESS_ADVISOR_UNSUPPORTED_SERVICES:
             LOGGER.info("skipping {}".format(permission_name))
             continue
@@ -561,15 +603,15 @@ def _get_potentially_repoable_permissions(
 
 
 def _get_repoable_permissions(
-    account_number,
-    role_name,
-    permissions,
-    aa_data,
-    no_repo_permissions,
-    role_id,
-    minimum_age,
-    hooks,
-):
+    account_number: str,
+    role_name: str,
+    permissions: Set[str],
+    aa_data: List[Dict[str, Any]],
+    no_repo_permissions: Dict[str, Any],
+    role_id: str,
+    minimum_age: int,
+    hooks: RepokidHooks,
+) -> Set[str]:
     """
     Generate a list of repoable permissions for a role based on the list of all permissions the role's policies
     currently allow and Access Advisor data for the services included in the role's policies.
@@ -627,20 +669,22 @@ def _get_repoable_permissions(
         )
     )
 
-    return set(
-        [
-            permission_name
-            for permission_name, permission_value in list(
-                hooks_output["potentially_repoable_permissions"].items()
-            )
-            if permission_value.repoable
-        ]
-    )
+    return {
+        permission_name
+        for permission_name, permission_value in list(
+            hooks_output["potentially_repoable_permissions"].items()
+        )
+        if permission_value.repoable
+    }
 
 
 def _get_repoable_permissions_batch(
-    repo_able_roles, permissions_dict, minimum_age, hooks, batch_size
-):
+    repo_able_roles: RoleList,
+    permissions_dict: Dict[str, Any],
+    minimum_age: int,
+    hooks: RepokidHooks,
+    batch_size: int,
+) -> Dict[str, Any]:
     """
     Generate a dictionary mapping of role arns to their repoable permissions based on the list of all permissions the
     role's policies currently allow and Access Advisor data for the services included in the role's policies.
@@ -665,7 +709,7 @@ def _get_repoable_permissions_batch(
 
     repo_able_roles_batches = copy.deepcopy(repo_able_roles)
     potentially_repoable_permissions_dict = {}
-    repoable_set_dict = {}
+    repoable_dict = {}
     repoable_log_dict = {}
 
     for role in repo_able_roles:
@@ -674,7 +718,7 @@ def _get_repoable_permissions_batch(
         ] = _get_potentially_repoable_permissions(
             role.role_name,
             role.account,
-            role.aa_data,
+            role.aa_data or [],
             permissions_dict[role.arn],
             role.no_repo_permissions,
             minimum_age,
@@ -694,16 +738,14 @@ def _get_repoable_permissions_batch(
             },
         )
         for role_arn, output in list(hooks_output.items()):
-            repoable_set = set(
-                [
-                    permission_name
-                    for permission_name, permission_value in list(
-                        output["potentially_repoable_permissions"].items()
-                    )
-                    if permission_value.repoable
-                ]
-            )
-            repoable_set_dict[role_arn] = repoable_set
+            repoable = {
+                permission_name
+                for permission_name, permission_value in list(
+                    output["potentially_repoable_permissions"].items()
+                )
+                if permission_value.repoable
+            }
+            repoable_dict[role_arn] = repoable
             repoable_log_dict[role_arn] = "".join(
                 "{}: {}\n".format(perm, decision.decider)
                 for perm, decision in list(
@@ -719,10 +761,12 @@ def _get_repoable_permissions_batch(
                 repoable=repoable_log_dict[role.arn],
             )
         )
-    return repoable_set_dict
+    return repoable_dict
 
 
-def _get_repoed_policy(policies: Dict, repoable_permissions: set):
+def _get_repoed_policy(
+    policies: Dict[str, Any], repoable_permissions: Set[str]
+) -> Tuple[Dict[str, Any], List[str]]:
     """
     This function contains the logic to rewrite the policy to remove any repoable permissions. To do so we:
       - Iterate over role policies
@@ -792,7 +836,9 @@ def _get_repoed_policy(policies: Dict, repoable_permissions: set):
     return role_policies, empty_policies
 
 
-def _get_permissions_in_policy(policy_dict, warn_unknown_perms=False):
+def get_permissions_in_policy(
+    policy_dict: Dict[str, Any], warn_unknown_perms: bool = False
+) -> Tuple[Set[str], Set[str]]:
     """
     Given a set of policies for a role, return a set of all allowed permissions
 
@@ -805,8 +851,8 @@ def _get_permissions_in_policy(policy_dict, warn_unknown_perms=False):
         set - all permissions allowed by the policies
         set - all permisisons allowed by the policies not marked with STATEMENT_SKIP_SID
     """
-    total_permissions = set()
-    eligible_permissions = set()
+    total_permissions: Set[str] = set()
+    eligible_permissions: Set[str] = set()
 
     for policy_name, policy in list(policy_dict.items()):
         policy = expand_policy(policy=policy, expand_deny=False)
@@ -832,7 +878,9 @@ def _get_permissions_in_policy(policy_dict, warn_unknown_perms=False):
     return total_permissions, eligible_permissions
 
 
-def get_role_permissions(role, warn_unknown_perms=False):
+def _get_role_permissions(
+    role: Role, warn_unknown_perms: bool = False
+) -> Tuple[Set[str], Set[str]]:
     """
     Expand the most recent version of policies from a role to produce a list of all the permissions that are allowed
     (permission is included in one or more statements that is allowed).  To perform expansion the policyuniverse
@@ -849,12 +897,15 @@ def get_role_permissions(role, warn_unknown_perms=False):
         set - all permissions allowed by the policies
         set - all permisisons allowed by the policies not marked with STATEMENT_SKIP_SID
     """
-    return _get_permissions_in_policy(
+    if not role.policies:
+        return set(), set()
+
+    return get_permissions_in_policy(
         role.policies[-1]["Policy"], warn_unknown_perms=warn_unknown_perms
     )
 
 
-def _get_services_in_permissions(permissions_set):
+def _get_services_in_permissions(permissions_set: Iterable[str]) -> List[str]:
     """
     Given a set of permissions, return a sorted set of services
 
@@ -876,8 +927,15 @@ def _get_services_in_permissions(permissions_set):
 
 
 def partial_update_role_data(
-    role, dynamo_table, account_number, config, conn, hooks, source, add_no_repo=True
-):
+    role: Role,
+    dynamo_table: Table,
+    account_number: str,
+    config: RepokidConfig,
+    conn: Dict[str, Any],
+    hooks: RepokidHooks,
+    source: str,
+    add_no_repo: bool = True,
+) -> None:
     """
     Perform a scaled down version of role update, this is used to get an accurate count of repoable permissions after
     a rollback or repo.
@@ -926,7 +984,7 @@ def partial_update_role_data(
 
     role.aa_data = aardvark_data[role.arn]
     _calculate_repo_scores(
-        [role],
+        RoleList([role]),
         config["filter_config"]["AgeFilter"]["minimum_age"],
         hooks,
         batch_processing,
@@ -942,4 +1000,5 @@ def partial_update_role_data(
             "RepoableServices": role.repoable_services,
         },
     )
-    update_stats(dynamo_table, [role], source=source)
+    update_stats(dynamo_table, RoleList([role]), source=source)
+    # TODO(psanders): return new role instead of mutating

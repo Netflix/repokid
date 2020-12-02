@@ -20,13 +20,14 @@ setup(
     description="AWS Least Privilege for Distributed, High-Velocity Deployment",
     url="https://github.com/Netflix/repokid",
     packages=find_packages(),
+    package_data={"repokid": ["py.typed"]},
     versioning="dev",
     setup_requires=["setupmeta"],
     python_requires=">=3.7",
     keywords=["aws", "iam", "access_advisor"],
     entry_points={
         "console_scripts": [
-            "repokid = repokid.cli.repokid_cli:main",
+            "repokid = repokid.cli.repokid_cli:cli",
             "dispatcher = repokid.cli.dispatcher_cli:main",
         ]
     },
@@ -42,4 +43,5 @@ setup(
         "Topic :: System",
         "Topic :: System :: Systems Administration",
     ],
+    zip_safe=False,
 )

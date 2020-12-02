@@ -17,13 +17,20 @@ import json
 import logging
 import logging.config
 import os
+from typing import DefaultDict
+from typing import List
+from typing import Tuple
 
 import import_string
+
+from repokid.types import RepokidConfig
+from repokid.types import RepokidHook
+from repokid.types import RepokidHooks
 
 __version__ = "0.15.0"
 
 
-def init_config():
+def init_config() -> RepokidConfig:
     """
     Try to find config by searching for it in a few paths, load it, and store it in the global CONFIG
 
@@ -39,19 +46,22 @@ def init_config():
         "/etc/repokid/config.json",
         "/apps/repokid/config.json",
     ]
+    config: RepokidConfig = {}
     for path in load_config_paths:
         try:
             with open(path, "r") as f:
                 print("Loaded config from {}".format(path))
-                return json.load(f)
+                config = json.load(f)
+                return config
 
         except IOError:
             print("Unable to load config from {}, trying next location".format(path))
 
     print("Config not found in any path, using defaults")
+    return config
 
 
-def init_logging():
+def init_logging() -> logging.Logger:
     """
     Initialize global LOGGER object with config defined in the global CONFIG object
 
@@ -80,7 +90,7 @@ def init_logging():
     return log
 
 
-def get_hooks(hooks_list):
+def get_hooks(hooks_list: List[str]) -> RepokidHooks:
     """
     Output should be a dictionary with keys as the names of hooks and values as a list of functions (in order) to call
 
@@ -90,7 +100,11 @@ def get_hooks(hooks_list):
     Returns:
         dict: Keys are hooks by name (AFTER_SCHEDULE_REPO) and values are a list of functions to execute
     """
-    hooks = collections.defaultdict(list)
+    # hooks is a temporary dictionary of priority/RepokidHook tuples
+    hooks: DefaultDict[str, List[Tuple[int, RepokidHook]]] = collections.defaultdict(
+        list
+    )
+
     for hook in hooks_list:
         module = import_string(hook)
         # get members retrieves all the functions from a given module
@@ -99,21 +113,22 @@ def get_hooks(hooks_list):
         for (_, func) in all_funcs:
             # we only look at functions that have been decorated with _implements_hook
             if hasattr(func, "_implements_hook"):
+                h: Tuple[int, RepokidHook] = (func._implements_hook["priority"], func)
                 # append to the dictionary in whatever order we see them, we'll sort later. Dictionary value should be
                 # a list of tuples (priority, function)
-                hooks[func._implements_hook["hook_name"]].append(
-                    (func._implements_hook["priority"], func)
-                )
+                hooks[func._implements_hook["hook_name"]].append(h)
 
     # sort by priority
     for k in hooks.keys():
-        hooks[k] = sorted(hooks[k], key=lambda priority: priority[0])
+        hooks[k] = sorted(hooks[k], key=lambda priority: int(priority[0]))
     # get rid of the priority - we don't need it anymore
+    # save to a new dict that conforms to the RepokidHooks spec
+    final_hooks: RepokidHooks = RepokidHooks()
     for k in hooks.keys():
-        hooks[k] = [func_tuple[1] for func_tuple in hooks[k]]
+        final_hooks[k] = [func_tuple[1] for func_tuple in hooks[k]]
 
-    return hooks
+    return final_hooks
 
 
-CONFIG = init_config()
-LOGGER = init_logging()
+CONFIG: RepokidConfig = init_config()
+LOGGER: logging.Logger = init_logging()

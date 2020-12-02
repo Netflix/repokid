@@ -14,15 +14,19 @@
 import csv
 import json
 import logging
+from typing import Any
+from typing import List
 
 import tabview as t
+from mypy_boto3_dynamodb.service_resource import Table
 from policyuniverse.arn import ARN
 from tabulate import tabulate
 from tqdm import tqdm
 
 import repokid.hooks
-from repokid.role import Role
-from repokid.role import Roles
+from repokid.role import RoleList
+from repokid.types import RepokidConfig
+from repokid.types import RepokidHooks
 from repokid.utils import roledata as roledata
 from repokid.utils.dynamo import find_role_in_cache
 from repokid.utils.dynamo import get_role_data
@@ -34,7 +38,9 @@ from repokid.utils.iam import remove_permissions_from_role
 LOGGER = logging.getLogger("repokid")
 
 
-def _display_roles(account_number, dynamo_table, inactive=False):
+def _display_roles(
+    account_number: str, dynamo_table: Table, inactive: bool = False
+) -> None:
     """
     Display a table with data about all roles in an account and write a csv file with the data.
 
@@ -56,11 +62,11 @@ def _display_roles(account_number, dynamo_table, inactive=False):
         "Services",
     ]
 
-    rows = list()
+    rows: List[List[Any]] = []
 
-    roles = Roles(
+    roles = RoleList(
         [
-            Role.parse_obj(get_role_data(dynamo_table, roleID))
+            get_role_data(dynamo_table, roleID)
             for roleID in tqdm(role_ids_for_account(dynamo_table, account_number))
         ]
     )
@@ -93,7 +99,9 @@ def _display_roles(account_number, dynamo_table, inactive=False):
             csv_writer.writerow(row)
 
 
-def _find_roles_with_permissions(permissions, dynamo_table, output_file):
+def _find_roles_with_permissions(
+    permissions: List[str], dynamo_table: Table, output_file: str
+) -> None:
     """
     Search roles in all accounts for a policy with any of the provided permissions, log the ARN of each role.
 
@@ -104,17 +112,15 @@ def _find_roles_with_permissions(permissions, dynamo_table, output_file):
     Returns:
         None
     """
-    arns = list()
+    arns: List[str] = list()
     for roleID in role_ids_for_all_accounts(dynamo_table):
-        role = Role.parse_obj(
-            get_role_data(
-                dynamo_table, roleID, fields=["Policies", "RoleName", "Arn", "Active"]
-            )
+        role = get_role_data(
+            dynamo_table, roleID, fields=["Policies", "RoleName", "Arn", "Active"]
         )
-        role_permissions, _ = roledata.get_role_permissions(role)
+        role_permissions, _ = roledata._get_role_permissions(role)
 
-        permissions = set([p.lower() for p in permissions])
-        found_permissions = permissions.intersection(role_permissions)
+        permissions_set = set([p.lower() for p in permissions])
+        found_permissions = permissions_set.intersection(role_permissions)
 
         if found_permissions and role.active:
             arns.append(role.arn)
@@ -133,7 +139,13 @@ def _find_roles_with_permissions(permissions, dynamo_table, output_file):
     LOGGER.info('Ouput written to file "{output_file}"'.format(output_file=output_file))
 
 
-def _display_role(account_number, role_name, dynamo_table, config, hooks):
+def _display_role(
+    account_number: str,
+    role_name: str,
+    dynamo_table: Table,
+    config: RepokidConfig,
+    hooks: RepokidHooks,
+) -> None:
     """
     Displays data about a role in a given account:
       1) Name, which filters are disqualifying it from repo, if it's repoable, total/repoable permissions,
@@ -155,7 +167,7 @@ def _display_role(account_number, role_name, dynamo_table, config, hooks):
         LOGGER.warning("Could not find role with name {}".format(role_name))
         return
 
-    role = Role.parse_obj(get_role_data(dynamo_table, role_id))
+    role = get_role_data(dynamo_table, role_id)
 
     print("\n\nRole repo data:")
     headers = [
@@ -186,7 +198,7 @@ def _display_role(account_number, role_name, dynamo_table, config, hooks):
     headers = ["Number", "Source", "Discovered", "Permissions", "Services"]
     rows = []
     for index, policies_version in enumerate(role.policies):
-        policy_permissions, _ = roledata._get_permissions_in_policy(
+        policy_permissions, _ = roledata.get_permissions_in_policy(
             policies_version["Policy"]
         )
         rows.append(
@@ -222,9 +234,8 @@ def _display_role(account_number, role_name, dynamo_table, config, hooks):
     warn_unknown_permissions = config.get("warnings", {}).get(
         "unknown_permissions", False
     )
-    repoable_permissions = set([])
 
-    permissions, eligible_permissions = roledata.get_role_permissions(
+    permissions, eligible_permissions = roledata._get_role_permissions(
         role, warn_unknown_perms=warn_unknown_permissions
     )
     if len(role.disqualified_by) == 0:
@@ -238,6 +249,8 @@ def _display_role(account_number, role_name, dynamo_table, config, hooks):
             config["filter_config"]["AgeFilter"]["minimum_age"],
             hooks,
         )
+    else:
+        repoable_permissions = set()
 
     print("Repoable services and permissions")
     headers = ["Service", "Action", "Repoable"]
@@ -273,8 +286,13 @@ def _display_role(account_number, role_name, dynamo_table, config, hooks):
 
 
 def _remove_permissions_from_roles(
-    permissions, role_filename, dynamo_table, config, hooks, commit=False
-):
+    permissions: List[str],
+    role_filename: str,
+    dynamo_table: Table,
+    config: RepokidConfig,
+    hooks: RepokidHooks,
+    commit: bool = False,
+) -> None:
     """Loads roles specified in file and calls _remove_permissions_from_role() for each one.
 
     Args:
@@ -299,7 +317,7 @@ def _remove_permissions_from_roles(
         role_name = arn.name.split("/")[-1]
 
         role_id = find_role_in_cache(dynamo_table, account_number, role_name)
-        role = Role.parse_obj(get_role_data(dynamo_table, role_id))
+        role = get_role_data(dynamo_table, role_id)
 
         remove_permissions_from_role(
             account_number,

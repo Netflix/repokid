@@ -40,7 +40,7 @@ def func_c(input_dict):
 def func_d(input_value):
     required_vals = ["a", "b"]
     if not all(val in input_value for val in required_vals):
-        raise repokid.hooks.MissingHookParamaeter
+        raise repokid.hooks.MissingHookParameter
 
 
 def func_e(input_value):
@@ -62,7 +62,7 @@ class TestHooks(object):
         assert output_value["value"] == 2
 
         # missing required parameter b
-        with pytest.raises(repokid.hooks.MissingHookParamaeter):
+        with pytest.raises(repokid.hooks.MissingHookParameter):
             output_value = repokid.hooks.call_hooks(
                 hooks, "MISSING_PARAMETER", {"a": "1"}
             )
@@ -102,7 +102,7 @@ class TestHooks(object):
             "minimum_age": 1,
         }
 
-        with pytest.raises(repokid.hooks.MissingHookParamaeter):
+        with pytest.raises(repokid.hooks.MissingHookParameter):
             # role_batch', 'potentially_repoable_permissions', 'minimum_age'
             repokid.hooks.call_hooks(
                 hooks, "DURING_REPOABLE_CALCULATION_BATCH", input_dict

@@ -27,7 +27,8 @@ importlib-metadata==2.0.0  # via flake8, pluggy, pre-commit, pytest, stevedore, 
 iniconfig==1.1.1          # via pytest
 mccabe==0.6.1             # via flake8
 mock==4.0.2               # via -r requirements-test.in
-mypy-extensions==0.4.3    # via black
+mypy-extensions==0.4.3    # via black, mypy
+mypy==0.790               # via -r requirements-test.in
 nodeenv==1.5.0            # via pre-commit
 packaging==20.4           # via pytest
 pathspec==0.8.1           # via black
@@ -47,8 +48,8 @@ six==1.15.0               # via bandit, packaging, python-dateutil, virtualenv
 smmap==3.0.4              # via gitdb
 stevedore==3.2.2          # via bandit
 toml==0.10.2              # via black, pre-commit, pytest
-typed-ast==1.4.1          # via black
-typing-extensions==3.7.4.3  # via black
+typed-ast==1.4.1          # via black, mypy
+typing-extensions==3.7.4.3  # via black, mypy
 urllib3==1.26.2           # via requests
 virtualenv==20.2.1        # via pre-commit
 zipp==3.4.0               # via importlib-metadata
