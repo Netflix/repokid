@@ -12,7 +12,7 @@ LOGGER = logging.getLogger("repokid")
 
 
 # inspiration from https://github.com/slackhq/python-rtmbot/blob/master/rtmbot/core.py
-class FilterPlugins(object):
+class FilterPlugins:
     """
     FilterPlugins is used to hold a list of instantiated plugins. The internal object filter_plugins contains a list
     of active plugins that can be iterated.
@@ -38,7 +38,7 @@ class FilterPlugins(object):
             self.filter_plugins.append(plugin)
 
 
-class Filter(object):
+class Filter:
     """Base class for filter plugins to inherit.  Passes config if supplied and requires the apply method be defined"""
 
     def __init__(self, config: RepokidFilterConfig = None) -> None:

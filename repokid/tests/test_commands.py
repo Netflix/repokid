@@ -203,48 +203,60 @@ ROLES = [
 ]
 
 ROLES_FOR_DISPLAY = [
-    {
-        "TotalPermissions": 4,
-        "RepoablePermissions": 0,
-        "Repoed": "Never",
-        "RepoableServices": [],
-        "Refreshed": "Someday",
-    },
-    {
-        "TotalPermissions": 4,
-        "RepoablePermissions": 2,
-        "Repoed": "Never",
-        "RepoableServices": ["ec2"],
-        "Refreshed": "Someday",
-    },
-    {
-        "TotalPermissions": 4,
-        "RepoablePermissions": 0,
-        "Repoed": "Never",
-        "RepoableServices": [],
-        "Refreshed": "Someday",
-    },
-    {
-        "TotalPermissions": 4,
-        "RepoablePermissions": 0,
-        "Repoed": "Never",
-        "RepoableServices": [],
-        "Refreshed": "Someday",
-    },
-    {
-        "TotalPermissions": 4,
-        "RepoablePermissions": 2,
-        "Repoed": "Never",
-        "RepoableServices": ["ec2"],
-        "Refreshed": "Someday",
-    },
-    {
-        "TotalPermissions": 4,
-        "RepoablePermissions": 2,
-        "Repoed": "Never",
-        "RepoableServices": ["ec2"],
-        "Refreshed": "Someday",
-    },
+    Role.parse_obj(
+        {
+            "TotalPermissions": 4,
+            "RepoablePermissions": 0,
+            "Repoed": "Never",
+            "RepoableServices": [],
+            "Refreshed": "Someday",
+        }
+    ),
+    Role.parse_obj(
+        {
+            "TotalPermissions": 4,
+            "RepoablePermissions": 2,
+            "Repoed": "Never",
+            "RepoableServices": ["ec2"],
+            "Refreshed": "Someday",
+        }
+    ),
+    Role.parse_obj(
+        {
+            "TotalPermissions": 4,
+            "RepoablePermissions": 0,
+            "Repoed": "Never",
+            "RepoableServices": [],
+            "Refreshed": "Someday",
+        }
+    ),
+    Role.parse_obj(
+        {
+            "TotalPermissions": 4,
+            "RepoablePermissions": 0,
+            "Repoed": "Never",
+            "RepoableServices": [],
+            "Refreshed": "Someday",
+        }
+    ),
+    Role.parse_obj(
+        {
+            "TotalPermissions": 4,
+            "RepoablePermissions": 2,
+            "Repoed": "Never",
+            "RepoableServices": ["ec2"],
+            "Refreshed": "Someday",
+        }
+    ),
+    Role.parse_obj(
+        {
+            "TotalPermissions": 4,
+            "RepoablePermissions": 2,
+            "Repoed": "Never",
+            "RepoableServices": ["ec2"],
+            "Refreshed": "Someday",
+        }
+    ),
 ]
 
 
@@ -305,8 +317,8 @@ class TestRepokidCLI(object):
         console_logger = logging.StreamHandler()
         console_logger.setLevel(logging.WARNING)
 
-        repokid.cli.repokid_cli.LOGGER = logging.getLogger("test")
-        repokid.cli.repokid_cli.LOGGER.addHandler(console_logger)
+        repokid.cli.repokid_cli.logger = logging.getLogger("test")
+        repokid.cli.repokid_cli.logger.addHandler(console_logger)
 
         dynamo_table = None
         account_number = "123456789012"
@@ -381,8 +393,8 @@ class TestRepokidCLI(object):
         console_logger = logging.StreamHandler()
         console_logger.setLevel(logging.WARNING)
 
-        repokid.cli.repokid_cli.LOGGER = logging.getLogger("test")
-        repokid.cli.repokid_cli.LOGGER.addHandler(console_logger)
+        repokid.cli.repokid_cli.logger = logging.getLogger("test")
+        repokid.cli.repokid_cli.logger.addHandler(console_logger)
 
         mock_role_ids_for_account.return_value = [
             "AROAABCDEFGHIJKLMNOPA",
@@ -391,19 +403,22 @@ class TestRepokidCLI(object):
             "AROAABCDEFGHIJKLMNOPD",
         ]
 
+        test_roles = []
         for x, role in enumerate(ROLES_FOR_DISPLAY):
-            role.update(ROLES[x])
+            test_roles.append(
+                role.copy(update=Role.parse_obj(ROLES[x]).dict(exclude_unset=True))
+            )
 
         # loop over all roles twice (one for each call below)
         mock_get_role_data.side_effect = [
-            ROLES_FOR_DISPLAY[0],
-            ROLES_FOR_DISPLAY[1],
-            ROLES_FOR_DISPLAY[2],
-            ROLES_FOR_DISPLAY[3],
-            ROLES_FOR_DISPLAY[0],
-            ROLES_FOR_DISPLAY[1],
-            ROLES_FOR_DISPLAY[2],
-            ROLES_FOR_DISPLAY[3],
+            test_roles[0],
+            test_roles[1],
+            test_roles[2],
+            test_roles[3],
+            test_roles[0],
+            test_roles[1],
+            test_roles[2],
+            test_roles[3],
         ]
 
         repokid.commands.role._display_roles("123456789012", None, inactive=True)
@@ -467,11 +482,19 @@ class TestRepokidCLI(object):
             "AROAABCDEFGHIJKLMNOPB",
         ]
         # first role is not repoable, second role is repoable
-        ROLES_FOR_DISPLAY[0].update({"RoleId": "AROAABCDEFGHIJKLMNOPA"})
-        ROLES_FOR_DISPLAY[1].update({"RoleId": "AROAABCDEFGHIJKLMNOPB"})
-        ROLES_FOR_DISPLAY[1].update({"AAData": [{"foo": "bar"}]})
-
-        mock_get_role_data.side_effect = [ROLES_FOR_DISPLAY[0], ROLES_FOR_DISPLAY[1]]
+        test_roles = [
+            ROLES_FOR_DISPLAY[0].copy(
+                update=Role.parse_obj({"RoleId": "AROAABCDEFGHIJKLMNOPA"}).dict(
+                    exclude_unset=True
+                )
+            ),
+            ROLES_FOR_DISPLAY[1].copy(
+                update=Role.parse_obj(
+                    {"RoleId": "AROAABCDEFGHIJKLMNOPB", "AAData": [{"foo": "bar"}]}
+                ).dict(exclude_unset=True)
+            ),
+        ]
+        mock_get_role_data.side_effect = [test_roles[0], test_roles[1]]
         mock_time.return_value = 1
 
         config = {"repo_schedule_period_days": 1}
@@ -489,7 +512,7 @@ class TestRepokidCLI(object):
             call(
                 hooks,
                 "AFTER_SCHEDULE_REPO",
-                {"roles": [Role.parse_obj(ROLES_FOR_DISPLAY[1])]},
+                {"roles": [test_roles[1]]},
             )
         ]
 
@@ -512,32 +535,43 @@ class TestRepokidCLI(object):
             "AROAABCDEFGHIJKLMNOPB",
             "AROAABCDEFGHIJKLMNOPC",
         ]
-        roles = [
-            {
-                "Arn": "arn:aws:iam::123456789012:role/ROLE_A",
-                "RoleId": "AROAABCDEFGHIJKLMNOPA",
-                "Active": True,
-                "RoleName": "ROLE_A",
-                "RepoScheduled": 100,
-                "CreateDate": datetime.datetime.now() - datetime.timedelta(days=100),
-            },
-            {
-                "Arn": "arn:aws:iam::123456789012:role/ROLE_B",
-                "RoleId": "AROAABCDEFGHIJKLMNOPB",
-                "Active": True,
-                "RoleName": "ROLE_B",
-                "RepoScheduled": 0,
-                "CreateDate": datetime.datetime.now() - datetime.timedelta(days=100),
-            },
-            {
-                "Arn": "arn:aws:iam::123456789012:role/ROLE_C",
-                "RoleId": "AROAABCDEFGHIJKLMNOPC",
-                "Active": True,
-                "RoleName": "ROLE_C",
-                "RepoScheduled": 5,
-                "CreateDate": datetime.datetime.now() - datetime.timedelta(days=100),
-            },
-        ]
+        roles = RoleList(
+            [
+                Role.parse_obj(
+                    {
+                        "Arn": "arn:aws:iam::123456789012:role/ROLE_A",
+                        "RoleId": "AROAABCDEFGHIJKLMNOPA",
+                        "Active": True,
+                        "RoleName": "ROLE_A",
+                        "RepoScheduled": 100,
+                        "CreateDate": datetime.datetime.now()
+                        - datetime.timedelta(days=100),
+                    }
+                ),
+                Role.parse_obj(
+                    {
+                        "Arn": "arn:aws:iam::123456789012:role/ROLE_B",
+                        "RoleId": "AROAABCDEFGHIJKLMNOPB",
+                        "Active": True,
+                        "RoleName": "ROLE_B",
+                        "RepoScheduled": 0,
+                        "CreateDate": datetime.datetime.now()
+                        - datetime.timedelta(days=100),
+                    }
+                ),
+                Role.parse_obj(
+                    {
+                        "Arn": "arn:aws:iam::123456789012:role/ROLE_C",
+                        "RoleId": "AROAABCDEFGHIJKLMNOPC",
+                        "Active": True,
+                        "RoleName": "ROLE_C",
+                        "RepoScheduled": 5,
+                        "CreateDate": datetime.datetime.now()
+                        - datetime.timedelta(days=100),
+                    }
+                ),
+            ]
+        )
 
         # time is past ROLE_C but before ROLE_A
         mock_time.return_value = 10
@@ -565,30 +599,28 @@ class TestRepokidCLI(object):
             call("", "ROLE_C", None, {}, hooks, commit=False, scheduled=True),
         ]
 
-        roles_items = RoleList([Role.parse_obj(r) for r in roles])
-
         assert mock_call_hooks.mock_calls == [
             call(
                 hooks,
                 "BEFORE_REPO_ROLES",
-                {"account_number": "", "roles": roles_items},
+                {"account_number": "", "roles": roles},
             ),
             call(
                 hooks,
                 "AFTER_REPO_ROLES",
-                {"account_number": "", "roles": roles_items, "errors": []},
+                {"account_number": "", "roles": roles, "errors": []},
             ),
             call(
                 hooks,
                 "BEFORE_REPO_ROLES",
-                {"account_number": "", "roles": RoleList([roles_items[2]])},
+                {"account_number": "", "roles": RoleList([roles[2]])},
             ),
             call(
                 hooks,
                 "AFTER_REPO_ROLES",
                 {
                     "account_number": "",
-                    "roles": RoleList([roles_items[2]]),
+                    "roles": RoleList([roles[2]]),
                     "errors": [],
                 },
             ),
@@ -610,32 +642,43 @@ class TestRepokidCLI(object):
             "AROAABCDEFGHIJKLMNOPA",
             "AROAABCDEFGHIJKLMNOPB",
         ]
-        roles = [
-            {
-                "Arn": "arn:aws:iam::123456789012:role/ROLE_A",
-                "RoleId": "AROAABCDEFGHIJKLMNOPA",
-                "Active": True,
-                "RoleName": "ROLE_A",
-                "RepoScheduled": 100,
-                "CreateDate": datetime.datetime.now() - datetime.timedelta(days=100),
-            },
-            {
-                "Arn": "arn:aws:iam::123456789012:role/ROLE_B",
-                "RoleId": "AROAABCDEFGHIJKLMNOPB",
-                "Active": True,
-                "RoleName": "ROLE_B",
-                "RepoScheduled": 0,
-                "CreateDate": datetime.datetime.now() - datetime.timedelta(days=100),
-            },
-            {
-                "Arn": "arn:aws:iam::123456789012:role/ROLE_C",
-                "RoleId": "AROAABCDEFGHIJKLMNOPC",
-                "Active": True,
-                "RoleName": "ROLE_C",
-                "RepoScheduled": 5,
-                "CreateDate": datetime.datetime.now() - datetime.timedelta(days=100),
-            },
-        ]
+        roles = RoleList(
+            [
+                Role.parse_obj(
+                    {
+                        "Arn": "arn:aws:iam::123456789012:role/ROLE_A",
+                        "RoleId": "AROAABCDEFGHIJKLMNOPA",
+                        "Active": True,
+                        "RoleName": "ROLE_A",
+                        "RepoScheduled": 100,
+                        "CreateDate": datetime.datetime.now()
+                        - datetime.timedelta(days=100),
+                    }
+                ),
+                Role.parse_obj(
+                    {
+                        "Arn": "arn:aws:iam::123456789012:role/ROLE_B",
+                        "RoleId": "AROAABCDEFGHIJKLMNOPB",
+                        "Active": True,
+                        "RoleName": "ROLE_B",
+                        "RepoScheduled": 0,
+                        "CreateDate": datetime.datetime.now()
+                        - datetime.timedelta(days=100),
+                    }
+                ),
+                Role.parse_obj(
+                    {
+                        "Arn": "arn:aws:iam::123456789012:role/ROLE_C",
+                        "RoleId": "AROAABCDEFGHIJKLMNOPC",
+                        "Active": True,
+                        "RoleName": "ROLE_C",
+                        "RepoScheduled": 5,
+                        "CreateDate": datetime.datetime.now()
+                        - datetime.timedelta(days=100),
+                    }
+                ),
+            ]
+        )
         mock_get_role_data.side_effect = [roles[0], roles[2], roles[0]]
 
         # first check all
@@ -863,7 +906,6 @@ class TestRepokidCLI(object):
         MagicMock(return_value="12345-roleid"),
     )
     @patch("repokid.commands.role.get_role_data", MagicMock(return_value=None))
-    @patch("repokid.commands.role.Role", MagicMock(return_value="IAMROLE"))
     @patch(
         "repokid.commands.role.remove_permissions_from_role",
         MagicMock(return_value=None),
