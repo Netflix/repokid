@@ -1,2 +1,3 @@
 include requirements.txt
 include requirements.in
+include repokid/py.typed
