@@ -39,7 +39,7 @@ To run locally:
 
 If you run the development version the table and index will be created for you automatically.
 
- #### IAM Permissions:
+#### IAM Permissions
 
 Repokid needs an IAM Role in each account that will be queried.  Additionally, Repokid needs to be launched with a role or user which can `sts:AssumeRole` into the different account roles.
 
@@ -131,11 +131,15 @@ By default the age filter excludes roles that are younger than 90 days.  To chan
 `filter_config.AgeFilter.minimum_age`.
 
 ### Active Filters
+
 New filters can be created to support internal logic.  At Netflix we have several that are specific to our
 use cases.  To make them active make sure they are in the Python path and add them in the config to the list in
 the section `active_filters`.
 
-## Hooks
+## Extending Repokid
+
+### Hooks
+
 Repokid is extensible via hooks that are called before, during, and after various operations as listed below.
 
 | Hook name | Context |
@@ -147,7 +151,51 @@ Repokid is extensible via hooks that are called before, during, and after variou
 | `DURING_REPOABLE_CALCULATION` | role_id, account_number, role_name, potentially_repoable_permissions, minimum_age |
 | `DURING_REPOABLE_CALCULATION_BATCH` | role_batch, potentially_repoable_permissions, minimum_age |
 
+Hooks must adhere to the following interface:
+
+```python
+from repokid.hooks import implements_hook
+from repokid.types import RepokidHookInput, RepokidHookOutput
+
+@implements_hook("TARGET_HOOK_NAME", 1)
+def custom_hook(input_dict: RepokidHookInput) -> RepokidHookOutput:
+    """Hook functions are called with a dict containing the keys listed above based on the target hook.
+    Any mutations made to the input and returned in the output will be passed on to subsequent hook funtions.
+    """
+    ...
+```
+
 Examples of hook implementations can be found in [`repokid.hooks.loggers`](repokid/hooks/loggers/__init__.py).
+
+### Filters
+
+Custom filters can be written to exclude roles from being repoed. Filters must adhere to the following interface:
+
+```python
+from repokid.filters import Filter
+from repokid.types import RepokidFilterConfig
+from repokid.role import RoleList
+
+
+class CustomFilterName(Filter):
+    def __init__(self, config: RepokidFilterConfig = None) -> None:
+        """Filters are initialized with a dict containing the contents of `filter_config.FilterName`
+        from the config file. This example would be initialized with `filter_config.CustomFilterName`.
+        The configuration can be accessed via `self.config`
+
+        If you don't need any custom initialization logic, you can leave this function out of your
+        filter class.
+        """
+        super().__init__(config=config)
+        # custom initialization logic goes here
+        ...
+
+    def apply(self, input_list: RoleList) -> RoleList:
+        """Determine roles to be excluded and return them as a RoleList"""
+        ...
+```
+
+A simple filter implementation can be found in [`repokid.filters.age`](repokid/filters/age/__init__.py). A more complex example is in [`repokid.blocklist.age`](repokid/filters/blocklist/__init__.py).
 
 ## How to Use
 

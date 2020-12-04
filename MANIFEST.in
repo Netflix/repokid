@@ -1,3 +1,7 @@
 include requirements.txt
 include requirements.in
 include repokid/py.typed
+
+include LICENSE README.md
+
+global-exclude *.py[cod]
