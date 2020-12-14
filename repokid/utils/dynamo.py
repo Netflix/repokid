@@ -219,7 +219,7 @@ def get_role_data(
         response = dynamo_table.get_item(Key={"RoleId": roleID})
 
     if response and "Item" in response:
-        return Role.parse_obj(_empty_string_from_dynamo_replace(response["Item"]))
+        return Role(**_empty_string_from_dynamo_replace(response["Item"]))
     else:
         raise RoleNotFoundError(f"Role ID {roleID} not found in DynamoDB")
 

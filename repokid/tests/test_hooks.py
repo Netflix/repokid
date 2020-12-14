@@ -97,7 +97,7 @@ class TestHooks(object):
         }
 
         input_dict = {
-            "role_batch": [Role.parse_obj(ROLES[0]), "def"],
+            "role_batch": [Role(**ROLES[0]), "def"],
             "potentially_repoable_permissions": [],
             "minimum_age": 1,
         }
@@ -109,9 +109,9 @@ class TestHooks(object):
             )
 
         input_dict["role_batch"] = [
-            Role.parse_obj(ROLES[0]),
-            Role.parse_obj(ROLES[1]),
-            Role.parse_obj(ROLES[2]),
+            Role(**ROLES[0]),
+            Role(**ROLES[1]),
+            Role(**ROLES[2]),
         ]
         assert input_dict == repokid.hooks.call_hooks(
             hooks, "DURING_REPOABLE_CALCULATION_BATCH", input_dict

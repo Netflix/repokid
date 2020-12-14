@@ -203,8 +203,8 @@ ROLES = [
 ]
 
 ROLES_FOR_DISPLAY = [
-    Role.parse_obj(
-        {
+    Role(
+        **{
             "TotalPermissions": 4,
             "RepoablePermissions": 0,
             "Repoed": "Never",
@@ -212,8 +212,8 @@ ROLES_FOR_DISPLAY = [
             "Refreshed": "Someday",
         }
     ),
-    Role.parse_obj(
-        {
+    Role(
+        **{
             "TotalPermissions": 4,
             "RepoablePermissions": 2,
             "Repoed": "Never",
@@ -221,8 +221,8 @@ ROLES_FOR_DISPLAY = [
             "Refreshed": "Someday",
         }
     ),
-    Role.parse_obj(
-        {
+    Role(
+        **{
             "TotalPermissions": 4,
             "RepoablePermissions": 0,
             "Repoed": "Never",
@@ -230,8 +230,8 @@ ROLES_FOR_DISPLAY = [
             "Refreshed": "Someday",
         }
     ),
-    Role.parse_obj(
-        {
+    Role(
+        **{
             "TotalPermissions": 4,
             "RepoablePermissions": 0,
             "Repoed": "Never",
@@ -239,8 +239,8 @@ ROLES_FOR_DISPLAY = [
             "Refreshed": "Someday",
         }
     ),
-    Role.parse_obj(
-        {
+    Role(
+        **{
             "TotalPermissions": 4,
             "RepoablePermissions": 2,
             "Repoed": "Never",
@@ -248,8 +248,8 @@ ROLES_FOR_DISPLAY = [
             "Refreshed": "Someday",
         }
     ),
-    Role.parse_obj(
-        {
+    Role(
+        **{
             "TotalPermissions": 4,
             "RepoablePermissions": 2,
             "Repoed": "Never",
@@ -329,9 +329,9 @@ class TestRepokidCLI(object):
 
         roles = RoleList(
             [
-                Role.parse_obj(ROLES[0]),
-                Role.parse_obj(ROLES[1]),
-                Role.parse_obj(ROLES[2]),
+                Role(**ROLES[0]),
+                Role(**ROLES[1]),
+                Role(**ROLES[2]),
             ]
         )
 
@@ -344,19 +344,19 @@ class TestRepokidCLI(object):
             call(
                 dynamo_table,
                 account_number,
-                Role.parse_obj(ROLES[0]),
+                Role(**ROLES[0]),
                 {"all_services_used": ROLE_POLICIES["all_services_used"]},
             ),
             call(
                 dynamo_table,
                 account_number,
-                Role.parse_obj(ROLES[1]),
+                Role(**ROLES[1]),
                 {"unused_ec2": ROLE_POLICIES["unused_ec2"]},
             ),
             call(
                 dynamo_table,
                 account_number,
-                Role.parse_obj(ROLES[2]),
+                Role(**ROLES[2]),
                 {"all_services_used": ROLE_POLICIES["all_services_used"]},
             ),
         ]
@@ -368,9 +368,9 @@ class TestRepokidCLI(object):
                 account_number,
                 RoleList(
                     [
-                        Role.parse_obj(ROLES[0]),
-                        Role.parse_obj(ROLES[1]),
-                        Role.parse_obj(ROLES[2]),
+                        Role(**ROLES[0]),
+                        Role(**ROLES[1]),
+                        Role(**ROLES[2]),
                     ]
                 ),
             )
@@ -406,7 +406,7 @@ class TestRepokidCLI(object):
         test_roles = []
         for x, role in enumerate(ROLES_FOR_DISPLAY):
             test_roles.append(
-                role.copy(update=Role.parse_obj(ROLES[x]).dict(exclude_unset=True))
+                role.copy(update=Role(**ROLES[x]).dict(exclude_unset=True))
             )
 
         # loop over all roles twice (one for each call below)
@@ -484,13 +484,13 @@ class TestRepokidCLI(object):
         # first role is not repoable, second role is repoable
         test_roles = [
             ROLES_FOR_DISPLAY[0].copy(
-                update=Role.parse_obj({"RoleId": "AROAABCDEFGHIJKLMNOPA"}).dict(
+                update=Role(**{"RoleId": "AROAABCDEFGHIJKLMNOPA"}).dict(
                     exclude_unset=True
                 )
             ),
             ROLES_FOR_DISPLAY[1].copy(
-                update=Role.parse_obj(
-                    {"RoleId": "AROAABCDEFGHIJKLMNOPB", "AAData": [{"foo": "bar"}]}
+                update=Role(
+                    **{"RoleId": "AROAABCDEFGHIJKLMNOPB", "AAData": [{"foo": "bar"}]}
                 ).dict(exclude_unset=True)
             ),
         ]
@@ -537,8 +537,8 @@ class TestRepokidCLI(object):
         ]
         roles = RoleList(
             [
-                Role.parse_obj(
-                    {
+                Role(
+                    **{
                         "Arn": "arn:aws:iam::123456789012:role/ROLE_A",
                         "RoleId": "AROAABCDEFGHIJKLMNOPA",
                         "Active": True,
@@ -548,8 +548,8 @@ class TestRepokidCLI(object):
                         - datetime.timedelta(days=100),
                     }
                 ),
-                Role.parse_obj(
-                    {
+                Role(
+                    **{
                         "Arn": "arn:aws:iam::123456789012:role/ROLE_B",
                         "RoleId": "AROAABCDEFGHIJKLMNOPB",
                         "Active": True,
@@ -559,8 +559,8 @@ class TestRepokidCLI(object):
                         - datetime.timedelta(days=100),
                     }
                 ),
-                Role.parse_obj(
-                    {
+                Role(
+                    **{
                         "Arn": "arn:aws:iam::123456789012:role/ROLE_C",
                         "RoleId": "AROAABCDEFGHIJKLMNOPC",
                         "Active": True,
@@ -644,8 +644,8 @@ class TestRepokidCLI(object):
         ]
         roles = RoleList(
             [
-                Role.parse_obj(
-                    {
+                Role(
+                    **{
                         "Arn": "arn:aws:iam::123456789012:role/ROLE_A",
                         "RoleId": "AROAABCDEFGHIJKLMNOPA",
                         "Active": True,
@@ -655,8 +655,8 @@ class TestRepokidCLI(object):
                         - datetime.timedelta(days=100),
                     }
                 ),
-                Role.parse_obj(
-                    {
+                Role(
+                    **{
                         "Arn": "arn:aws:iam::123456789012:role/ROLE_B",
                         "RoleId": "AROAABCDEFGHIJKLMNOPB",
                         "Active": True,
@@ -666,8 +666,8 @@ class TestRepokidCLI(object):
                         - datetime.timedelta(days=100),
                     }
                 ),
-                Role.parse_obj(
-                    {
+                Role(
+                    **{
                         "Arn": "arn:aws:iam::123456789012:role/ROLE_C",
                         "RoleId": "AROAABCDEFGHIJKLMNOPC",
                         "Active": True,

@@ -30,7 +30,7 @@ class TestRoledata(object):
     def test_get_role_permissions(
         self, mock_all_permissions, mock_get_actions_from_statement, mock_expand_policy
     ):
-        test_role = Role.parse_obj(ROLES[0])
+        test_role = Role(**ROLES[0])
 
         all_permissions = [
             "ec2:associateaddress",
@@ -146,9 +146,9 @@ class TestRoledata(object):
     @patch("repokid.hooks.call_hooks")
     def test_get_repoable_permissions_batch(self, mock_call_hooks):
         roles = [
-            Role.parse_obj(ROLES[0]),
-            Role.parse_obj(ROLES[4]),
-            Role.parse_obj(ROLES[5]),
+            Role(**ROLES[0]),
+            Role(**ROLES[4]),
+            Role(**ROLES[5]),
         ]
 
         roles[0].aa_data = AARDVARK_DATA[roles[0].arn]
@@ -273,9 +273,9 @@ class TestRoledata(object):
         self, mock_call_hooks, mock_get_repoable_permissions, mock_get_role_permissions
     ):
         roles = [
-            Role.parse_obj(ROLES[0]),
-            Role.parse_obj(ROLES[1]),
-            Role.parse_obj(ROLES[2]),
+            Role(**ROLES[0]),
+            Role(**ROLES[1]),
+            Role(**ROLES[2]),
         ]
         roles[0].disqualified_by = []
         roles[0].aa_data = "some_aa_data"
@@ -340,11 +340,11 @@ class TestRoledata(object):
         mock_get_role_permissions,
     ):
         roles = [
-            Role.parse_obj(ROLES[0]),
-            Role.parse_obj(ROLES[1]),
-            Role.parse_obj(ROLES[2]),
-            Role.parse_obj(ROLES[4]),
-            Role.parse_obj(ROLES[5]),
+            Role(**ROLES[0]),
+            Role(**ROLES[1]),
+            Role(**ROLES[2]),
+            Role(**ROLES[4]),
+            Role(**ROLES[5]),
         ]
         roles[0].disqualified_by = []
         roles[0].aa_data = "some_aa_data"

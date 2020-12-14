@@ -244,7 +244,7 @@ def update_role_data(
             current_policy,
             role.tags,
         )
-        role_updates = Role.parse_obj(role_dict)
+        role_updates = Role(**role_dict)
         update_dict = role_updates.dict(exclude_unset=True)
         role = role.copy(update=update_dict)
         LOGGER.info("Added new role ({}): {}".format(role.role_id, role.arn))
