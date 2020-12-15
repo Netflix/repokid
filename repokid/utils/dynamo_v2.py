@@ -254,4 +254,9 @@ def set_role_data(
     )
 
 
-ROLE_TABLE = dynamo_get_or_create_table(**CONFIG["dynamo_db"])
+dynamodb_config = CONFIG.get("dynamo_db")
+if dynamodb_config:
+    ROLE_TABLE = dynamo_get_or_create_table(**CONFIG["dynamo_db"])
+else:
+    logger.warning("No DynamoDB config found; not creating table")
+    ROLE_TABLE = None
