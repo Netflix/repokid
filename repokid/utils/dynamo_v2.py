@@ -12,6 +12,7 @@ from cloudaux.aws.sts import boto3_cached_conn
 from mypy_boto3_dynamodb.service_resource import Table
 from mypy_boto3_dynamodb.type_defs import GlobalSecondaryIndexTypeDef
 
+from repokid import CONFIG
 from repokid.exceptions import RoleNotFoundError
 
 DYNAMO_EMPTY_STRING = "---DYNAMO-EMPTY-STRING---"
@@ -156,9 +157,10 @@ def dynamo_get_or_create_table(
     return table
 
 
-def create_dynamodb_entry(dynamo_table: Table, values: Dict[str, Any]) -> None:
+def create_dynamodb_entry(values: Dict[str, Any], dynamo_table: Optional[Table] = None) -> None:
+    table = dynamo_table or ROLE_TABLE
     try:
-        dynamo_table.put_item(Item=values)
+        table.put_item(Item=values)
     except BotoClientError:
         logger.error("failed to create dynamodb item")
         logger.debug("dynamodb creation failure details", extra={"values": values})
@@ -166,14 +168,15 @@ def create_dynamodb_entry(dynamo_table: Table, values: Dict[str, Any]) -> None:
 
 
 def get_role_by_id(
-    dynamo_table: Table, role_id: str, fields: Optional[List[str]] = None
+    role_id: str, fields: Optional[List[str]] = None, dynamo_table: Optional[Table] = None
 ) -> Dict[str, Any]:
+    table = dynamo_table or ROLE_TABLE
     if fields:
-        response = dynamo_table.get_item(
+        response = table.get_item(
             Key={"RoleId": role_id}, AttributesToGet=fields
         )
     else:
-        response = dynamo_table.get_item(Key={"RoleId": role_id})
+        response = table.get_item(Key={"RoleId": role_id})
 
     if response and "Item" in response:
         return _empty_string_from_dynamo_replace(response["Item"])
@@ -182,12 +185,13 @@ def get_role_by_id(
 
 
 def get_role_by_name(
-    dynamo_table: Table,
     account_id: str,
     role_name: str,
     fields: Optional[List[str]] = None,
+    dynamo_table: Optional[Table] = None,
 ) -> Dict[str, Any]:
-    results = dynamo_table.query(
+    table = dynamo_table or ROLE_TABLE
+    results = table.query(
         IndexName="RoleName",
         KeyConditionExpression="RoleName = :rn",
         ExpressionAttributeValues={":rn": role_name},
@@ -207,8 +211,9 @@ def get_role_by_name(
 
 
 def set_role_data(
-    dynamo_table: Table, role_id: str, update_keys: Dict[str, Any]
+    role_id: str, update_keys: Dict[str, Any], dynamo_table: Optional[Table] = None
 ) -> None:
+    table = dynamo_table or ROLE_TABLE
     if not update_keys:
         return
 
@@ -236,9 +241,12 @@ def set_role_data(
         "ExpressionAttributeValues": expression_attribute_values,
     }
     logger.debug("updating dynamodb with inputs %s", update_item_inputs)
-    dynamo_table.update_item(
+    table.update_item(
         Key={"RoleId": role_id},
         UpdateExpression=update_expression,
         ExpressionAttributeNames=expression_attribute_names,
         ExpressionAttributeValues=expression_attribute_values,
     )
+
+
+ROLE_TABLE = dynamo_get_or_create_table(**CONFIG["dynamo_db"])

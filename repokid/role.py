@@ -23,7 +23,6 @@ from typing import Set
 from typing import Union
 from typing import overload
 
-from mypy_boto3_dynamodb.service_resource import Table
 from pydantic import BaseModel
 from pydantic import Field
 from pydantic import PrivateAttr
@@ -35,7 +34,6 @@ from repokid.exceptions import RoleNotFoundError
 from repokid.types import RepokidConfig
 from repokid.utils.aardvark import get_aardvark_data
 from repokid.utils.dynamo_v2 import create_dynamodb_entry
-from repokid.utils.dynamo_v2 import dynamo_get_or_create_table
 from repokid.utils.dynamo_v2 import get_role_by_id
 from repokid.utils.dynamo_v2 import get_role_by_name
 from repokid.utils.dynamo_v2 import set_role_data
@@ -43,6 +41,15 @@ from repokid.utils.dynamo_v2 import set_role_data
 
 def to_camel(string: str) -> str:
     return "".join(word.capitalize() for word in string.split("_"))
+
+
+def update(r: Role, updates: Dict[str, Any], store: bool = False) -> Role:
+    new_role = r.copy(update=updates)
+    if store:
+        # TODO: add store logic
+        pass
+
+    return new_role
 
 
 class Role(BaseModel):
@@ -70,19 +77,14 @@ class Role(BaseModel):
     total_permissions: Optional[int] = Field()
     config: RepokidConfig = Field(default=CONFIG)
     _dirty: bool = PrivateAttr(default=False)
-    _default_store_args = {
-        "by_alias": True,
-        "exclude": {
-            "role_id",
-            "role_name",
-            "account",
-            "config",
-            "_dirty",
-            "_dynamo_table",
-            "_updated_fields",
-        },
+    _default_exclude = {
+        "role_id",
+        "role_name",
+        "account",
+        "config",
+        "_dirty",
+        "_updated_fields",
     }
-    _dynamo_table: Table = PrivateAttr()
     _updated_fields: Set[str] = PrivateAttr(default_factory=set)
 
     class Config:
@@ -90,10 +92,6 @@ class Role(BaseModel):
         allow_population_by_field_name = True
         arbitrary_types_allowed = True
         underscore_attrs_are_private = True
-
-    def __init__(self, **data):
-        super().__init__(**data)
-        self._dynamo_table = dynamo_get_or_create_table(**self.config["dynamo_db"])
 
     def __eq__(self, other: object) -> bool:
         return self.role_id == other
@@ -107,11 +105,15 @@ class Role(BaseModel):
     def update(self, values: Dict[str, Any], store: bool = True) -> None:
         self._dirty = True
         self._updated_fields.update(values.keys())
-        self.parse_obj(values)
+        temp_role = Role(**values)
+        role_data = temp_role.dict(exclude_unset=True, exclude=self._default_exclude)
+        for k, v in role_data.items():
+            setattr(self, k, v)
         if store:
             self.store()
 
-    def fetch_aa_data(self, config: RepokidConfig):
+    def fetch_aa_data(self, config: RepokidConfig = None):
+        config = config or CONFIG
         if not self.arn:
             raise RoleModelError(
                 "missing arn on Role instance, cannot retrieve Access Advisor data"
@@ -130,23 +132,26 @@ class Role(BaseModel):
             )
 
         if self.role_id:
-            role_data = get_role_by_id(self._dynamo_table, self.role_id, fields=fields)
+            stored_role_data = get_role_by_id(self.role_id, fields=fields)
         elif self.role_name and self.account:
-            role_data = get_role_by_name(
-                self._dynamo_table, self.account, self.role_name, fields=fields
+            stored_role_data = get_role_by_name(
+                self.account, self.role_name, fields=fields
             )
         else:
             raise RoleModelError(
                 "missing role_id or role_name and account on Role instance"
             )
 
-        if role_data and update:
-            self.parse_obj(role_data)
+        if update:
+            temp_role = Role(**stored_role_data)
+            role_data = temp_role.dict(exclude_unset=True, exclude=self._default_exclude)
+            self.update(role_data, store=False)
+            self._updated_fields - set(role_data.keys())
 
     def store(self, fields: Optional[List[str]] = None):
         try:
             remote_dt = get_role_by_id(
-                self._dynamo_table, self.role_id, fields=["LastUpdated"]
+                self.role_id, fields=["LastUpdated"]
             ).get("LastUpdated")
             remote_last_updated = datetime.datetime.strptime(
                 remote_dt, "%Y-%m-%d %H:%M"
@@ -161,24 +166,23 @@ class Role(BaseModel):
         try:
             self.fetch(fields=fields, update=False)
         except RoleNotFoundError:
-            create_dynamodb_entry(self._dynamo_table, self.dict())
+            create_dynamodb_entry(self.dict())
             self._updated_fields = set()
 
         if fields:
             set_role_data(
-                self._dynamo_table,
                 self.role_id,
                 self.dict(
                     include=set(fields).add("last_updated"),
-                    **self._default_store_args,
+                    by_alias=True,
+                    exclude=self._default_exclude,
                 ),
             )
             self._updated_fields - set(fields)
         else:
             set_role_data(
-                self._dynamo_table,
                 self.role_id,
-                self.dict(exclude_unset=True, **self._default_store_args),
+                self.dict(exclude_unset=True, by_alias=True, exclude=self._default_exclude),
             )
             self._updated_fields = set()
         self._dirty = False
