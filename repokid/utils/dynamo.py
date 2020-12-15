@@ -8,6 +8,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Set
+from typing import TypeVar
 from typing import Union
 
 import boto3
@@ -22,6 +23,7 @@ from repokid.role import Role
 LOGGER = logging.getLogger("repokid")
 # used as a placeholder for empty SID to work around this: https://github.com/aws/aws-sdk-js/issues/833
 DYNAMO_EMPTY_STRING = "---DYNAMO-EMPTY-STRING---"
+T = TypeVar("T", str, Dict[Any, Any], List[Any])
 
 
 def catch_boto_error(func: Callable[..., Any]) -> Callable[..., Any]:
@@ -219,7 +221,7 @@ def get_role_data(
         response = dynamo_table.get_item(Key={"RoleId": roleID})
 
     if response and "Item" in response:
-        return Role.parse_obj(_empty_string_from_dynamo_replace(response["Item"]))
+        return Role(**_empty_string_from_dynamo_replace(response["Item"]))
     else:
         raise RoleNotFoundError(f"Role ID {roleID} not found in DynamoDB")
 
@@ -374,9 +376,7 @@ def store_initial_role_data(
     return role_dict
 
 
-def _empty_string_from_dynamo_replace(
-    obj: Union[Dict[str, Any], List[Any]]
-) -> Union[Dict[str, Any], List[Any]]:
+def _empty_string_from_dynamo_replace(obj: T) -> T:
     """
     Traverse a potentially nested object and replace all Dynamo placeholders with actual empty strings
 

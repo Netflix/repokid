@@ -29,3 +29,15 @@ class RoleNotFoundError(Exception):
 
 class IAMError(Exception):
     pass
+
+
+class RoleModelError(AttributeError):
+    pass
+
+
+class DynamoDBError(Exception):
+    pass
+
+
+class IntegrityError(Exception):
+    pass

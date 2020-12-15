@@ -77,7 +77,7 @@ def _update_role_cache(
             for item in data["RolePolicyList"]
         }
 
-    roles = RoleList([Role.parse_obj(rd) for rd in role_data])
+    roles = RoleList([Role(**rd) for rd in role_data])
 
     active_roles = RoleList([])
     updated_roles = RoleList([])
