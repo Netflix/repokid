@@ -43,15 +43,6 @@ def to_camel(string: str) -> str:
     return "".join(word.capitalize() for word in string.split("_"))
 
 
-def update(r: Role, updates: Dict[str, Any], store: bool = False) -> Role:
-    new_role = r.copy(update=updates)
-    if store:
-        # TODO: add store logic
-        pass
-
-    return new_role
-
-
 class Role(BaseModel):
     aa_data: Optional[List[Dict[str, Any]]] = Field(alias="AAData")
     account: str = Field(default="")
@@ -77,7 +68,7 @@ class Role(BaseModel):
     total_permissions: Optional[int] = Field()
     config: RepokidConfig = Field(default=CONFIG)
     _dirty: bool = PrivateAttr(default=False)
-    _default_exclude = {
+    _default_exclude: Set[str] = {
         "role_id",
         "role_name",
         "account",
@@ -110,9 +101,10 @@ class Role(BaseModel):
         for k, v in role_data.items():
             setattr(self, k, v)
         if store:
-            self.store()
+            fields = list(values.keys())
+            self.store(fields=fields)
 
-    def fetch_aa_data(self, config: RepokidConfig = None):
+    def fetch_aa_data(self, config: Optional[RepokidConfig] = None) -> None:
         config = config or CONFIG
         if not self.arn:
             raise RoleModelError(
@@ -120,12 +112,12 @@ class Role(BaseModel):
             )
 
         aardvark_data = get_aardvark_data(
-            config.get("aardvark_api_location"), arn=self.arn
+            config.get("aardvark_api_location", ""), arn=self.arn
         )
 
         self.aa_data = aardvark_data.get(self.arn)
 
-    def fetch(self, fields: Optional[List[str]] = None, update: bool = True):
+    def fetch(self, fields: Optional[List[str]] = None, update: bool = True) -> None:
         if self._dirty:
             raise IntegrityError(
                 "role object has unsaved modifications, fetching may overwrite changes"
@@ -144,47 +136,52 @@ class Role(BaseModel):
 
         if update:
             temp_role = Role(**stored_role_data)
-            role_data = temp_role.dict(exclude_unset=True, exclude=self._default_exclude)
+            role_data = temp_role.dict(
+                exclude_unset=True, exclude=self._default_exclude
+            )
             self.update(role_data, store=False)
             self._updated_fields - set(role_data.keys())
 
-    def store(self, fields: Optional[List[str]] = None):
+    def store(self, fields: Optional[List[str]] = None) -> None:
+        create = False
         try:
-            remote_dt = get_role_by_id(
-                self.role_id, fields=["LastUpdated"]
-            ).get("LastUpdated")
+            remote_role_data = get_role_by_id(self.role_id, fields=["LastUpdated"])
+            remote_dt = remote_role_data.get("LastUpdated", "")
             remote_last_updated = datetime.datetime.strptime(
                 remote_dt, "%Y-%m-%d %H:%M"
             )
             if remote_last_updated > self.last_updated:
                 raise IntegrityError("stored role has been updated since last fetch")
         except RoleNotFoundError:
-            pass
+            create = True
 
         self.last_updated = datetime.datetime.now()
 
-        try:
-            self.fetch(fields=fields, update=False)
-        except RoleNotFoundError:
-            create_dynamodb_entry(self.dict())
+        if create:
+            # TODO: handle this case in set_role_data() to simplify logic here
+            create_dynamodb_entry(self.dict(exclude_unset=True, by_alias=True))
             self._updated_fields = set()
-
-        if fields:
-            set_role_data(
-                self.role_id,
-                self.dict(
-                    include=set(fields).add("last_updated"),
-                    by_alias=True,
-                    exclude=self._default_exclude,
-                ),
-            )
-            self._updated_fields - set(fields)
         else:
-            set_role_data(
-                self.role_id,
-                self.dict(exclude_unset=True, by_alias=True, exclude=self._default_exclude),
-            )
-            self._updated_fields = set()
+            if fields:
+                include_fields = set(fields)
+                include_fields.add("last_updated")
+                set_role_data(
+                    self.role_id,
+                    self.dict(
+                        include=include_fields,
+                        by_alias=True,
+                        exclude=self._default_exclude,
+                    ),
+                )
+                self._updated_fields - set(fields)
+            else:
+                set_role_data(
+                    self.role_id,
+                    self.dict(
+                        exclude_unset=True, by_alias=True, exclude=self._default_exclude
+                    ),
+                )
+                self._updated_fields = set()
         self._dirty = False
 
 

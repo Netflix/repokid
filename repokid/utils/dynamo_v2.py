@@ -4,6 +4,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import TypeVar
 from typing import Union
 
 import boto3
@@ -16,13 +17,12 @@ from repokid import CONFIG
 from repokid.exceptions import RoleNotFoundError
 
 DYNAMO_EMPTY_STRING = "---DYNAMO-EMPTY-STRING---"
+T = TypeVar("T", str, Dict[Any, Any], List[Any])
 
 logger = logging.getLogger("repokid")
 
 
-def _empty_string_from_dynamo_replace(
-    obj: Union[Dict[str, Any], List[Any]]
-) -> Union[Dict[str, Any], List[Any]]:
+def _empty_string_from_dynamo_replace(obj: T) -> T:
     """
     Traverse a potentially nested object and replace all Dynamo placeholders with actual empty strings
 
@@ -37,8 +37,8 @@ def _empty_string_from_dynamo_replace(
     elif isinstance(obj, list):
         return [_empty_string_from_dynamo_replace(elem) for elem in obj]
     else:
-        if str(obj) == DYNAMO_EMPTY_STRING:
-            obj = ""
+        if isinstance(obj, str) and str == DYNAMO_EMPTY_STRING:
+            return ""
         return obj
 
 
@@ -157,7 +157,9 @@ def dynamo_get_or_create_table(
     return table
 
 
-def create_dynamodb_entry(values: Dict[str, Any], dynamo_table: Optional[Table] = None) -> None:
+def create_dynamodb_entry(
+    values: Dict[str, Any], dynamo_table: Optional[Table] = None
+) -> None:
     table = dynamo_table or ROLE_TABLE
     try:
         table.put_item(Item=values)
@@ -168,13 +170,13 @@ def create_dynamodb_entry(values: Dict[str, Any], dynamo_table: Optional[Table] 
 
 
 def get_role_by_id(
-    role_id: str, fields: Optional[List[str]] = None, dynamo_table: Optional[Table] = None
+    role_id: str,
+    fields: Optional[List[str]] = None,
+    dynamo_table: Optional[Table] = None,
 ) -> Dict[str, Any]:
     table = dynamo_table or ROLE_TABLE
     if fields:
-        response = table.get_item(
-            Key={"RoleId": role_id}, AttributesToGet=fields
-        )
+        response = table.get_item(Key={"RoleId": role_id}, AttributesToGet=fields)
     else:
         response = table.get_item(Key={"RoleId": role_id})
 
@@ -203,11 +205,14 @@ def get_role_by_name(
     if len(items) > 1:
         # multiple results, so we'll grab the first match that's active
         for r in items:
-            if r.get("Active"):
+            if r.get("Active") and isinstance(r, dict):
                 return r
 
     # we only have one result
-    return items[0]
+    if not isinstance(items[0], dict):
+        raise RoleNotFoundError(f"{role_name} in {account_id} not found in DynamoDB")
+    else:
+        return items[0]
 
 
 def set_role_data(

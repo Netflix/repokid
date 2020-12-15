@@ -1,10 +1,13 @@
 import copy
-
-import pytest
+import datetime
 from unittest.mock import patch
 
+import pytest
+
+from repokid.exceptions import IntegrityError
 from repokid.exceptions import RoleModelError
-from repokid.role import Role, update
+from repokid.exceptions import RoleNotFoundError
+from repokid.role import Role
 from repokid.tests import vars
 
 
@@ -67,6 +70,31 @@ def test_role_update(role_dict):
     assert r.repoable_permissions == 20
 
 
+@patch("repokid.role.get_role_by_id")
+@patch("repokid.role.set_role_data")
+def test_role_update_store(
+    mock_set_role_data, mock_get_role_by_id, role_dict, role_dict_with_aliases
+):
+    expected = {"RepoablePermissions": 20, "LastUpdated": vars.last_updated}
+    mock_get_role_by_id.return_value = {
+        "LastUpdated": vars.last_updated.strftime("%Y-%m-%d %H:%M")
+    }
+    r = Role(**role_dict)
+    updates = {"repoable_permissions": 20}
+    r.update(updates, store=True)
+    assert r.repoable_permissions == 20
+    mock_set_role_data.assert_called_once()
+    assert mock_set_role_data.call_args[0][0] == r.role_id
+    # LastUpdated gets set when we store, so we just need to make sure it's different now
+    assert mock_set_role_data.call_args[0][1]["LastUpdated"] > expected["LastUpdated"]
+
+    # Remove LastUpdated from the fn call and expected dict so we can compare the rest
+    mock_set_role_data.call_args[0][1].pop("LastUpdated")
+    expected.pop("LastUpdated")
+
+    assert mock_set_role_data.call_args[0][1] == expected
+
+
 def test_role_update_by_alias(role_dict):
     r = Role(**role_dict)
     updates = {"RepoablePermissions": 20}
@@ -124,14 +152,25 @@ def test_role_fetch_not_found(role_dict):
         r.fetch()
 
 
+def test_role_fetch_dirty(role_dict):
+    r = Role(**role_dict)
+    r._dirty = True
+    with pytest.raises(IntegrityError):
+        r.fetch()
+
+
 @patch("repokid.role.get_role_by_id")
 @patch("repokid.role.set_role_data")
-def test_role_store(mock_set_role_data, mock_get_role_by_id, role_dict, role_dict_with_aliases):
+def test_role_store(
+    mock_set_role_data, mock_get_role_by_id, role_dict, role_dict_with_aliases
+):
     expected = copy.deepcopy(role_dict_with_aliases)
     expected.pop("RoleId")
     expected.pop("RoleName")
     expected.pop("Account")
-    mock_get_role_by_id.return_value = {"LastUpdated": vars.last_updated.strftime("%Y-%m-%d %H:%M")}
+    mock_get_role_by_id.return_value = {
+        "LastUpdated": vars.last_updated.strftime("%Y-%m-%d %H:%M")
+    }
     r = Role(**role_dict)
     r.store()
     mock_set_role_data.assert_called_once()
@@ -148,9 +187,13 @@ def test_role_store(mock_set_role_data, mock_get_role_by_id, role_dict, role_dic
 
 @patch("repokid.role.get_role_by_id")
 @patch("repokid.role.set_role_data")
-def test_role_store_fields(mock_set_role_data, mock_get_role_by_id, role_dict, role_dict_with_aliases):
+def test_role_store_fields(
+    mock_set_role_data, mock_get_role_by_id, role_dict, role_dict_with_aliases
+):
     expected = {"RepoablePermissions": 5, "LastUpdated": vars.last_updated}
-    mock_get_role_by_id.return_value = {"LastUpdated": vars.last_updated.strftime("%Y-%m-%d %H:%M")}
+    mock_get_role_by_id.return_value = {
+        "LastUpdated": vars.last_updated.strftime("%Y-%m-%d %H:%M")
+    }
     r = Role(**role_dict)
     r.store(fields=["repoable_permissions"])
     mock_set_role_data.assert_called_once()
@@ -164,3 +207,39 @@ def test_role_store_fields(mock_set_role_data, mock_get_role_by_id, role_dict, r
 
     assert mock_set_role_data.call_args[0][1] == expected
 
+
+@patch("repokid.role.get_role_by_id")
+def test_role_store_remote_updated(
+    mock_get_role_by_id, role_dict, role_dict_with_aliases
+):
+    expected = copy.deepcopy(role_dict_with_aliases)
+    expected.pop("RoleId")
+    expected.pop("RoleName")
+    expected.pop("Account")
+
+    # simulate the record having been updated in DynamoDB since we last fetched it
+    last_updated = (vars.last_updated + datetime.timedelta(hours=2)).strftime(
+        "%Y-%m-%d %H:%M"
+    )
+    mock_get_role_by_id.return_value = {"LastUpdated": last_updated}
+    r = Role(**role_dict)
+    with pytest.raises(IntegrityError):
+        r.store()
+
+
+@patch("repokid.role.get_role_by_id")
+@patch("repokid.role.create_dynamodb_entry")
+def test_role_store_create(
+    mock_create_dynamodb_entry, mock_get_role_by_id, role_dict, role_dict_with_aliases
+):
+    expected = copy.deepcopy(role_dict_with_aliases)
+    mock_get_role_by_id.side_effect = RoleNotFoundError
+    r = Role(**role_dict)
+    r.store()
+    mock_create_dynamodb_entry.assert_called_once()
+
+    # Remove LastUpdated from the fn call and expected dict so we can compare the rest
+    mock_create_dynamodb_entry.call_args[0][0].pop("LastUpdated")
+    expected.pop("LastUpdated")
+
+    assert mock_create_dynamodb_entry.call_args[0][0] == expected
