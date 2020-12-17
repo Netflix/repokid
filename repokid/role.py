@@ -42,9 +42,11 @@ from repokid.utils.dynamo_v2 import get_role_by_id
 from repokid.utils.dynamo_v2 import get_role_by_name
 from repokid.utils.dynamo_v2 import set_role_data
 from repokid.utils.permissions import _convert_repoable_perms_to_perms_and_services
-from repokid.utils.permissions import _get_repoable_permissions
 from repokid.utils.permissions import find_newly_added_permissions
 from repokid.utils.permissions import get_permissions_in_policy
+from repokid.utils.permissions import get_repoable_permissions
+from repokid.utils.permissions import get_repoed_policy
+from repokid.utils.permissions import get_services_and_permissions_from_repoable
 
 logger = logging.getLogger("repokid")
 
@@ -72,7 +74,7 @@ class Role(BaseModel):
     repo_scheduled: float = Field(default=0.0)
     role_id: str = Field(default="")
     role_name: str = Field(default="")
-    scheduled_perms: Set[str] = Field(default=[])
+    scheduled_perms: Set[str] = Field(default=set())
     stats: List[Dict[str, Any]] = Field(default=[])
     tags: List[Dict[str, Any]] = Field(default=[])
     total_permissions: Optional[int] = Field()
@@ -113,27 +115,26 @@ class Role(BaseModel):
             if policy == last_policy:
                 # we're already up to date, so this is a noop
                 return
-        else:
-            last_policy = {}
         policy_entry = {
             "Source": source,
-            "Discovered": datetime.datetime.utcnow().isoformat(),
+            "Discovered": datetime.datetime.now(tz=datetime.timezone.utc).isoformat(),
             "Policy": policy,
         }
         self.policies.append(policy_entry)
         if store:
             self.store(fields=["Policies", "NoRepoPermissions"])
 
-    def _calculate_repo_scores(self, minimum_age: int, hooks: RepokidHooks) -> None:
-        all_permissions, eligible_permissions = get_permissions_in_policy(
-            self.policies[-1].get("Policy", {})
-        )
+    def calculate_repo_scores(self, minimum_age: int, hooks: RepokidHooks) -> None:
+        (
+            all_permissions,
+            eligible_permissions,
+        ) = self.get_permissions_for_policy_version()
         self.total_permissions = len(all_permissions)
         if self.disqualified_by or not self.aa_data:
             self.repoable_permissions = 0
             self.repoable_services = []
             return
-        repoable_permissions = _get_repoable_permissions(
+        repoable_permissions = get_repoable_permissions(
             self.account,
             self.role_name,
             eligible_permissions,
@@ -150,21 +151,21 @@ class Role(BaseModel):
             eligible_permissions, repoable_permissions
         )
         self.repoable_services = list(
-            repoable_permissions_set.union(repoable_permissions_set)
+            repoable_permissions_set.union(repoable_services_set)
         )
         self.repoable_permissions = len(repoable_permissions)
 
-    def _get_permissions(
-        self, warn_unknown_perms: bool = False
+    def get_permissions_for_policy_version(
+        self, selection: int = -1, warn_unknown_perms: bool = False
     ) -> Tuple[Set[str], Set[str]]:
         if not self.policies:
             return set(), set()
 
         return get_permissions_in_policy(
-            self.policies[-1]["Policy"], warn_unknown_perms=warn_unknown_perms
+            self.policies[selection]["Policy"], warn_unknown_perms=warn_unknown_perms
         )
 
-    def _update_no_repo_permissions(self) -> None:
+    def _calculate_no_repo_permissions(self) -> None:
         try:
             previous_policy = self.policies[-2]
         except IndexError:
@@ -183,12 +184,63 @@ class Role(BaseModel):
         for permission in newly_added_permissions:
             new_no_repo_permissions[permission] = expire_time
 
+    def get_repoed_policy(
+        self, scheduled: bool = False
+    ) -> Tuple[Dict[str, Any], List[str]]:
+        if not self.repoable_services:
+            # TODO: handle this better, maybe by calculating repoable services on the fly
+            #  or just use a custom exception type
+            raise Exception("role needs to be updated")
+        if scheduled:
+            permissions, services = get_services_and_permissions_from_repoable(
+                self.scheduled_perms
+            )
+            repoable = {
+                p
+                for p in self.repoable_services
+                if p in self.scheduled_perms or p.split(":")[0] in services
+            }
+        else:
+            repoable = self.repoable_services
+
+        repoed_policies, deleted_policy_names = get_repoed_policy(
+            self.policies[-1]["Policy"], repoable
+        )
+        return repoed_policies, deleted_policy_names
+
+    def is_eligible_for_repo(self) -> bool:
+        if len(self.disqualified_by) > 0:
+            return False
+        if not self.aa_data:
+            return False
+        if not self.repoable_permissions:
+            return False
+        stale_aa_services = self._stale_aa_services()
+        if stale_aa_services:
+            return False
+        return True
+
+    def _stale_aa_services(self) -> List[str]:
+        thresh = datetime.datetime.now(tz=datetime.timezone.utc) - datetime.timedelta(
+            days=self.config["repo_requirements"]["oldest_aa_data_days"]
+        )
+        stale_services = []
+        for service in self.aa_data:
+            if (
+                datetime.datetime.strptime(
+                    service["lastUpdated"], "%a, %d %b %Y %H:%M:%S %Z"
+                )
+                < thresh
+            ):
+                stale_services.append(service["serviceName"])
+        return stale_services
+
     def _update_opt_out(self) -> None:
         if self.opt_out and int(self.opt_out["expire"]) < int(time.time()):
             self.opt_out = {}
 
     def _update_refreshed(self) -> None:
-        self.refreshed = datetime.datetime.utcnow().isoformat()
+        self.refreshed = datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
 
     def update(self, values: Dict[str, Any], store: bool = True) -> None:
         self._dirty = True
@@ -241,7 +293,8 @@ class Role(BaseModel):
 
     def mark_inactive(self, store: bool = True) -> None:
         self.active = False
-        self.store(fields=["Active"])
+        if store:
+            self.store(fields=["Active"])
 
     def store(self, fields: Optional[List[str]] = None) -> None:
         create = False
@@ -257,7 +310,7 @@ class Role(BaseModel):
         except RoleNotFoundError:
             create = True
 
-        self.last_updated = datetime.datetime.now()
+        self.last_updated = datetime.datetime.now(tz=datetime.timezone.utc)
 
         if create:
             # TODO: handle this case in set_role_data() to simplify logic here
@@ -286,7 +339,7 @@ class Role(BaseModel):
                 self._updated_fields = set()
         self._dirty = False
 
-    def update_role_data(
+    def gather_role_data(
         self,
         current_policy: Dict[str, Any],
         hooks: RepokidHooks,
@@ -299,18 +352,18 @@ class Role(BaseModel):
         self.fetch_aa_data(config=config)
         self.add_policy_version(current_policy, source=source, store=False)
         if add_no_repo:
-            self._update_no_repo_permissions()
+            self._calculate_no_repo_permissions()
         self._update_opt_out()
         self._update_refreshed()
         minimum_age = config["filter_config"]["AgeFilter"]["minimum_age"]
-        self._calculate_repo_scores(minimum_age, hooks)
-        self.update_stats(source=source, store=False)
+        self.calculate_repo_scores(minimum_age, hooks)
+        self.calculate_stats(source=source, store=False)
         if store:
             self.store()
 
-    def update_stats(self, source: str = "Scan", store: bool = True) -> None:
+    def calculate_stats(self, source: str = "Scan", store: bool = True) -> None:
         new_stats = {
-            "Date": datetime.datetime.utcnow().isoformat(),
+            "Date": datetime.datetime.now(tz=datetime.timezone.utc).isoformat(),
             "DisqualifiedBy": self.disqualified_by,
             "PermissionsCount": self.total_permissions,
             "RepoablePermissionsCount": self.repoable_permissions,
@@ -408,9 +461,9 @@ class RoleList(object):
     def get_active(self) -> RoleList:
         return self.filter(active=True)
 
-    def get_by_id(self, id: str) -> Optional[Role]:
+    def get_by_id(self, role_id: str) -> Optional[Role]:
         try:
-            return self.filter(role_id=id)[0]
+            return self.filter(role_id=role_id)[0]
         except IndexError:
             return None
 
@@ -436,4 +489,4 @@ class RoleList(object):
 
     def update_stats(self, source: str = "Scan", store: bool = True) -> None:
         for role in self.roles:
-            role.update_stats(source=source, store=store)
+            role.calculate_stats(source=source, store=store)

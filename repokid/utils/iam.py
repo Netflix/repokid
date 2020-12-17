@@ -44,7 +44,7 @@ def update_repoed_description(role_name: str, conn_details: Dict[str, Any]) -> N
         description = client.get_role(RoleName=role_name)["Role"].get("Description", "")
     except KeyError:
         return
-    date_string = datetime.datetime.utcnow().strftime("%m/%d/%y")
+    date_string = datetime.datetime.now(tz=datetime.timezone.utc).strftime("%m/%d/%y")
     if "; Repokid repoed" in description:
         new_description = re.sub(
             r"; Repokid repoed [0-9]{2}\/[0-9]{2}\/[0-9]{2}",
@@ -173,7 +173,7 @@ def remove_permissions_from_role(
     (
         repoed_policies,
         deleted_policy_names,
-    ) = repokid.utils.permissions._get_repoed_policy(
+    ) = repokid.utils.permissions.get_repoed_policy(
         role.policies[-1]["Policy"], set(permissions)
     )
 
@@ -208,9 +208,9 @@ def remove_permissions_from_role(
     current_policies = get_role_inline_policies(role.dict(), **conn) or {}
     role.add_policy_version(current_policies, "Repo")
 
-    role.repoed = datetime.datetime.utcnow().isoformat()
+    role.repoed = datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
     update_repoed_description(role.role_name, conn)
-    role.update_role_data(
+    role.gather_role_data(
         current_policies, hooks, source="ManualPermissionRepo", add_no_repo=False
     )
     LOGGER.info(

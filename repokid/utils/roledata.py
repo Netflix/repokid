@@ -15,7 +15,6 @@ import copy
 import logging
 from typing import Any
 from typing import Dict
-from typing import Iterable
 from typing import List
 from typing import Set
 from typing import Tuple
@@ -23,12 +22,10 @@ from typing import Tuple
 from mypy_boto3_dynamodb.service_resource import Table
 
 import repokid.hooks
-from repokid.role import Role
 from repokid.role import RoleList
 from repokid.types import RepokidHooks
 from repokid.utils.dynamo_v2 import get_all_role_ids_for_account
 from repokid.utils.permissions import _get_potentially_repoable_permissions
-from repokid.utils.permissions import get_permissions_in_policy
 
 LOGGER = logging.getLogger("repokid")
 
@@ -87,30 +84,6 @@ def _convert_repoed_service_to_sorted_perms_and_services(
             repoable_services.add(entry)
 
     return sorted(repoable_permissions), sorted(repoable_services)
-
-
-def _filter_scheduled_repoable_perms(
-    repoable_permissions: Set[str], scheduled_perms: Set[str]
-) -> List[str]:
-    """
-    Take a list of current repoable permissions and filter out any that weren't in the list of scheduled permissions
-
-    Args:
-        repoable_permissions (list): List of expanded permissions that are currently believed repoable
-        scheduled_perms (list): List of scheduled permissions and services (stored in Dynamo at schedule time)
-    Returns:
-        list: New (filtered) repoable permissions
-    """
-    (
-        scheduled_permissions,
-        scheduled_services,
-    ) = _convert_repoed_service_to_sorted_perms_and_services(scheduled_perms)
-    filtered = [
-        perm
-        for perm in repoable_permissions
-        if (perm in scheduled_permissions or perm.split(":")[0] in scheduled_services)
-    ]
-    return sorted(filtered)
 
 
 def _get_repoable_permissions_batch(
@@ -197,51 +170,3 @@ def _get_repoable_permissions_batch(
             )
         )
     return repoable_dict
-
-
-def _get_role_permissions(
-    role: Role, warn_unknown_perms: bool = False
-) -> Tuple[Set[str], Set[str]]:
-    """
-    Expand the most recent version of policies from a role to produce a list of all the permissions that are allowed
-    (permission is included in one or more statements that is allowed).  To perform expansion the policyuniverse
-    library is used. The result is a list of all of the individual permissions that are allowed in any of the
-    statements. If our resultant list contains any permissions that aren't listed in the master list of permissions
-    we'll raise an exception with the set of unknown permissions found.
-
-    Args:
-        role (Role): The role object that we're getting a list of permissions for
-        warn_unknown_perms (bool)
-
-    Returns:
-        tuple
-        set - all permissions allowed by the policies
-        set - all permisisons allowed by the policies not marked with STATEMENT_SKIP_SID
-    """
-    if not role.policies:
-        return set(), set()
-
-    return get_permissions_in_policy(
-        role.policies[-1]["Policy"], warn_unknown_perms=warn_unknown_perms
-    )
-
-
-def _get_services_in_permissions(permissions_set: Iterable[str]) -> List[str]:
-    """
-    Given a set of permissions, return a sorted set of services
-
-    Args:
-        permissions_set
-
-    Returns:
-        services_set
-    """
-    services_set = set()
-    for permission in permissions_set:
-        try:
-            service = permission.split(":")[0]
-        except IndexError:
-            pass
-        else:
-            services_set.add(service)
-    return sorted(services_set)

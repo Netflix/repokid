@@ -5,13 +5,19 @@ account = "123456789012"
 active = True
 arn = f"arn:aws:iam:{account}::role/TestRole"
 assume_role_policy_document = {}
-create_date = datetime.datetime.now() - datetime.timedelta(days=10)
+create_date = datetime.datetime.now(tz=datetime.timezone.utc) - datetime.timedelta(
+    days=10
+)
 disqualified_by = [""]
-last_updated = datetime.datetime.now() - datetime.timedelta(hours=2)
+last_updated = datetime.datetime.now(tz=datetime.timezone.utc) - datetime.timedelta(
+    hours=2
+)
 no_repo_permissions = {}
 opt_out = {}
 policies = [{}]
-refreshed = ""
+refreshed = (
+    datetime.datetime.now(tz=datetime.timezone.utc) - datetime.timedelta(hours=1)
+).isoformat()
 repoable_permissions = 5
 repoable_services = [""]
 repoed = ""

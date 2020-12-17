@@ -243,3 +243,11 @@ def test_role_store_create(
     expected.pop("LastUpdated")
 
     assert mock_create_dynamodb_entry.call_args[0][0] == expected
+
+
+def test_role_update_refreshed(role_dict):
+    r = Role(**role_dict)
+    old_refreshed = datetime.datetime.strptime(r.refreshed, "%Y-%m-%dT%H:%M:%S.%f")
+    r._update_refreshed()
+    new_refreshed = datetime.datetime.strptime(r.refreshed, "%Y-%m-%dT%H:%M:%S.%f")
+    assert new_refreshed > old_refreshed

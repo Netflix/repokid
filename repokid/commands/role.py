@@ -24,17 +24,17 @@ from tabulate import tabulate
 from tqdm import tqdm
 
 import repokid.hooks
-import repokid.utils.permissions
 from repokid.role import Role
 from repokid.role import RoleList
 from repokid.types import RepokidConfig
 from repokid.types import RepokidHooks
-from repokid.utils import roledata as roledata
 from repokid.utils.dynamo import find_role_in_cache
 from repokid.utils.dynamo import role_ids_for_all_accounts
 from repokid.utils.dynamo_v2 import get_all_role_ids_for_account
 from repokid.utils.iam import inline_policies_size_exceeds_maximum
 from repokid.utils.iam import remove_permissions_from_role
+from repokid.utils.permissions import get_permissions_in_policy
+from repokid.utils.permissions import get_services_in_permissions
 
 LOGGER = logging.getLogger("repokid")
 
@@ -115,7 +115,7 @@ def _find_roles_with_permissions(
         role_ids, fields=["Policies", "RoleName", "Arn", "Active"]
     )
     for role in roles:
-        role_permissions, _ = roledata._get_role_permissions(role)
+        role_permissions, _ = role.get_permissions_for_policy_version()
 
         permissions_set = set([p.lower() for p in permissions])
         found_permissions = permissions_set.intersection(role_permissions)
@@ -197,16 +197,14 @@ def _display_role(
     headers = ["Number", "Source", "Discovered", "Permissions", "Services"]
     rows = []
     for index, policies_version in enumerate(role.policies):
-        policy_permissions, _ = repokid.utils.permissions.get_permissions_in_policy(
-            policies_version["Policy"]
-        )
+        policy_permissions, _ = get_permissions_in_policy(policies_version["Policy"])
         rows.append(
             [
                 index,
                 policies_version["Source"],
                 policies_version["Discovered"],
                 len(policy_permissions),
-                roledata._get_services_in_permissions(policy_permissions),
+                get_services_in_permissions(policy_permissions),
             ]
         )
     print(tabulate(rows, headers=headers) + "\n\n")
@@ -234,22 +232,9 @@ def _display_role(
         "unknown_permissions", False
     )
 
-    permissions, eligible_permissions = roledata._get_role_permissions(
-        role, warn_unknown_perms=warn_unknown_permissions
+    permissions, eligible_permissions = role.get_permissions_for_policy_version(
+        warn_unknown_perms=warn_unknown_permissions
     )
-    if len(role.disqualified_by) == 0:
-        repoable_permissions = repokid.utils.permissions._get_repoable_permissions(
-            account_number,
-            role.role_name,
-            eligible_permissions,
-            role.aa_data,
-            role.no_repo_permissions,
-            role.role_id,
-            config["filter_config"]["AgeFilter"]["minimum_age"],
-            hooks,
-        )
-    else:
-        repoable_permissions = set()
 
     print("Repoable services and permissions")
     headers = ["Service", "Action", "Repoable"]
@@ -257,15 +242,13 @@ def _display_role(
     for permission in permissions:
         service = permission.split(":")[0]
         action = permission.split(":")[1]
-        repoable = permission in repoable_permissions
+        repoable = permission in role.repoable_permissions
         rows.append([service, action, repoable])
 
     rows = sorted(rows, key=lambda x: (x[2], x[0], x[1]))
     print(tabulate(rows, headers=headers) + "\n\n")
 
-    repoed_policies, _ = repokid.utils.permissions._get_repoed_policy(
-        role.policies[-1]["Policy"], repoable_permissions
-    )
+    repoed_policies, _ = role.get_repoed_policy()
 
     if repoed_policies:
         print(

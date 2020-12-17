@@ -5,12 +5,12 @@ import time
 from collections import defaultdict
 from typing import Any
 from typing import Dict
+from typing import Iterable
 from typing import List
 from typing import Optional
 from typing import Set
 from typing import Tuple
 
-from dateutil.tz.tz import tzlocal
 from policyuniverse import all_permissions
 from policyuniverse import expand_policy
 from policyuniverse import get_actions_from_statement
@@ -52,7 +52,7 @@ def find_newly_added_permissions(
     """
     old_permissions, _ = get_permissions_in_policy(old_policy)
     new_permissions, _ = get_permissions_in_policy(new_policy)
-    return set(new_permissions) - set(old_permissions)
+    return new_permissions - old_permissions
 
 
 def _convert_repoable_perms_to_perms_and_services(
@@ -98,7 +98,22 @@ def _convert_repoable_perms_to_perms_and_services(
     return repoed_permissions, repoed_services
 
 
-def _get_repoable_permissions(
+def get_services_and_permissions_from_repoable(
+    repoable: Set[str],
+) -> Tuple[Set[str], Set[str]]:
+    repoable_permissions = set()
+    repoable_services = set()
+
+    for entry in repoable:
+        if len(entry.split(":")) == 2:
+            repoable_permissions.add(entry)
+        else:
+            repoable_services.add(entry)
+
+    return repoable_permissions, repoable_services
+
+
+def get_repoable_permissions(
     account_number: str,
     role_name: str,
     permissions: Set[str],
@@ -225,7 +240,7 @@ def _get_potentially_repoable_permissions(
     minimum_age: int,
 ) -> Dict[str, Any]:
     ago = datetime.timedelta(minimum_age)
-    now = datetime.datetime.now(tzlocal())
+    now = datetime.datetime.now(tz=datetime.timezone.utc)
 
     current_time = time.time()
     no_repo_list = [
@@ -263,7 +278,9 @@ def _get_potentially_repoable_permissions(
             )
             used_services.add(service["serviceNamespace"])
 
-        accessed_dt = datetime.datetime.fromtimestamp(accessed, tzlocal())
+        accessed_dt = datetime.datetime.fromtimestamp(
+            accessed, tz=datetime.timezone.utc
+        )
         if accessed_dt > now - ago:
             used_services.add(service["serviceNamespace"])
 
@@ -313,7 +330,7 @@ def _get_epoch_authenticated(service_authenticated: int) -> Tuple[int, bool]:
         return -1, False
 
 
-def _get_repoed_policy(
+def get_repoed_policy(
     policies: Dict[str, Any], repoable_permissions: Set[str]
 ) -> Tuple[Dict[str, Any], List[str]]:
     """
@@ -383,3 +400,24 @@ def _get_repoed_policy(
         del role_policies[policy_name]
 
     return role_policies, empty_policies
+
+
+def get_services_in_permissions(permissions_set: Iterable[str]) -> List[str]:
+    """
+    Given a set of permissions, return a sorted set of services
+
+    Args:
+        permissions_set
+
+    Returns:
+        services_set
+    """
+    services_set = set()
+    for permission in permissions_set:
+        try:
+            service = permission.split(":")[0]
+        except IndexError:
+            pass
+        else:
+            services_set.add(service)
+    return sorted(services_set)

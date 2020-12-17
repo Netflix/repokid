@@ -60,7 +60,6 @@ def list_repoable_services(dynamo_table: Table, message: Message) -> ResponderRe
             set(role.repoable_services)
         )
 
-        repoable_services = role.repoable_services
         return ResponderReturn(
             successful=True,
             return_message=(

@@ -126,7 +126,7 @@ class TestRoledata(object):
             }
         }
 
-        repoable_permissions = repokid.utils.permissions._get_repoable_permissions(
+        repoable_permissions = repokid.utils.permissions.get_repoable_permissions(
             None,
             "test_name",
             permissions,
@@ -446,7 +446,7 @@ class TestRoledata(object):
         (
             rewritten_policies,
             empty_policies,
-        ) = repokid.utils.permissions._get_repoed_policy(policies, repoable_permissions)
+        ) = repokid.utils.permissions.get_repoed_policy(policies, repoable_permissions)
 
         assert rewritten_policies == {
             "s3_perms": {
@@ -567,7 +567,7 @@ class TestRoledata(object):
             "repo_all": TestPolicy(actions=["sqs:createqueue"]).to_dict(),
         }
         repoable_permissions = {"sqs:createqueue"}
-        repoed_policies, empty_policies = repokid.utils.permissions._get_repoed_policy(
+        repoed_policies, empty_policies = repokid.utils.permissions.get_repoed_policy(
             policies, repoable_permissions
         )
 

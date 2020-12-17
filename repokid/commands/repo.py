@@ -26,13 +26,11 @@ from mypy_boto3_dynamodb.service_resource import Table
 from tabulate import tabulate
 
 import repokid.hooks
-import repokid.utils.permissions
 from repokid.exceptions import IAMError
 from repokid.role import Role
 from repokid.role import RoleList
 from repokid.types import RepokidConfig
 from repokid.types import RepokidHooks
-from repokid.utils import roledata as roledata
 from repokid.utils.dynamo import find_role_in_cache
 from repokid.utils.dynamo import role_ids_for_all_accounts
 from repokid.utils.dynamo_v2 import get_all_role_ids_for_account
@@ -41,6 +39,7 @@ from repokid.utils.iam import inline_policies_size_exceeds_maximum
 from repokid.utils.iam import replace_policies
 from repokid.utils.iam import update_repoed_description
 from repokid.utils.logging import log_deleted_and_repoed_policies
+from repokid.utils.permissions import get_services_in_permissions
 
 LOGGER = logging.getLogger("repokid")
 
@@ -72,79 +71,17 @@ def _repo_role(
     role_id = find_role_in_cache(dynamo_table, account_number, role_name)
     # only load partial data that we need to determine if we should keep going
     role = Role(role_id=role_id)
-    role.fetch(fields=["DisqualifiedBy", "AAData", "RepoablePermissions", "RoleName"])
+    role.fetch()
 
     continuing = True
 
-    if len(role.disqualified_by) > 0:
-        LOGGER.info(
-            "Cannot repo role {} in account {} because it is being disqualified by: {}".format(
-                role_name, account_number, role.disqualified_by
-            )
-        )
+    if not role.is_eligible_for_repo():
         continuing = False
 
-    if not role.aa_data:
-        LOGGER.warning("ARN not found in Access Advisor: {}".format(role.arn))
-        continuing = False
-
-    if not role.repoable_permissions:
-        LOGGER.info(
-            "No permissions to repo for role {} in account {}".format(
-                role_name, account_number
-            )
-        )
-        continuing = False
-
-    # if we've gotten to this point, load the rest of the role
-    role.fetch()
-
-    old_aa_data_services = []
-    if role.aa_data:
-        for aa_service in role.aa_data:
-            if datetime.datetime.strptime(
-                aa_service["lastUpdated"], "%a, %d %b %Y %H:%M:%S %Z"
-            ) < datetime.datetime.now() - datetime.timedelta(
-                days=config["repo_requirements"]["oldest_aa_data_days"]
-            ):
-                old_aa_data_services.append(aa_service["serviceName"])
-
-        if old_aa_data_services:
-            LOGGER.error(
-                "AAData older than threshold for these services: {} (role: {}, account {})".format(
-                    old_aa_data_services, role_name, account_number
-                ),
-                exc_info=True,
-            )
-            continuing = False
-
-    total_permissions, eligible_permissions = roledata._get_role_permissions(role)
-    repoable_permissions_list = repokid.utils.permissions._get_repoable_permissions(
-        account_number,
-        role.role_name,
-        eligible_permissions,
-        role.aa_data or [],
-        role.no_repo_permissions,
-        role.role_id,
-        config["filter_config"]["AgeFilter"]["minimum_age"],
-        hooks,
+    role.calculate_repo_scores(
+        config["filter_config"]["AgeFilter"]["minimum_age"], hooks
     )
-
-    repoable_permissions = set(repoable_permissions_list)
-
-    # if this is a scheduled repo we need to filter out permissions that weren't previously scheduled
-    if scheduled:
-        repoable_permissions_filtered = roledata._filter_scheduled_repoable_perms(
-            repoable_permissions, role.scheduled_perms
-        )
-        repoable_permissions = set(repoable_permissions_filtered)
-
-    (
-        repoed_policies,
-        deleted_policy_names,
-    ) = repokid.utils.permissions._get_repoed_policy(
-        role.policies[-1]["Policy"], repoable_permissions
-    )
+    repoed_policies, deleted_policy_names = role.get_repoed_policy(scheduled=scheduled)
 
     if inline_policies_size_exceeds_maximum(repoed_policies):
         error = (
@@ -196,9 +133,9 @@ def _repo_role(
 
     if not errors:
         # repos will stay scheduled until they are successful
-        role.repoed = datetime.datetime.utcnow().isoformat()
+        role.repoed = datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
         update_repoed_description(role.role_name, conn)
-        role.update_role_data(current_policies, hooks, source="Repo", add_no_repo=False)
+        role.gather_role_data(current_policies, hooks, source="Repo", add_no_repo=False)
         LOGGER.info(
             "Successfully repoed role: {} in account {}".format(
                 role.role_name, account_number
@@ -258,7 +195,7 @@ def _rollback_role(
                     policies_version["Source"],
                     policies_version["Discovered"],
                     len(policy_permissions),
-                    roledata._get_services_in_permissions(policy_permissions),
+                    get_services_in_permissions(policy_permissions),
                 ]
             )
         print(tabulate(rows, headers=headers))
@@ -278,13 +215,11 @@ def _rollback_role(
         print("Current policies:")
         pp.pprint(current_policies)
 
-        current_permissions, _ = repokid.utils.permissions.get_permissions_in_policy(
-            role.policies[-1]["Policy"]
+        current_permissions, _ = role.get_permissions_for_policy_version()
+        selected_permissions, _ = role.get_permissions_for_policy_version(
+            selection=selection
         )
-        selected_permissions, _ = repokid.utils.permissions.get_permissions_in_policy(
-            role.policies[int(selection)]["Policy"]
-        )
-        restored_permissions = set(selected_permissions) - set(current_permissions)
+        restored_permissions = selected_permissions - current_permissions
 
         print("\nResore will return these permissions:")
         print("\n".join([perm for perm in sorted(restored_permissions)]))
@@ -343,7 +278,7 @@ def _rollback_role(
                 LOGGER.error(message, exc_info=True)
                 errors.append(message)
 
-    role.update_role_data(current_policies, hooks, source="Restore", add_no_repo=False)
+    role.gather_role_data(current_policies, hooks, source="Restore", add_no_repo=False)
 
     if not errors:
         LOGGER.info(

@@ -80,7 +80,7 @@ def _update_role_cache(
     for role in tqdm(roles):
         role.account = account_number
         current_policies = role_data_by_id[role.role_id]["RolePolicyList"]
-        role.update_role_data(
+        role.gather_role_data(
             current_policies, hooks, config, source="Scan", store=False
         )
 
