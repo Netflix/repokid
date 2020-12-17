@@ -17,16 +17,14 @@ from datetime import datetime as dt
 
 from mypy_boto3_dynamodb.service_resource import Table
 from tabulate import tabulate
-from tqdm import tqdm
 
 import repokid.hooks
+from repokid.role import Role
 from repokid.role import RoleList
 from repokid.types import RepokidConfig
 from repokid.types import RepokidHooks
 from repokid.utils.dynamo import find_role_in_cache
-from repokid.utils.dynamo import get_role_data
-from repokid.utils.dynamo import role_ids_for_account
-from repokid.utils.dynamo import set_role_data
+from repokid.utils.dynamo_v2 import get_all_role_ids_for_account
 
 LOGGER = logging.getLogger("repokid")
 
@@ -42,13 +40,8 @@ def _schedule_repo(
     the account with repoable permissions.
     """
     scheduled_roles = []
-
-    roles = RoleList(
-        [
-            get_role_data(dynamo_table, roleID)
-            for roleID in tqdm(role_ids_for_account(dynamo_table, account_number))
-        ]
-    )
+    role_ids = get_all_role_ids_for_account(account_number)
+    roles = RoleList.from_ids(role_ids)
 
     scheduled_time = int(time.time()) + (
         86400 * config.get("repo_schedule_period_days", 7)
@@ -70,14 +63,9 @@ def _schedule_repo(
 
         role.repo_scheduled = scheduled_time
         # freeze the scheduled perms to whatever is repoable right now
-        set_role_data(
-            dynamo_table,
-            role.role_id,
-            {
-                "RepoScheduled": scheduled_time,
-                "ScheduledPerms": role.repoable_services,
-            },
-        )
+        role.repo_scheduled = scheduled_time
+        role.scheduled_perms = set(role.repoable_services)
+        role.store(["repo_scheduled", "scheduled_perms"])
 
         scheduled_roles.append(role)
 
@@ -96,16 +84,11 @@ def _show_scheduled_roles(account_number: str, dynamo_table: Table) -> None:
     """
     Show scheduled repos for a given account.  For each scheduled show whether scheduled time is elapsed or not.
     """
-    roles = RoleList(
-        [
-            get_role_data(dynamo_table, roleID)
-            for roleID in tqdm(role_ids_for_account(dynamo_table, account_number))
-        ]
-    )
+    role_ids = get_all_role_ids_for_account(account_number)
+    roles = RoleList.from_ids(role_ids)
 
     # filter to show only roles that are scheduled
-    roles = roles.filter(active=True)
-    roles = roles.get_scheduled()
+    roles = roles.get_active().get_scheduled()
 
     header = ["Role name", "Scheduled", "Scheduled Time Elapsed?"]
     rows = []
@@ -135,20 +118,16 @@ def _cancel_scheduled_repo(
         return
 
     if is_all:
-        roles = RoleList(
-            [
-                get_role_data(dynamo_table, roleID)
-                for roleID in role_ids_for_account(dynamo_table, account_number)
-            ]
-        )
+        role_ids = get_all_role_ids_for_account(account_number)
+        roles = RoleList.from_ids(role_ids)
 
         # filter to show only roles that are scheduled
         roles = roles.get_scheduled()
 
         for role in roles:
-            set_role_data(
-                dynamo_table, role.role_id, {"RepoScheduled": 0, "ScheduledPerms": []}
-            )
+            role.repo_scheduled = 0
+            role.scheduled_perms = []
+            role.store(["repo_scheduled", "scheduled_perms"])
 
         LOGGER.info(
             "Canceled scheduled repo for roles: {}".format(
@@ -166,7 +145,8 @@ def _cancel_scheduled_repo(
         )
         return
 
-    role = get_role_data(dynamo_table, role_id)
+    role = Role(role_id=role_id)
+    role.fetch()
 
     if not role.repo_scheduled:
         LOGGER.warn(
@@ -176,9 +156,9 @@ def _cancel_scheduled_repo(
         )
         return
 
-    set_role_data(
-        dynamo_table, role.role_id, {"RepoScheduled": 0, "ScheduledPerms": []}
-    )
+    role.repo_scheduled = 0
+    role.scheduled_perms = []
+    role.store(["repo_scheduled", "scheduled_perms"])
     LOGGER.info(
         "Successfully cancelled scheduled repo for role {} in account {}".format(
             role.role_name, role.account

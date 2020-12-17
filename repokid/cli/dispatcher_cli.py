@@ -12,9 +12,9 @@ from mypy_boto3_sqs.client import SQSClient
 from mypy_boto3_sqs.type_defs import ReceiveMessageResultTypeDef
 
 import repokid.dispatcher
-import repokid.utils.dynamo as dynamo
 from repokid import CONFIG
 from repokid.dispatcher.types import Message
+from repokid.utils.dynamo_v2 import dynamo_get_or_create_table
 
 
 def get_failure_message(channel: str, message: str) -> Dict[str, Any]:
@@ -68,7 +68,7 @@ RESPONDER_FUNCTIONS = {
 
 
 def main() -> None:
-    dynamo_table = dynamo.dynamo_get_or_create_table(**CONFIG["dynamo_db"])
+    dynamo_table = dynamo_get_or_create_table(**CONFIG["dynamo_db"])
 
     conn_details = {
         "assume_role": CONFIG["dispatcher"].get("assume_role", None),

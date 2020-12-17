@@ -24,14 +24,15 @@ from tabulate import tabulate
 from tqdm import tqdm
 
 import repokid.hooks
+import repokid.utils.permissions
+from repokid.role import Role
 from repokid.role import RoleList
 from repokid.types import RepokidConfig
 from repokid.types import RepokidHooks
 from repokid.utils import roledata as roledata
 from repokid.utils.dynamo import find_role_in_cache
-from repokid.utils.dynamo import get_role_data
-from repokid.utils.dynamo import role_ids_for_account
 from repokid.utils.dynamo import role_ids_for_all_accounts
+from repokid.utils.dynamo_v2 import get_all_role_ids_for_account
 from repokid.utils.iam import inline_policies_size_exceeds_maximum
 from repokid.utils.iam import remove_permissions_from_role
 
@@ -64,15 +65,11 @@ def _display_roles(
 
     rows: List[List[Any]] = []
 
-    roles = RoleList(
-        [
-            get_role_data(dynamo_table, roleID)
-            for roleID in tqdm(role_ids_for_account(dynamo_table, account_number))
-        ]
-    )
+    role_ids = get_all_role_ids_for_account(account_number)
+    roles = RoleList.from_ids(role_ids)
 
     if not inactive:
-        roles = roles.filter(active=True)
+        roles = roles.get_active()
 
     for role in roles:
         rows.append(
@@ -113,10 +110,11 @@ def _find_roles_with_permissions(
         None
     """
     arns: List[str] = list()
-    for roleID in role_ids_for_all_accounts(dynamo_table):
-        role = get_role_data(
-            dynamo_table, roleID, fields=["Policies", "RoleName", "Arn", "Active"]
-        )
+    role_ids = role_ids_for_all_accounts(dynamo_table)
+    roles = RoleList.from_ids(
+        role_ids, fields=["Policies", "RoleName", "Arn", "Active"]
+    )
+    for role in roles:
         role_permissions, _ = roledata._get_role_permissions(role)
 
         permissions_set = set([p.lower() for p in permissions])
@@ -136,7 +134,7 @@ def _find_roles_with_permissions(
     with open(output_file, "w") as fd:
         json.dump(arns, fd)
 
-    LOGGER.info('Ouput written to file "{output_file}"'.format(output_file=output_file))
+    LOGGER.info(f"Output written to file {output_file}")
 
 
 def _display_role(
@@ -167,7 +165,8 @@ def _display_role(
         LOGGER.warning("Could not find role with name {}".format(role_name))
         return
 
-    role = get_role_data(dynamo_table, role_id)
+    role = Role(role_id=role_id)
+    role.fetch()
 
     print("\n\nRole repo data:")
     headers = [
@@ -198,7 +197,7 @@ def _display_role(
     headers = ["Number", "Source", "Discovered", "Permissions", "Services"]
     rows = []
     for index, policies_version in enumerate(role.policies):
-        policy_permissions, _ = roledata.get_permissions_in_policy(
+        policy_permissions, _ = repokid.utils.permissions.get_permissions_in_policy(
             policies_version["Policy"]
         )
         rows.append(
@@ -239,7 +238,7 @@ def _display_role(
         role, warn_unknown_perms=warn_unknown_permissions
     )
     if len(role.disqualified_by) == 0:
-        repoable_permissions = roledata._get_repoable_permissions(
+        repoable_permissions = repokid.utils.permissions._get_repoable_permissions(
             account_number,
             role.role_name,
             eligible_permissions,
@@ -264,7 +263,7 @@ def _display_role(
     rows = sorted(rows, key=lambda x: (x[2], x[0], x[1]))
     print(tabulate(rows, headers=headers) + "\n\n")
 
-    repoed_policies, _ = roledata._get_repoed_policy(
+    repoed_policies, _ = repokid.utils.permissions._get_repoed_policy(
         role.policies[-1]["Policy"], repoable_permissions
     )
 
@@ -303,7 +302,6 @@ def _remove_permissions_from_roles(
     Returns:
         None
     """
-    roles = list()
     with open(role_filename, "r") as fd:
         roles = json.load(fd)
 
@@ -317,7 +315,8 @@ def _remove_permissions_from_roles(
         role_name = arn.name.split("/")[-1]
 
         role_id = find_role_in_cache(dynamo_table, account_number, role_name)
-        role = get_role_data(dynamo_table, role_id)
+        role = Role(role_id=role_id)
+        role.fetch()
 
         remove_permissions_from_role(
             account_number,

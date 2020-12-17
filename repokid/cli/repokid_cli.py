@@ -34,7 +34,7 @@ from repokid.commands.schedule import _cancel_scheduled_repo
 from repokid.commands.schedule import _schedule_repo
 from repokid.commands.schedule import _show_scheduled_roles
 from repokid.types import RepokidConfig
-from repokid.utils.dynamo import dynamo_get_or_create_table
+from repokid.utils.dynamo_v2 import dynamo_get_or_create_table
 
 logger = logging.getLogger("repokid")
 

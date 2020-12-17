@@ -17,14 +17,11 @@ from cloudaux.aws.iam import get_account_authorization_details
 from mypy_boto3_dynamodb.service_resource import Table
 from tqdm import tqdm
 
-from repokid.filters import FilterPlugins
+from repokid.filters.utils import get_filter_plugins
 from repokid.role import Role
 from repokid.role import RoleList
 from repokid.types import RepokidConfig
 from repokid.types import RepokidHooks
-from repokid.utils import roledata as roledata
-from repokid.utils.aardvark import get_aardvark_data
-from repokid.utils.dynamo import set_role_data
 
 LOGGER = logging.getLogger("repokid")
 
@@ -79,44 +76,19 @@ def _update_role_cache(
 
     roles = RoleList([Role(**rd) for rd in role_data])
 
-    active_roles = RoleList([])
-    updated_roles = RoleList([])
     LOGGER.info("Updating role data for account {}".format(account_number))
     for role in tqdm(roles):
         role.account = account_number
         current_policies = role_data_by_id[role.role_id]["RolePolicyList"]
-        active_roles.append(role)
-        role = roledata.update_role_data(
-            dynamo_table, account_number, role, current_policies
+        role.update_role_data(
+            current_policies, hooks, config, source="Scan", store=False
         )
-        updated_roles.append(role)
-
-    # Replace roles list with mutated Role objects
-    roles = updated_roles
 
     LOGGER.info("Finding inactive roles in account {}".format(account_number))
-    roledata.find_and_mark_inactive(dynamo_table, account_number, active_roles)
+    # roledata.find_and_mark_inactive(dynamo_table, account_number, roles)
 
     LOGGER.info("Filtering roles")
-    plugins = FilterPlugins()
-
-    # Blocklist needs to know the current account
-    filter_config = config["filter_config"]
-    blocklist_filter_config = filter_config.get(
-        "BlocklistFilter", filter_config.get("BlacklistFilter")
-    )
-    blocklist_filter_config["current_account"] = account_number
-
-    for plugin_path in config.get("active_filters", []):
-        plugin_name = plugin_path.split(":")[1]
-        if plugin_name == "ExclusiveFilter":
-            # ExclusiveFilter plugin active; try loading its config. Also, it requires the current account, so add it.
-            exclusive_filter_config = filter_config.get("ExclusiveFilter", {})
-            exclusive_filter_config["current_account"] = account_number
-        plugins.load_plugin(
-            plugin_path, config=config["filter_config"].get(plugin_name, None)
-        )
-
+    plugins = get_filter_plugins(account_number)
     for plugin in plugins.filter_plugins:
         filtered_list = plugin.apply(roles)
         class_name = plugin.__class__.__name__
@@ -127,46 +99,6 @@ def _update_role_cache(
             filtered_role.disqualified_by.append(class_name)
 
     for role in roles:
-        set_role_data(
-            dynamo_table, role.role_id, {"DisqualifiedBy": role.disqualified_by}
-        )
-
-    LOGGER.info("Getting data from Aardvark for account {}".format(account_number))
-    aardvark_data = get_aardvark_data(
-        config["aardvark_api_location"], account_number=account_number
-    )
-
-    LOGGER.info(
-        "Updating roles with Aardvark data in account {}".format(account_number)
-    )
-    for role in roles:
-        try:
-            role.aa_data = aardvark_data[role.arn]
-        except KeyError:
-            LOGGER.warning(
-                "Aardvark data not found for role: {} ({})".format(
-                    role.role_id, role.role_name
-                )
-            )
-        else:
-            set_role_data(dynamo_table, role.role_id, {"AAData": role.aa_data})
-
-    LOGGER.info(
-        "Calculating repoable permissions and services for account {}".format(
-            account_number
-        )
-    )
-
-    batch_processing = config.get("query_role_data_in_batch", False)
-    batch_size = config.get("batch_processing_size", 100)
-    roledata._calculate_repo_scores(
-        roles,
-        config["filter_config"]["AgeFilter"]["minimum_age"],
-        hooks,
-        batch_processing,
-        batch_size,
-    )
-    for role in roles:
         LOGGER.debug(
             "Role {} in account {} has\nrepoable permissions: {}\nrepoable services: {}".format(
                 role.role_name,
@@ -175,15 +107,6 @@ def _update_role_cache(
                 role.repoable_services,
             )
         )
-        set_role_data(
-            dynamo_table,
-            role.role_id,
-            {
-                "TotalPermissions": role.total_permissions,
-                "RepoablePermissions": role.repoable_permissions,
-                "RepoableServices": role.repoable_services,
-            },
-        )
 
-    LOGGER.info("Updating stats in account {}".format(account_number))
-    roledata.update_stats(dynamo_table, roles, source="Scan")
+    LOGGER.info("Storing updated role data in account {}".format(account_number))
+    roles.store()

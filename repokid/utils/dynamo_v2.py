@@ -4,6 +4,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Set
 from typing import TypeVar
 from typing import Union
 
@@ -252,6 +253,46 @@ def set_role_data(
         ExpressionAttributeNames=expression_attribute_names,
         ExpressionAttributeValues=expression_attribute_values,
     )
+
+
+def get_all_role_ids_for_account(
+    account_number: str, dynamo_table: Optional[Table] = None
+) -> Set[str]:
+    """
+    Get a set of all role IDs in a given account by querying the Dynamo secondary index 'account'
+
+    Args:
+        account_number (string)
+
+    Returns:
+        list: role ids in given account
+    """
+    table = dynamo_table or ROLE_TABLE
+    role_ids: Set[str] = set()
+
+    results = table.query(
+        IndexName="Account",
+        KeyConditionExpression="Account = :act",
+        ExpressionAttributeValues={":act": account_number},
+    )
+    items = results.get("Items")
+    if not items:
+        return set()
+
+    role_ids.update([str(return_dict["RoleId"]) for return_dict in items])
+
+    while "LastEvaluatedKey" in results:
+        results = table.query(
+            IndexName="Account",
+            KeyConditionExpression="Account = :act",
+            ExpressionAttributeValues={":act": account_number},
+            ExclusiveStartKey=results.get("LastEvaluatedKey") or {},
+        )
+        items = results.get("Items")
+        if not items:
+            continue
+        role_ids.update([str(return_dict["RoleId"]) for return_dict in items])
+    return role_ids
 
 
 dynamodb_config = CONFIG.get("dynamo_db")

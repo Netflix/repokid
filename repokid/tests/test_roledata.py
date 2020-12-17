@@ -14,6 +14,7 @@
 import time
 from unittest.mock import patch
 
+import repokid.utils.permissions
 import repokid.utils.roledata
 from repokid.role import Role
 from repokid.tests.test_commands import AARDVARK_DATA
@@ -125,7 +126,7 @@ class TestRoledata(object):
             }
         }
 
-        repoable_permissions = repokid.utils.roledata._get_repoable_permissions(
+        repoable_permissions = repokid.utils.permissions._get_repoable_permissions(
             None,
             "test_name",
             permissions,
@@ -321,7 +322,7 @@ class TestRoledata(object):
         ]
 
         minimum_age = 90
-        repokid.utils.roledata._calculate_repo_scores(roles, minimum_age, hooks)
+        # repokid.utils.roledata._calculate_repo_scores(roles, minimum_age, hooks)
 
         assert roles[0].repoable_permissions == 2
         assert roles[0].repoable_services == ["iam"]
@@ -419,9 +420,9 @@ class TestRoledata(object):
         mock_get_repoable_permissions_batch.side_effect = [batch_perms_dict]
 
         minimum_age = 90
-        repokid.utils.roledata._calculate_repo_scores(
-            roles, minimum_age, hooks, batch=True, batch_size=100
-        )
+        # repokid.utils.roledata._calculate_repo_scores(
+        #     roles, minimum_age, hooks, batch=True, batch_size=100
+        # )
 
         assert roles[0].repoable_permissions == 2
         assert roles[0].repoable_services == ["iam"]
@@ -442,9 +443,10 @@ class TestRoledata(object):
             "s3:createbucket",
         }
 
-        rewritten_policies, empty_policies = repokid.utils.roledata._get_repoed_policy(
-            policies, repoable_permissions
-        )
+        (
+            rewritten_policies,
+            empty_policies,
+        ) = repokid.utils.permissions._get_repoed_policy(policies, repoable_permissions)
 
         assert rewritten_policies == {
             "s3_perms": {
@@ -464,7 +466,7 @@ class TestRoledata(object):
         old_policy = ROLE_POLICIES["all_services_used"]
         new_policy = ROLE_POLICIES["unused_ec2"]
 
-        new_perms = repokid.utils.roledata.find_newly_added_permissions(
+        new_perms = repokid.utils.permissions.find_newly_added_permissions(
             old_policy, new_policy
         )
         assert new_perms == {"ec2:allocatehosts", "ec2:associateaddress"}
@@ -474,7 +476,7 @@ class TestRoledata(object):
         repoable_perms = {"b:l", "c:m"}
         expected_repoed_services = {"b"}
         expected_repoed_permissions = {"c:m"}
-        assert repokid.utils.roledata._convert_repoable_perms_to_perms_and_services(
+        assert repokid.utils.permissions._convert_repoable_perms_to_perms_and_services(
             all_perms, repoable_perms
         ) == (expected_repoed_permissions, expected_repoed_services)
 
@@ -500,15 +502,15 @@ class TestRoledata(object):
         )
 
     def test_get_epoch_authenticated(self):
-        assert repokid.utils.roledata._get_epoch_authenticated(1545787620000) == (
+        assert repokid.utils.permissions._get_epoch_authenticated(1545787620000) == (
             1545787620,
             True,
         )
-        assert repokid.utils.roledata._get_epoch_authenticated(1545787620) == (
+        assert repokid.utils.permissions._get_epoch_authenticated(1545787620) == (
             1545787620,
             True,
         )
-        assert repokid.utils.roledata._get_epoch_authenticated(154578762) == (
+        assert repokid.utils.permissions._get_epoch_authenticated(154578762) == (
             -1,
             False,
         )
@@ -565,7 +567,7 @@ class TestRoledata(object):
             "repo_all": TestPolicy(actions=["sqs:createqueue"]).to_dict(),
         }
         repoable_permissions = {"sqs:createqueue"}
-        repoed_policies, empty_policies = repokid.utils.roledata._get_repoed_policy(
+        repoed_policies, empty_policies = repokid.utils.permissions._get_repoed_policy(
             policies, repoable_permissions
         )
 
@@ -624,7 +626,7 @@ class TestRoledata(object):
             "norepo_sid": TestPolicy(sid=sid, actions=["sns:createtopic"]).to_dict(),
         }
 
-        total, eligible = repokid.utils.roledata.get_permissions_in_policy(policies)
+        total, eligible = repokid.utils.permissions.get_permissions_in_policy(policies)
 
         # eligible is a subset of total
         assert eligible < total

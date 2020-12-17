@@ -26,22 +26,21 @@ from mypy_boto3_dynamodb.service_resource import Table
 from tabulate import tabulate
 
 import repokid.hooks
+import repokid.utils.permissions
 from repokid.exceptions import IAMError
+from repokid.role import Role
 from repokid.role import RoleList
 from repokid.types import RepokidConfig
 from repokid.types import RepokidHooks
 from repokid.utils import roledata as roledata
 from repokid.utils.dynamo import find_role_in_cache
-from repokid.utils.dynamo import get_role_data
-from repokid.utils.dynamo import role_ids_for_account
 from repokid.utils.dynamo import role_ids_for_all_accounts
-from repokid.utils.dynamo import set_role_data
+from repokid.utils.dynamo_v2 import get_all_role_ids_for_account
 from repokid.utils.iam import delete_policy
 from repokid.utils.iam import inline_policies_size_exceeds_maximum
 from repokid.utils.iam import replace_policies
 from repokid.utils.iam import update_repoed_description
 from repokid.utils.logging import log_deleted_and_repoed_policies
-from repokid.utils.roledata import partial_update_role_data
 
 LOGGER = logging.getLogger("repokid")
 
@@ -72,11 +71,8 @@ def _repo_role(
 
     role_id = find_role_in_cache(dynamo_table, account_number, role_name)
     # only load partial data that we need to determine if we should keep going
-    role = get_role_data(
-        dynamo_table,
-        role_id,
-        fields=["DisqualifiedBy", "AAData", "RepoablePermissions", "RoleName"],
-    )
+    role = Role(role_id=role_id)
+    role.fetch(fields=["DisqualifiedBy", "AAData", "RepoablePermissions", "RoleName"])
 
     continuing = True
 
@@ -101,7 +97,7 @@ def _repo_role(
         continuing = False
 
     # if we've gotten to this point, load the rest of the role
-    role = get_role_data(dynamo_table, role_id)
+    role.fetch()
 
     old_aa_data_services = []
     if role.aa_data:
@@ -123,7 +119,7 @@ def _repo_role(
             continuing = False
 
     total_permissions, eligible_permissions = roledata._get_role_permissions(role)
-    repoable_permissions_list = roledata._get_repoable_permissions(
+    repoable_permissions_list = repokid.utils.permissions._get_repoable_permissions(
         account_number,
         role.role_name,
         eligible_permissions,
@@ -143,7 +139,10 @@ def _repo_role(
         )
         repoable_permissions = set(repoable_permissions_filtered)
 
-    repoed_policies, deleted_policy_names = roledata._get_repoed_policy(
+    (
+        repoed_policies,
+        deleted_policy_names,
+    ) = repokid.utils.permissions._get_repoed_policy(
         role.policies[-1]["Policy"], repoable_permissions
     )
 
@@ -158,9 +157,9 @@ def _repo_role(
 
     # if we aren't repoing for some reason, unschedule the role
     if not continuing:
-        set_role_data(
-            dynamo_table, role.role_id, {"RepoScheduled": 0, "ScheduledPerms": []}
-        )
+        role.repo_scheduled = 0
+        role.scheduled_perms = []
+        role.store(["repo_scheduled", "scheduled_perms"])
         return errors
 
     if not commit:
@@ -187,38 +186,25 @@ def _repo_role(
             errors.append(str(e))
 
     current_policies = get_role_inline_policies(role.dict(), **conn) or {}
-    roledata.add_new_policy_version(dynamo_table, role, current_policies, "Repo")
+    role.add_policy_version(current_policies, source="Repo")
 
     # regardless of whether we're successful we want to unschedule the repo
-    set_role_data(
-        dynamo_table, role.role_id, {"RepoScheduled": 0, "ScheduledPerms": []}
-    )
+    role.repo_scheduled = 0
+    role.scheduled_perms = []
 
     repokid.hooks.call_hooks(hooks, "AFTER_REPO", {"role": role, "errors": errors})
 
     if not errors:
         # repos will stay scheduled until they are successful
-        set_role_data(
-            dynamo_table,
-            role.role_id,
-            {"Repoed": datetime.datetime.utcnow().isoformat()},
-        )
+        role.repoed = datetime.datetime.utcnow().isoformat()
         update_repoed_description(role.role_name, conn)
-        partial_update_role_data(
-            role,
-            dynamo_table,
-            account_number,
-            config,
-            conn,
-            hooks,
-            source="Repo",
-            add_no_repo=False,
-        )
+        role.update_role_data(current_policies, hooks, source="Repo", add_no_repo=False)
         LOGGER.info(
             "Successfully repoed role: {} in account {}".format(
                 role.role_name, account_number
             )
         )
+    role.store()
     return errors
 
 
@@ -255,14 +241,15 @@ def _rollback_role(
         LOGGER.warning(message)
         return errors
     else:
-        role = get_role_data(dynamo_table, role_id)
+        role = Role(role_id=role_id)
+        role.fetch()
 
     # no option selected, display a table of options
     if not selection:
         headers = ["Number", "Source", "Discovered", "Permissions", "Services"]
         rows = []
         for index, policies_version in enumerate(role.policies):
-            policy_permissions, _ = roledata.get_permissions_in_policy(
+            policy_permissions, _ = repokid.utils.permissions.get_permissions_in_policy(
                 policies_version["Policy"]
             )
             rows.append(
@@ -291,10 +278,10 @@ def _rollback_role(
         print("Current policies:")
         pp.pprint(current_policies)
 
-        current_permissions, _ = roledata.get_permissions_in_policy(
+        current_permissions, _ = repokid.utils.permissions.get_permissions_in_policy(
             role.policies[-1]["Policy"]
         )
-        selected_permissions, _ = roledata.get_permissions_in_policy(
+        selected_permissions, _ = repokid.utils.permissions.get_permissions_in_policy(
             role.policies[int(selection)]["Policy"]
         )
         restored_permissions = set(selected_permissions) - set(current_permissions)
@@ -356,16 +343,7 @@ def _rollback_role(
                 LOGGER.error(message, exc_info=True)
                 errors.append(message)
 
-    partial_update_role_data(
-        role,
-        dynamo_table,
-        account_number,
-        config,
-        conn,
-        hooks,
-        source="Restore",
-        add_no_repo=False,
-    )
+    role.update_role_data(current_policies, hooks, source="Restore", add_no_repo=False)
 
     if not errors:
         LOGGER.info(
@@ -400,16 +378,8 @@ def _repo_all_roles(
     """
     errors = []
 
-    role_ids_in_account = role_ids_for_account(dynamo_table, account_number)
-    roles = RoleList([])
-    for role_id in role_ids_in_account:
-        roles.append(
-            get_role_data(
-                dynamo_table,
-                role_id,
-                fields=["Active", "RoleName", "RepoScheduled"],
-            )
-        )
+    role_ids_in_account = get_all_role_ids_for_account(account_number)
+    roles = RoleList.from_ids(role_ids_in_account)
 
     roles = roles.get_active()
 
@@ -472,8 +442,8 @@ def _repo_stats(
     Returns:
         None
     """
-    roleIDs = (
-        role_ids_for_account(dynamo_table, account_number)
+    role_ids = (
+        get_all_role_ids_for_account(account_number)
         if account_number
         else role_ids_for_all_accounts(dynamo_table)
     )
@@ -489,13 +459,11 @@ def _repo_stats(
         "Disqualified By",
     ]
     rows = []
+    roles = RoleList.from_ids(
+        role_ids, fields=["RoleId", "RoleName", "Account", "Active", "Stats"]
+    )
 
-    for roleID in roleIDs:
-        role = get_role_data(
-            dynamo_table,
-            roleID,
-            fields=["RoleId", "RoleName", "Account", "Active", "Stats"],
-        )
+    for role in roles:
         for stats_entry in role.stats:
             rows.append(
                 [
