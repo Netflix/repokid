@@ -476,7 +476,7 @@ class TestRoledata(object):
         repoable_perms = {"b:l", "c:m"}
         expected_repoed_services = {"b"}
         expected_repoed_permissions = {"c:m"}
-        assert repokid.utils.permissions._convert_repoable_perms_to_perms_and_services(
+        assert repokid.utils.permissions.convert_repoable_perms_to_perms_and_services(
             all_perms, repoable_perms
         ) == (expected_repoed_permissions, expected_repoed_services)
 

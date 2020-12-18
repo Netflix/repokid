@@ -24,7 +24,7 @@ from repokid.role import RoleList
 from repokid.types import RepokidConfig
 from repokid.types import RepokidHooks
 from repokid.utils.dynamo import find_role_in_cache
-from repokid.utils.dynamo_v2 import get_all_role_ids_for_account
+from repokid.utils.dynamo import get_all_role_ids_for_account
 
 LOGGER = logging.getLogger("repokid")
 
@@ -64,7 +64,7 @@ def _schedule_repo(
         role.repo_scheduled = scheduled_time
         # freeze the scheduled perms to whatever is repoable right now
         role.repo_scheduled = scheduled_time
-        role.scheduled_perms = set(role.repoable_services)
+        role.scheduled_perms = role.repoable_services
         role.store(["repo_scheduled", "scheduled_perms"])
 
         scheduled_roles.append(role)
@@ -136,7 +136,7 @@ def _cancel_scheduled_repo(
         )
         return
 
-    role_id = find_role_in_cache(dynamo_table, account_number, role_name)
+    role_id = find_role_in_cache(role_name, account_number)
     if not role_id:
         LOGGER.warn(
             "Could not find role with name {} in account {}".format(

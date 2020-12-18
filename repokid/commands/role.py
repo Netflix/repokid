@@ -29,8 +29,8 @@ from repokid.role import RoleList
 from repokid.types import RepokidConfig
 from repokid.types import RepokidHooks
 from repokid.utils.dynamo import find_role_in_cache
+from repokid.utils.dynamo import get_all_role_ids_for_account
 from repokid.utils.dynamo import role_ids_for_all_accounts
-from repokid.utils.dynamo_v2 import get_all_role_ids_for_account
 from repokid.utils.iam import inline_policies_size_exceeds_maximum
 from repokid.utils.iam import remove_permissions_from_role
 from repokid.utils.permissions import get_permissions_in_policy
@@ -110,7 +110,7 @@ def _find_roles_with_permissions(
         None
     """
     arns: List[str] = list()
-    role_ids = role_ids_for_all_accounts(dynamo_table)
+    role_ids = role_ids_for_all_accounts()
     roles = RoleList.from_ids(
         role_ids, fields=["Policies", "RoleName", "Arn", "Active"]
     )
@@ -160,7 +160,7 @@ def _display_role(
     Returns:
         None
     """
-    role_id = find_role_in_cache(dynamo_table, account_number, role_name)
+    role_id = find_role_in_cache(role_name, account_number)
     if not role_id:
         LOGGER.warning("Could not find role with name {}".format(role_name))
         return
@@ -242,7 +242,7 @@ def _display_role(
     for permission in permissions:
         service = permission.split(":")[0]
         action = permission.split(":")[1]
-        repoable = permission in role.repoable_permissions
+        repoable = permission in role.repoable_services
         rows.append([service, action, repoable])
 
     rows = sorted(rows, key=lambda x: (x[2], x[0], x[1]))
@@ -297,7 +297,7 @@ def _remove_permissions_from_roles(
         account_number = arn.account_number
         role_name = arn.name.split("/")[-1]
 
-        role_id = find_role_in_cache(dynamo_table, account_number, role_name)
+        role_id = find_role_in_cache(role_name, account_number)
         role = Role(role_id=role_id)
         role.fetch()
 

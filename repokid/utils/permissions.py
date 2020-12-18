@@ -55,7 +55,7 @@ def find_newly_added_permissions(
     return new_permissions - old_permissions
 
 
-def _convert_repoable_perms_to_perms_and_services(
+def convert_repoable_perms_to_perms_and_services(
     total_permissions: Set[str], repoable_permissions: Set[str]
 ) -> Tuple[Set[str], Set[str]]:
     """
@@ -99,7 +99,7 @@ def _convert_repoable_perms_to_perms_and_services(
 
 
 def get_services_and_permissions_from_repoable(
-    repoable: Set[str],
+    repoable: List[str],
 ) -> Tuple[Set[str], Set[str]]:
     repoable_permissions = set()
     repoable_services = set()

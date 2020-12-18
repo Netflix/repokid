@@ -24,7 +24,7 @@ from mypy_boto3_dynamodb.service_resource import Table
 import repokid.hooks
 from repokid.role import RoleList
 from repokid.types import RepokidHooks
-from repokid.utils.dynamo_v2 import get_all_role_ids_for_account
+from repokid.utils.dynamo import get_all_role_ids_for_account
 from repokid.utils.permissions import _get_potentially_repoable_permissions
 
 LOGGER = logging.getLogger("repokid")

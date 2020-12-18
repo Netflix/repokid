@@ -5,14 +5,14 @@ from typing import Callable
 
 from mypy_boto3_dynamodb.service_resource import Table
 
-import repokid.commands.repo
-import repokid.utils.dynamo as dynamo
-import repokid.utils.permissions
-import repokid.utils.roledata as roledata
 from repokid import CONFIG
 from repokid import get_hooks
+from repokid.commands.repo import _rollback_role
 from repokid.dispatcher.types import Message
 from repokid.role import Role
+from repokid.utils.dynamo import find_role_in_cache
+from repokid.utils.permissions import get_permissions_in_policy
+from repokid.utils.permissions import get_services_and_permissions_from_repoable
 
 ResponderReturn = namedtuple("ResponderReturn", "successful, return_message")
 
@@ -38,9 +38,7 @@ def implements_command(
 
 @implements_command("list_repoable_services")
 def list_repoable_services(dynamo_table: Table, message: Message) -> ResponderReturn:
-    role_id = dynamo.find_role_in_cache(
-        dynamo_table, message.account, message.role_name
-    )
+    role_id = find_role_in_cache(message.role_name, message.account)
 
     if not role_id:
         return ResponderReturn(
@@ -56,9 +54,7 @@ def list_repoable_services(dynamo_table: Table, message: Message) -> ResponderRe
         (
             repoable_permissions,
             repoable_services,
-        ) = roledata._convert_repoed_service_to_sorted_perms_and_services(
-            set(role.repoable_services)
-        )
+        ) = get_services_and_permissions_from_repoable(role.repoable_services)
 
         return ResponderReturn(
             successful=True,
@@ -75,9 +71,7 @@ def list_repoable_services(dynamo_table: Table, message: Message) -> ResponderRe
 
 @implements_command("list_role_rollbacks")
 def list_role_rollbacks(dynamo_table: Table, message: Message) -> ResponderReturn:
-    role_id = dynamo.find_role_in_cache(
-        dynamo_table, message.account, message.role_name
-    )
+    role_id = find_role_in_cache(message.role_name, message.account)
 
     if not role_id:
         return ResponderReturn(
@@ -93,9 +87,7 @@ def list_role_rollbacks(dynamo_table: Table, message: Message) -> ResponderRetur
         message.role_name, message.account
     )
     for index, policy_version in enumerate(role.policies):
-        total_permissions, _ = repokid.utils.permissions.get_permissions_in_policy(
-            policy_version["Policy"]
-        )
+        total_permissions, _ = get_permissions_in_policy(policy_version["Policy"])
         return_val += "({:>3}):  {:<5}     {:<15}  {}\n".format(
             index,
             len(total_permissions),
@@ -117,9 +109,7 @@ def opt_out(dynamo_table: Table, message: Message) -> ResponderReturn:
             successful=False, return_message="Reason and requestor must be specified"
         )
 
-    role_id = dynamo.find_role_in_cache(
-        dynamo_table, message.account, message.role_name
-    )
+    role_id = find_role_in_cache(message.role_name, message.account)
 
     if not role_id:
         return ResponderReturn(
@@ -167,9 +157,7 @@ def opt_out(dynamo_table: Table, message: Message) -> ResponderReturn:
 
 @implements_command("remove_opt_out")
 def remove_opt_out(dynamo_table: Table, message: Message) -> ResponderReturn:
-    role_id = dynamo.find_role_in_cache(
-        dynamo_table, message.account, message.role_name
-    )
+    role_id = find_role_in_cache(message.role_name, message.account)
 
     if not role_id:
         return ResponderReturn(
@@ -207,7 +195,7 @@ def rollback_role(dynamo_table: Table, message: Message) -> ResponderReturn:
             successful=False, return_message="Rollback must contain a selection number"
         )
 
-    errors = repokid.commands.repo._rollback_role(
+    errors = _rollback_role(
         message.account,
         message.role_name,
         dynamo_table,

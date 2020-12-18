@@ -32,8 +32,8 @@ from repokid.role import RoleList
 from repokid.types import RepokidConfig
 from repokid.types import RepokidHooks
 from repokid.utils.dynamo import find_role_in_cache
+from repokid.utils.dynamo import get_all_role_ids_for_account
 from repokid.utils.dynamo import role_ids_for_all_accounts
-from repokid.utils.dynamo_v2 import get_all_role_ids_for_account
 from repokid.utils.iam import delete_policy
 from repokid.utils.iam import inline_policies_size_exceeds_maximum
 from repokid.utils.iam import replace_policies
@@ -68,7 +68,7 @@ def _repo_role(
     """
     errors: List[str] = []
 
-    role_id = find_role_in_cache(dynamo_table, account_number, role_name)
+    role_id = find_role_in_cache(role_name, account_number)
     # only load partial data that we need to determine if we should keep going
     role = Role(role_id=role_id)
     role.fetch()
@@ -169,7 +169,7 @@ def _rollback_role(
     """
     errors = []
 
-    role_id = find_role_in_cache(dynamo_table, account_number, role_name)
+    role_id = find_role_in_cache(role_name, account_number)
     if not role_id:
         message = "Could not find role with name {} in account {}".format(
             role_name, account_number
@@ -380,7 +380,7 @@ def _repo_stats(
     role_ids = (
         get_all_role_ids_for_account(account_number)
         if account_number
-        else role_ids_for_all_accounts(dynamo_table)
+        else role_ids_for_all_accounts()
     )
     headers = [
         "RoleId",

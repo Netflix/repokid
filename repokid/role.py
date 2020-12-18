@@ -37,11 +37,11 @@ from repokid.exceptions import RoleNotFoundError
 from repokid.types import RepokidConfig
 from repokid.types import RepokidHooks
 from repokid.utils.aardvark import get_aardvark_data
-from repokid.utils.dynamo_v2 import create_dynamodb_entry
-from repokid.utils.dynamo_v2 import get_role_by_id
-from repokid.utils.dynamo_v2 import get_role_by_name
-from repokid.utils.dynamo_v2 import set_role_data
-from repokid.utils.permissions import _convert_repoable_perms_to_perms_and_services
+from repokid.utils.dynamo import create_dynamodb_entry
+from repokid.utils.dynamo import get_role_by_id
+from repokid.utils.dynamo import get_role_by_name
+from repokid.utils.dynamo import set_role_data
+from repokid.utils.permissions import convert_repoable_perms_to_perms_and_services
 from repokid.utils.permissions import find_newly_added_permissions
 from repokid.utils.permissions import get_permissions_in_policy
 from repokid.utils.permissions import get_repoable_permissions
@@ -65,7 +65,7 @@ class Role(BaseModel):
     disqualified_by: List[str] = Field(default=[])
     last_updated: Optional[datetime.datetime] = Field()
     no_repo_permissions: Dict[str, int] = Field(default={})
-    opt_out: Dict[str, int] = Field(default={})
+    opt_out: Dict[str, Any] = Field(default={})
     policies: List[Dict[str, Any]] = Field(default=[])
     refreshed: Optional[str] = Field()
     repoable_permissions: int = Field(default=0)
@@ -74,7 +74,7 @@ class Role(BaseModel):
     repo_scheduled: float = Field(default=0.0)
     role_id: str = Field(default="")
     role_name: str = Field(default="")
-    scheduled_perms: Set[str] = Field(default=set())
+    scheduled_perms: List[str] = Field(default=[])
     stats: List[Dict[str, Any]] = Field(default=[])
     tags: List[Dict[str, Any]] = Field(default=[])
     total_permissions: Optional[int] = Field()
@@ -147,7 +147,7 @@ class Role(BaseModel):
         (
             repoable_permissions_set,
             repoable_services_set,
-        ) = _convert_repoable_perms_to_perms_and_services(
+        ) = convert_repoable_perms_to_perms_and_services(
             eligible_permissions, repoable_permissions
         )
         self.repoable_services = list(
@@ -195,16 +195,16 @@ class Role(BaseModel):
             permissions, services = get_services_and_permissions_from_repoable(
                 self.scheduled_perms
             )
-            repoable = {
+            repoable = [
                 p
                 for p in self.repoable_services
                 if p in self.scheduled_perms or p.split(":")[0] in services
-            }
+            ]
         else:
             repoable = self.repoable_services
 
         repoed_policies, deleted_policy_names = get_repoed_policy(
-            self.policies[-1]["Policy"], repoable
+            self.policies[-1]["Policy"], set(repoable)
         )
         return repoed_policies, deleted_policy_names
 
@@ -225,14 +225,15 @@ class Role(BaseModel):
             days=self.config["repo_requirements"]["oldest_aa_data_days"]
         )
         stale_services = []
-        for service in self.aa_data:
-            if (
-                datetime.datetime.strptime(
-                    service["lastUpdated"], "%a, %d %b %Y %H:%M:%S %Z"
-                )
-                < thresh
-            ):
-                stale_services.append(service["serviceName"])
+        if self.aa_data:
+            for service in self.aa_data:
+                if (
+                    datetime.datetime.strptime(
+                        service["lastUpdated"], "%a, %d %b %Y %H:%M:%S %Z"
+                    )
+                    < thresh
+                ):
+                    stale_services.append(service["serviceName"])
         return stale_services
 
     def _update_opt_out(self) -> None:

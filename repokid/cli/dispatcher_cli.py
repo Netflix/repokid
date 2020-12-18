@@ -14,7 +14,7 @@ from mypy_boto3_sqs.type_defs import ReceiveMessageResultTypeDef
 import repokid.dispatcher
 from repokid import CONFIG
 from repokid.dispatcher.types import Message
-from repokid.utils.dynamo_v2 import dynamo_get_or_create_table
+from repokid.utils.dynamo import dynamo_get_or_create_table
 
 
 def get_failure_message(channel: str, message: str) -> Dict[str, Any]:
