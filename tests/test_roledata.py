@@ -17,9 +17,9 @@ from unittest.mock import patch
 import repokid.utils.permissions
 import repokid.utils.roledata
 from repokid.role import Role
-from repokid.tests.test_commands import AARDVARK_DATA
-from repokid.tests.test_commands import ROLE_POLICIES
-from repokid.tests.test_commands import ROLES
+from tests.test_commands import AARDVARK_DATA
+from tests.test_commands import ROLE_POLICIES
+from tests.test_commands import ROLES
 
 # AARDVARK_DATA maintained in test_repokid_cli
 

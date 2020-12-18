@@ -1,6 +1,6 @@
 import pytest
 
-from repokid.tests import vars
+from tests import vars
 
 
 @pytest.fixture(scope="session")

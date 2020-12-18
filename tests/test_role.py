@@ -8,7 +8,7 @@ from repokid.exceptions import IntegrityError
 from repokid.exceptions import RoleModelError
 from repokid.exceptions import RoleNotFoundError
 from repokid.role import Role
-from repokid.tests import vars
+from tests import vars
 
 
 def test_create_role(role_dict):
