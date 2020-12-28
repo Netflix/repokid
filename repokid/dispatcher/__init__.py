@@ -3,8 +3,6 @@ import time
 from collections import namedtuple
 from typing import Callable
 
-from mypy_boto3_dynamodb.service_resource import Table
-
 from repokid import CONFIG
 from repokid import get_hooks
 from repokid.commands.repo import _rollback_role
@@ -22,7 +20,7 @@ else:
     hooks_list = ["repokid.hooks.loggers"]
 
 hooks = get_hooks(hooks_list)
-DispatcherCommand = Callable[[Table, Message], ResponderReturn]
+DispatcherCommand = Callable[[Message], ResponderReturn]
 
 
 def implements_command(
@@ -37,7 +35,7 @@ def implements_command(
 
 
 @implements_command("list_repoable_services")
-def list_repoable_services(dynamo_table: Table, message: Message) -> ResponderReturn:
+def list_repoable_services(message: Message) -> ResponderReturn:
     role_id = find_role_in_cache(message.role_name, message.account)
 
     if not role_id:
@@ -70,7 +68,7 @@ def list_repoable_services(dynamo_table: Table, message: Message) -> ResponderRe
 
 
 @implements_command("list_role_rollbacks")
-def list_role_rollbacks(dynamo_table: Table, message: Message) -> ResponderReturn:
+def list_role_rollbacks(message: Message) -> ResponderReturn:
     role_id = find_role_in_cache(message.role_name, message.account)
 
     if not role_id:
@@ -98,7 +96,7 @@ def list_role_rollbacks(dynamo_table: Table, message: Message) -> ResponderRetur
 
 
 @implements_command("opt_out")
-def opt_out(dynamo_table: Table, message: Message) -> ResponderReturn:
+def opt_out(message: Message) -> ResponderReturn:
     if CONFIG:
         opt_out_period = CONFIG.get("opt_out_period_days", 90)
     else:
@@ -156,7 +154,7 @@ def opt_out(dynamo_table: Table, message: Message) -> ResponderReturn:
 
 
 @implements_command("remove_opt_out")
-def remove_opt_out(dynamo_table: Table, message: Message) -> ResponderReturn:
+def remove_opt_out(message: Message) -> ResponderReturn:
     role_id = find_role_in_cache(message.role_name, message.account)
 
     if not role_id:
@@ -189,7 +187,7 @@ def remove_opt_out(dynamo_table: Table, message: Message) -> ResponderReturn:
 
 
 @implements_command("rollback_role")
-def rollback_role(dynamo_table: Table, message: Message) -> ResponderReturn:
+def rollback_role(message: Message) -> ResponderReturn:
     if not message.selection:
         return ResponderReturn(
             successful=False, return_message="Rollback must contain a selection number"
@@ -198,7 +196,6 @@ def rollback_role(dynamo_table: Table, message: Message) -> ResponderReturn:
     errors = _rollback_role(
         message.account,
         message.role_name,
-        dynamo_table,
         CONFIG,
         hooks,
         selection=int(message.selection),

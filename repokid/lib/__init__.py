@@ -52,7 +52,7 @@ def update_role_cache(account_number: str) -> None:
     Returns:
         None
     """
-    return _update_role_cache(account_number, dynamo_table, CONFIG, hooks)
+    return _update_role_cache(account_number, CONFIG, hooks)
 
 
 def display_role_cache(account_number: str, inactive: bool = False) -> None:
@@ -68,7 +68,7 @@ def display_role_cache(account_number: str, inactive: bool = False) -> None:
     Returns:
         None
     """
-    return _display_roles(account_number, dynamo_table, inactive=inactive)
+    return _display_roles(account_number, inactive=inactive)
 
 
 def find_roles_with_permissions(permissions: List[str], output_file: str = "") -> None:
@@ -85,7 +85,7 @@ def find_roles_with_permissions(permissions: List[str], output_file: str = "") -
     Returns:
         None
     """
-    return _find_roles_with_permissions(permissions, dynamo_table, output_file)
+    return _find_roles_with_permissions(permissions, output_file)
 
 
 def remove_permissions_from_roles(
@@ -105,7 +105,7 @@ def remove_permissions_from_roles(
         None
     """
     return _remove_permissions_from_roles(
-        permissions, role_filename, dynamo_table, CONFIG, hooks, commit=commit
+        permissions, role_filename, CONFIG, hooks, commit=commit
     )
 
 
@@ -122,7 +122,7 @@ def display_role(account_number: str, role_name: str) -> None:
     Returns:
         None
     """
-    return _display_role(account_number, role_name, dynamo_table, CONFIG, hooks)
+    return _display_role(account_number, role_name, CONFIG)
 
 
 def repo_role(
@@ -142,9 +142,7 @@ def repo_role(
     Returns:
         errors (list): if any
     """
-    return _repo_role(
-        account_number, role_name, dynamo_table, CONFIG, hooks, commit=commit
-    )
+    return _repo_role(account_number, role_name, CONFIG, hooks, commit=commit)
 
 
 def rollback_role(
@@ -166,13 +164,7 @@ def rollback_role(
         errors (list): if any
     """
     return _rollback_role(
-        account_number,
-        role_name,
-        dynamo_table,
-        CONFIG,
-        hooks,
-        selection=selection,
-        commit=commit,
+        account_number, role_name, CONFIG, hooks, selection=selection, commit=commit
     )
 
 
@@ -189,8 +181,8 @@ def schedule_repo(account_number: str) -> None:
     Returns:
         None
     """
-    _update_role_cache(account_number, dynamo_table, CONFIG, hooks)
-    return _schedule_repo(account_number, dynamo_table, CONFIG, hooks)
+    _update_role_cache(account_number, CONFIG, hooks)
+    return _schedule_repo(account_number, CONFIG, hooks)
 
 
 def repo_all_roles(
@@ -261,15 +253,9 @@ def repo_roles(
         None
     """
     if update:
-        _update_role_cache(account_number, dynamo_table, CONFIG, hooks)
+        _update_role_cache(account_number, CONFIG, hooks)
     return _repo_all_roles(
-        account_number,
-        dynamo_table,
-        CONFIG,
-        hooks,
-        commit=commit,
-        scheduled=scheduled,
-        limit=limit,
+        account_number, CONFIG, hooks, commit=commit, scheduled=scheduled, limit=limit
     )
 
 
@@ -286,7 +272,7 @@ def show_scheduled_roles(account_number: str) -> None:
     Returns:
         None
     """
-    return _show_scheduled_roles(account_number, dynamo_table)
+    return _show_scheduled_roles(account_number)
 
 
 def cancel_scheduled_repo(
@@ -305,9 +291,7 @@ def cancel_scheduled_repo(
     Returns:
         None
     """
-    return _cancel_scheduled_repo(
-        account_number, dynamo_table, role_name=role_name, is_all=is_all
-    )
+    return _cancel_scheduled_repo(account_number, role_name=role_name, is_all=is_all)
 
 
 def repo_stats(output_filename: str = "", account_number: str = "") -> None:
@@ -323,4 +307,4 @@ def repo_stats(output_filename: str = "", account_number: str = "") -> None:
     Returns:
         None
     """
-    return _repo_stats(output_filename, dynamo_table, account_number=account_number)
+    return _repo_stats(output_filename, account_number=account_number)

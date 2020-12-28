@@ -15,7 +15,6 @@ import logging
 import time
 from datetime import datetime as dt
 
-from mypy_boto3_dynamodb.service_resource import Table
 from tabulate import tabulate
 
 import repokid.hooks
@@ -31,7 +30,6 @@ LOGGER = logging.getLogger("repokid")
 
 def _schedule_repo(
     account_number: str,
-    dynamo_table: Table,
     config: RepokidConfig,
     hooks: RepokidHooks,
 ) -> None:
@@ -80,7 +78,7 @@ def _schedule_repo(
     repokid.hooks.call_hooks(hooks, "AFTER_SCHEDULE_REPO", {"roles": scheduled_roles})
 
 
-def _show_scheduled_roles(account_number: str, dynamo_table: Table) -> None:
+def _show_scheduled_roles(account_number: str) -> None:
     """
     Show scheduled repos for a given account.  For each scheduled show whether scheduled time is elapsed or not.
     """
@@ -108,7 +106,7 @@ def _show_scheduled_roles(account_number: str, dynamo_table: Table) -> None:
 
 
 def _cancel_scheduled_repo(
-    account_number: str, dynamo_table: Table, role_name: str = "", is_all: bool = False
+    account_number: str, role_name: str = "", is_all: bool = False
 ) -> None:
     """
     Cancel scheduled repo for a role in an account

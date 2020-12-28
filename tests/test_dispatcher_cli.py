@@ -1,5 +1,4 @@
 import copy
-import datetime
 
 import pytest
 from mock import call
@@ -9,7 +8,6 @@ from pydantic.error_wrappers import ValidationError
 import repokid.dispatcher as dispatcher
 from repokid.dispatcher.types import Message
 
-DYNAMO_TABLE = None
 MESSAGE = Message(
     command="command",
     account="account",
@@ -57,80 +55,81 @@ class TestDispatcherCLI(object):
         with pytest.raises(ValidationError):
             _ = Message.parse_obj(test_message)
 
-    @patch("repokid.utils.dynamo.find_role_in_cache")
-    @patch("repokid.utils.dynamo.get_role_data")
-    def test_list_repoable_services(self, mock_get_role_data, mock_find_role_in_cache):
+    @patch("repokid.dispatcher.get_services_and_permissions_from_repoable")
+    @patch("repokid.role.Role.fetch")
+    @patch("repokid.dispatcher.find_role_in_cache")
+    def test_list_repoable_services(
+        self,
+        mock_find_role_in_cache,
+        mock_role_fetch,
+        mock_get_services_and_permissions_from_repoable,
+    ):
+        mock_find_role_in_cache.side_effect = [None, "ROLE_ID_A"]
+        mock_get_services_and_permissions_from_repoable.return_value = {"foo", "bar"}
+
+        success, _ = dispatcher.list_repoable_services(MESSAGE)
+        assert not success
+        mock_find_role_in_cache.assert_called_once()
+        mock_role_fetch.assert_not_called()
+        mock_get_services_and_permissions_from_repoable.assert_not_called()
+
+        mock_role_fetch.reset_mock()
+        mock_get_services_and_permissions_from_repoable.reset_mock()
+        mock_find_role_in_cache.reset_mock()
+
+        success, _ = dispatcher.list_repoable_services(MESSAGE)
+        assert success
+        mock_find_role_in_cache.assert_called_once()
+        mock_role_fetch.assert_called_once()
+        mock_get_services_and_permissions_from_repoable.assert_called_once()
+
+    @patch("repokid.role.Role.fetch")
+    @patch("repokid.dispatcher.find_role_in_cache")
+    def test_list_role_rollbacks(self, mock_find_role_in_cache, mock_role_fetch):
         mock_find_role_in_cache.side_effect = [None, "ROLE_ID_A"]
 
-        (success, _) = dispatcher.list_repoable_services(DYNAMO_TABLE, MESSAGE)
+        (success, _) = dispatcher.list_role_rollbacks(MESSAGE)
         assert not success
+        mock_find_role_in_cache.assert_called_once()
+        mock_role_fetch.assert_not_called()
 
-        (success, _) = dispatcher.list_repoable_services(DYNAMO_TABLE, MESSAGE)
+        mock_role_fetch.reset_mock()
+        mock_find_role_in_cache.reset_mock()
+
+        (success, _) = dispatcher.list_repoable_services(MESSAGE)
         assert success
-
-    @patch("repokid.utils.dynamo.find_role_in_cache")
-    @patch("repokid.utils.dynamo.get_role_data")
-    def test_list_role_rollbacks(self, mock_get_role_data, mock_find_role_in_cache):
-        mock_find_role_in_cache.side_effect = [None, "ROLE_ID_A"]
-
-        (success, _) = dispatcher.list_role_rollbacks(DYNAMO_TABLE, MESSAGE)
-        assert not success
-
-        (success, _) = dispatcher.list_repoable_services(DYNAMO_TABLE, MESSAGE)
-        assert success
+        mock_find_role_in_cache.assert_called_once()
+        mock_role_fetch.assert_called_once()
 
     @patch("time.time")
-    @patch("repokid.utils.dynamo.find_role_in_cache")
-    @patch("repokid.utils.dynamo.get_role_data")
-    @patch("repokid.utils.dynamo.set_role_data")
+    @patch("repokid.role.Role.store")
+    @patch("repokid.role.Role.fetch")
+    @patch("repokid.dispatcher.find_role_in_cache")
     def test_opt_out(
-        self, mock_set_role_data, mock_get_role_data, mock_find_role_in_cache, mock_time
+        self, mock_find_role_in_cache, mock_role_fetch, mock_role_store, mock_time
     ):
         mock_find_role_in_cache.side_effect = [None, "ROLE_ID_A"]
 
-        class MockRoleNoOptOut:
-            opt_out = None
-
-        class MockRoleOptOut:
-            opt_out = {"owner": "somebody", "reason": "because"}
-
-        class MockRoleEmptyOptOut:
-            opt_out = {}
-
-        mock_get_role_data.side_effect = [
-            MockRoleNoOptOut(),  # role not found
-            MockRoleNoOptOut(),  # opt out exists
-            MockRoleOptOut(),
-            MockRoleNoOptOut(),
-            MockRoleEmptyOptOut(),  # success
-        ]
+        # mock_get_role_data.side_effect = [
+        #     MockRoleNoOptOut(),  # role not found
+        #     MockRoleNoOptOut(),  # opt out exists
+        #     MockRoleOptOut(),
+        #     MockRoleNoOptOut(),
+        #     MockRoleEmptyOptOut(),  # success
+        # ]
 
         mock_time.return_value = 0
-
-        current_dt = datetime.datetime.fromtimestamp(0)
-        expire_dt = current_dt + datetime.timedelta(90)
-        expire_epoch = int((expire_dt - datetime.datetime(1970, 1, 1)).total_seconds())
 
         bad_message = copy.deepcopy(MESSAGE)
         bad_message.reason = None
         # message missing reason
-        (success, _) = dispatcher.opt_out(DYNAMO_TABLE, bad_message)
+        (success, _) = dispatcher.opt_out(bad_message)
         assert not success
 
         # role not found
-        (success, _) = dispatcher.opt_out(DYNAMO_TABLE, MESSAGE)
+        (success, _) = dispatcher.opt_out(MESSAGE)
         assert not success
 
-        (success, msg) = dispatcher.opt_out(DYNAMO_TABLE, MESSAGE)
+        (success, msg) = dispatcher.opt_out(MESSAGE)
         assert success
-        assert mock_set_role_data.mock_calls[0] == call(
-            DYNAMO_TABLE,
-            "ROLE_ID_A",
-            {
-                "OptOut": {
-                    "owner": MESSAGE.requestor,
-                    "reason": MESSAGE.reason,
-                    "expire": expire_epoch,
-                }
-            },
-        )
+        assert mock_role_store.mock_calls[0] == call(fields=["opt_out"])

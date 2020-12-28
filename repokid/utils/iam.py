@@ -24,7 +24,6 @@ from cloudaux.aws.iam import delete_role_policy
 from cloudaux.aws.iam import get_role_inline_policies
 from cloudaux.aws.iam import put_role_policy
 from cloudaux.aws.sts import boto3_cached_conn
-from mypy_boto3_dynamodb.service_resource import Table
 from mypy_boto3_iam.client import IAMClient
 
 import repokid.utils.permissions
@@ -152,8 +151,6 @@ def remove_permissions_from_role(
     account_number: str,
     permissions: List[str],
     role: Role,
-    role_id: str,
-    dynamo_table: Table,
     config: RepokidConfig,
     hooks: RepokidHooks,
     commit: bool = False,

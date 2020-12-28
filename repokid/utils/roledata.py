@@ -19,8 +19,6 @@ from typing import List
 from typing import Set
 from typing import Tuple
 
-from mypy_boto3_dynamodb.service_resource import Table
-
 import repokid.hooks
 from repokid.role import RoleList
 from repokid.types import RepokidHooks
@@ -30,15 +28,12 @@ from repokid.utils.permissions import _get_potentially_repoable_permissions
 LOGGER = logging.getLogger("repokid")
 
 
-def find_and_mark_inactive(
-    dynamo_table: Table, account_number: str, active_roles: RoleList
-) -> None:
+def find_and_mark_inactive(account_number: str, active_roles: RoleList) -> None:
     """
     Mark roles in the account that aren't currently active inactive. Do this by getting all roles in the account and
     subtracting the active roles, any that are left are inactive and should be marked thusly.
 
     Args:
-        dynamo_table
         account_number (string)
         active_roles (set): the currently active roles discovered in the most recent scan
 

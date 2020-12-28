@@ -14,7 +14,6 @@ from mypy_boto3_sqs.type_defs import ReceiveMessageResultTypeDef
 import repokid.dispatcher
 from repokid import CONFIG
 from repokid.dispatcher.types import Message
-from repokid.utils.dynamo import dynamo_get_or_create_table
 
 
 def get_failure_message(channel: str, message: str) -> Dict[str, Any]:
@@ -68,8 +67,6 @@ RESPONDER_FUNCTIONS = {
 
 
 def main() -> None:
-    dynamo_table = dynamo_get_or_create_table(**CONFIG["dynamo_db"])
-
     conn_details = {
         "assume_role": CONFIG["dispatcher"].get("assume_role", None),
         "session_name": CONFIG["dispatcher"].get("session_name", "Repokid"),
@@ -96,9 +93,7 @@ def main() -> None:
                 continue
 
             try:
-                return_val = RESPONDER_FUNCTIONS[parsed_msg.command](
-                    dynamo_table, parsed_msg
-                )
+                return_val = RESPONDER_FUNCTIONS[parsed_msg.command](parsed_msg)
             except KeyError:
                 failure_message = get_failure_message(
                     channel=parsed_msg.respond_channel,

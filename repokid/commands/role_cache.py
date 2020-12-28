@@ -14,7 +14,6 @@
 import logging
 
 from cloudaux.aws.iam import get_account_authorization_details
-from mypy_boto3_dynamodb.service_resource import Table
 from tqdm import tqdm
 
 from repokid.filters.utils import get_filter_plugins
@@ -22,13 +21,13 @@ from repokid.role import Role
 from repokid.role import RoleList
 from repokid.types import RepokidConfig
 from repokid.types import RepokidHooks
+from repokid.utils.roledata import find_and_mark_inactive
 
 LOGGER = logging.getLogger("repokid")
 
 
 def _update_role_cache(
     account_number: str,
-    dynamo_table: Table,
     config: RepokidConfig,
     hooks: RepokidHooks,
 ) -> None:
@@ -85,10 +84,10 @@ def _update_role_cache(
         )
 
     LOGGER.info("Finding inactive roles in account {}".format(account_number))
-    # roledata.find_and_mark_inactive(dynamo_table, account_number, roles)
+    find_and_mark_inactive(account_number, roles)
 
     LOGGER.info("Filtering roles")
-    plugins = get_filter_plugins(account_number)
+    plugins = get_filter_plugins(account_number, config=config)
     for plugin in plugins.filter_plugins:
         filtered_list = plugin.apply(roles)
         class_name = plugin.__class__.__name__

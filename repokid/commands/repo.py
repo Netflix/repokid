@@ -22,7 +22,6 @@ import botocore
 from cloudaux.aws.iam import delete_role_policy
 from cloudaux.aws.iam import get_role_inline_policies
 from cloudaux.aws.iam import put_role_policy
-from mypy_boto3_dynamodb.service_resource import Table
 from tabulate import tabulate
 
 import repokid.hooks
@@ -47,7 +46,6 @@ LOGGER = logging.getLogger("repokid")
 def _repo_role(
     account_number: str,
     role_name: str,
-    dynamo_table: Table,
     config: RepokidConfig,
     hooks: RepokidHooks,
     commit: bool = False,
@@ -148,7 +146,6 @@ def _repo_role(
 def _rollback_role(
     account_number: str,
     role_name: str,
-    dynamo_table: Table,
     config: RepokidConfig,
     hooks: RepokidHooks,
     selection: int = 0,
@@ -290,7 +287,6 @@ def _rollback_role(
 
 def _repo_all_roles(
     account_number: str,
-    dynamo_table: Table,
     config: RepokidConfig,
     hooks: RepokidHooks,
     commit: bool = False,
@@ -341,7 +337,6 @@ def _repo_all_roles(
         error = _repo_role(
             account_number,
             role.role_name,
-            dynamo_table,
             config,
             hooks,
             commit=commit,
@@ -364,9 +359,7 @@ def _repo_all_roles(
     )
 
 
-def _repo_stats(
-    output_file: str, dynamo_table: Table, account_number: str = ""
-) -> None:
+def _repo_stats(output_file: str, account_number: str = "") -> None:
     """
     Create a csv file with stats about roles, total permissions, and applicable filters over time
 

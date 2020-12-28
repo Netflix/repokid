@@ -18,7 +18,6 @@ from typing import Any
 from typing import List
 
 import tabview as t
-from mypy_boto3_dynamodb.service_resource import Table
 from policyuniverse.arn import ARN
 from tabulate import tabulate
 from tqdm import tqdm
@@ -39,9 +38,7 @@ from repokid.utils.permissions import get_services_in_permissions
 LOGGER = logging.getLogger("repokid")
 
 
-def _display_roles(
-    account_number: str, dynamo_table: Table, inactive: bool = False
-) -> None:
+def _display_roles(account_number: str, inactive: bool = False) -> None:
     """
     Display a table with data about all roles in an account and write a csv file with the data.
 
@@ -96,9 +93,7 @@ def _display_roles(
             csv_writer.writerow(row)
 
 
-def _find_roles_with_permissions(
-    permissions: List[str], dynamo_table: Table, output_file: str
-) -> None:
+def _find_roles_with_permissions(permissions: List[str], output_file: str) -> None:
     """
     Search roles in all accounts for a policy with any of the provided permissions, log the ARN of each role.
 
@@ -140,9 +135,7 @@ def _find_roles_with_permissions(
 def _display_role(
     account_number: str,
     role_name: str,
-    dynamo_table: Table,
     config: RepokidConfig,
-    hooks: RepokidHooks,
 ) -> None:
     """
     Displays data about a role in a given account:
@@ -270,7 +263,6 @@ def _display_role(
 def _remove_permissions_from_roles(
     permissions: List[str],
     role_filename: str,
-    dynamo_table: Table,
     config: RepokidConfig,
     hooks: RepokidHooks,
     commit: bool = False,
@@ -302,14 +294,7 @@ def _remove_permissions_from_roles(
         role.fetch()
 
         remove_permissions_from_role(
-            account_number,
-            permissions,
-            role,
-            role_id,
-            dynamo_table,
-            config,
-            hooks,
-            commit=commit,
+            account_number, permissions, role, config, hooks, commit=commit
         )
 
         repokid.hooks.call_hooks(hooks, "AFTER_REPO", {"role": role})

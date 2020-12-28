@@ -15,6 +15,8 @@
 import datetime
 import logging
 
+from dateutil.tz import tzlocal
+
 from repokid.filters import Filter
 from repokid.role import RoleList
 
@@ -23,7 +25,7 @@ LOGGER = logging.getLogger("repokid")
 
 class AgeFilter(Filter):
     def apply(self, input_list: RoleList) -> RoleList:
-        now = datetime.datetime.now()
+        now = datetime.datetime.now(tzlocal())
         if self.config:
             days_delta = self.config.get("minimum_age", 90)
         else:

@@ -261,22 +261,16 @@ ROLES_FOR_DISPLAY = [
 
 
 class TestRepokidCLI(object):
-    @patch("repokid.commands.role_cache.roledata.update_stats")
-    @patch("repokid.commands.role_cache.roledata.find_and_mark_inactive")
-    @patch("repokid.commands.role_cache.roledata.update_role_data")
-    @patch("repokid.commands.role_cache.roledata._calculate_repo_scores")
-    @patch("repokid.commands.role_cache.set_role_data")
-    @patch("repokid.commands.role_cache.get_aardvark_data")
+    @patch("repokid.commands.role_cache.find_and_mark_inactive")
+    @patch("repokid.commands.role_cache.RoleList.store")
+    @patch("repokid.commands.role_cache.Role.gather_role_data")
     @patch("repokid.commands.role_cache.get_account_authorization_details")
     def test_repokid_update_role_cache(
         self,
         mock_get_account_authorization_details,
-        mock_get_aardvark_data,
-        mock_set_role_data,
-        mock_calculate_repo_scores,
-        mock_update_role_data,
+        mock_gather_role_data,
+        mock_role_list_store,
         mock_find_and_mark_inactive,
-        mock_update_stats,
     ):
 
         hooks = {}
@@ -299,13 +293,6 @@ class TestRepokidCLI(object):
         ]
 
         mock_get_account_authorization_details.side_effect = [role_data]
-        mock_get_aardvark_data.return_value = AARDVARK_DATA
-
-        def update_role_data(dynamo_table, account_number, role, current_policies):
-            role.policies = [{"Policy": current_policies}]
-            return role
-
-        mock_update_role_data.side_effect = update_role_data
 
         config = {
             "aardvark_api_location": "",
@@ -320,51 +307,15 @@ class TestRepokidCLI(object):
         repokid.cli.repokid_cli.logger = logging.getLogger("test")
         repokid.cli.repokid_cli.logger.addHandler(console_logger)
 
-        dynamo_table = None
         account_number = "123456789012"
 
-        repokid.commands.role_cache._update_role_cache(
-            account_number, dynamo_table, config, hooks
-        )
+        repokid.commands.role_cache._update_role_cache(account_number, config, hooks)
 
-        roles = RoleList(
-            [
-                Role(**ROLES[0]),
-                Role(**ROLES[1]),
-                Role(**ROLES[2]),
-            ]
-        )
-
-        assert mock_calculate_repo_scores.mock_calls == [
-            call(roles, 90, hooks, False, 100)
-        ]
-
-        # validate update data called for each role
-        assert mock_update_role_data.mock_calls == [
-            call(
-                dynamo_table,
-                account_number,
-                Role(**ROLES[0]),
-                {"all_services_used": ROLE_POLICIES["all_services_used"]},
-            ),
-            call(
-                dynamo_table,
-                account_number,
-                Role(**ROLES[1]),
-                {"unused_ec2": ROLE_POLICIES["unused_ec2"]},
-            ),
-            call(
-                dynamo_table,
-                account_number,
-                Role(**ROLES[2]),
-                {"all_services_used": ROLE_POLICIES["all_services_used"]},
-            ),
-        ]
+        assert mock_gather_role_data.call_count == 3
 
         # all roles active
         assert mock_find_and_mark_inactive.mock_calls == [
             call(
-                dynamo_table,
                 account_number,
                 RoleList(
                     [
@@ -376,19 +327,11 @@ class TestRepokidCLI(object):
             )
         ]
 
-        # TODO: validate total permission, repoable, etc are getting updated properly
-
-        assert mock_update_stats.mock_calls == [
-            call(dynamo_table, roles, source="Scan")
-        ]
-
-        # TODO: set_role_data called with
-
     @patch("tabview.view")
-    @patch("repokid.commands.role.get_role_data")
-    @patch("repokid.commands.role.role_ids_for_account")
+    @patch("repokid.commands.role.RoleList.from_ids")
+    @patch("repokid.commands.role.get_all_role_ids_for_account")
     def test_repokid_display_roles(
-        self, mock_role_ids_for_account, mock_get_role_data, mock_tabview
+        self, mock_get_all_role_ids_for_account, mock_role_list_from_ids, mock_tabview
     ):
         console_logger = logging.StreamHandler()
         console_logger.setLevel(logging.WARNING)
@@ -396,7 +339,7 @@ class TestRepokidCLI(object):
         repokid.cli.repokid_cli.logger = logging.getLogger("test")
         repokid.cli.repokid_cli.logger.addHandler(console_logger)
 
-        mock_role_ids_for_account.return_value = [
+        mock_get_all_role_ids_for_account.return_value = [
             "AROAABCDEFGHIJKLMNOPA",
             "AROAABCDEFGHIJKLMNOPB",
             "AROAABCDEFGHIJKLMNOPC",
@@ -410,19 +353,17 @@ class TestRepokidCLI(object):
             )
 
         # loop over all roles twice (one for each call below)
-        mock_get_role_data.side_effect = [
-            test_roles[0],
-            test_roles[1],
-            test_roles[2],
-            test_roles[3],
-            test_roles[0],
-            test_roles[1],
-            test_roles[2],
-            test_roles[3],
-        ]
+        mock_role_list_from_ids.return_value = RoleList(
+            [
+                test_roles[0],
+                test_roles[1],
+                test_roles[2],
+                test_roles[3],
+            ]
+        )
 
-        repokid.commands.role._display_roles("123456789012", None, inactive=True)
-        repokid.commands.role._display_roles("123456789012", None, inactive=False)
+        repokid.commands.role._display_roles("123456789012", inactive=True)
+        repokid.commands.role._display_roles("123456789012", inactive=False)
 
         # first call has inactive role, second doesn't because it's filtered
         assert mock_tabview.mock_calls == [
@@ -464,20 +405,20 @@ class TestRepokidCLI(object):
         ]
 
     @patch("repokid.hooks.call_hooks")
-    @patch("repokid.commands.schedule.get_role_data")
-    @patch("repokid.commands.schedule.set_role_data")
-    @patch("repokid.commands.schedule.role_ids_for_account")
+    @patch("repokid.commands.role_cache.Role.store")
+    @patch("repokid.commands.role.RoleList.from_ids")
+    @patch("repokid.commands.schedule.get_all_role_ids_for_account")
     @patch("time.time")
     def test_schedule_repo(
         self,
         mock_time,
-        mock_role_ids_for_account,
-        mock_set_role_data,
-        mock_get_role_data,
+        mock_get_all_role_ids_for_account,
+        mock_role_list_from_ids,
+        mock_role_store,
         mock_call_hooks,
     ):
         hooks = RepokidHooks
-        mock_role_ids_for_account.return_value = [
+        mock_get_all_role_ids_for_account.return_value = [
             "AROAABCDEFGHIJKLMNOPA",
             "AROAABCDEFGHIJKLMNOPB",
         ]
@@ -494,20 +435,14 @@ class TestRepokidCLI(object):
                 ).dict(exclude_unset=True)
             ),
         ]
-        mock_get_role_data.side_effect = [test_roles[0], test_roles[1]]
+        mock_role_list_from_ids.return_value = RoleList([test_roles[0], test_roles[1]])
         mock_time.return_value = 1
 
         config = {"repo_schedule_period_days": 1}
 
-        repokid.commands.schedule._schedule_repo("1234567890", None, config, hooks)
+        repokid.commands.schedule._schedule_repo("1234567890", config, hooks)
 
-        assert mock_set_role_data.mock_calls == [
-            call(
-                None,
-                "AROAABCDEFGHIJKLMNOPB",
-                {"RepoScheduled": 86401, "ScheduledPerms": ["ec2"]},
-            )
-        ]
+        mock_role_store.assert_called()
         assert mock_call_hooks.mock_calls == [
             call(
                 hooks,
@@ -517,20 +452,20 @@ class TestRepokidCLI(object):
         ]
 
     @patch("repokid.hooks.call_hooks")
-    @patch("repokid.commands.repo.get_role_data")
-    @patch("repokid.commands.repo.role_ids_for_account")
+    @patch("repokid.commands.role.RoleList.from_ids")
+    @patch("repokid.commands.repo.get_all_role_ids_for_account")
     @patch("repokid.commands.repo._repo_role")
     @patch("time.time")
     def test_repo_all_roles(
         self,
         mock_time,
         mock_repo_role,
-        mock_role_ids_for_account,
-        mock_get_role_data,
+        mock_get_all_role_ids_for_account,
+        mock_role_list_from_ids,
         mock_call_hooks,
     ):
         hooks = RepokidHooks()
-        mock_role_ids_for_account.return_value = [
+        mock_get_all_role_ids_for_account.return_value = [
             "AROAABCDEFGHIJKLMNOPA",
             "AROAABCDEFGHIJKLMNOPB",
             "AROAABCDEFGHIJKLMNOPC",
@@ -576,27 +511,25 @@ class TestRepokidCLI(object):
         # time is past ROLE_C but before ROLE_A
         mock_time.return_value = 10
 
-        # return both roles each time
-        mock_get_role_data.side_effect = [
-            roles[0],
-            roles[1],
-            roles[2],
-            roles[0],
-            roles[1],
-            roles[2],
-        ]
+        mock_role_list_from_ids.return_value = RoleList(
+            [
+                roles[0],
+                roles[1],
+                roles[2],
+            ]
+        )
         mock_repo_role.return_value = None
 
         # repo all roles in the account, should call repo with all roles
-        repokid.commands.repo._repo_all_roles("", None, {}, hooks, scheduled=False)
+        repokid.commands.repo._repo_all_roles("", {}, hooks, scheduled=False)
         # repo only scheduled, should only call repo role with role C
-        repokid.commands.repo._repo_all_roles("", None, {}, hooks, scheduled=True)
+        repokid.commands.repo._repo_all_roles("", {}, hooks, scheduled=True)
 
         assert mock_repo_role.mock_calls == [
-            call("", "ROLE_A", None, {}, hooks, commit=False, scheduled=False),
-            call("", "ROLE_B", None, {}, hooks, commit=False, scheduled=False),
-            call("", "ROLE_C", None, {}, hooks, commit=False, scheduled=False),
-            call("", "ROLE_C", None, {}, hooks, commit=False, scheduled=True),
+            call("", "ROLE_A", {}, hooks, commit=False, scheduled=False),
+            call("", "ROLE_B", {}, hooks, commit=False, scheduled=False),
+            call("", "ROLE_C", {}, hooks, commit=False, scheduled=False),
+            call("", "ROLE_C", {}, hooks, commit=False, scheduled=True),
         ]
 
         assert mock_call_hooks.mock_calls == [
@@ -626,19 +559,21 @@ class TestRepokidCLI(object):
             ),
         ]
 
+    @patch("repokid.commands.role_cache.Role.fetch")
+    @patch("repokid.commands.role_cache.Role.store")
+    @patch("repokid.commands.role.RoleList.from_ids")
     @patch("repokid.commands.schedule.find_role_in_cache")
-    @patch("repokid.commands.schedule.get_role_data")
-    @patch("repokid.commands.schedule.role_ids_for_account")
-    @patch("repokid.commands.schedule.set_role_data")
+    @patch("repokid.commands.schedule.get_all_role_ids_for_account")
     def test_cancel_scheduled_repo(
         self,
-        mock_set_role_data,
-        mock_role_ids_for_account,
-        mock_get_role_data,
+        mock_get_all_role_ids_for_account,
         mock_find_role_in_cache,
+        mock_role_list_from_ids,
+        mock_role_store,
+        mock_role_fetch,
     ):
 
-        mock_role_ids_for_account.return_value = [
+        mock_get_all_role_ids_for_account.return_value = [
             "AROAABCDEFGHIJKLMNOPA",
             "AROAABCDEFGHIJKLMNOPB",
         ]
@@ -679,37 +614,19 @@ class TestRepokidCLI(object):
                 ),
             ]
         )
-        mock_get_role_data.side_effect = [roles[0], roles[2], roles[0]]
+        mock_role_list_from_ids.return_value = RoleList([roles[0], roles[2]])
 
         # first check all
-        repokid.commands.schedule._cancel_scheduled_repo(
-            None, None, role_name=None, is_all=True
-        )
+        repokid.commands.schedule._cancel_scheduled_repo("", role_name="", is_all=True)
+        assert mock_role_store.call_count == 2
+        mock_role_store.reset_mock()
 
         # ensure all are cancelled
-        mock_find_role_in_cache.return_value = ["AROAABCDEFGHIJKLMNOPA"]
+        mock_find_role_in_cache.return_value = "AROAABCDEFGHIJKLMNOPA"
 
         repokid.commands.schedule._cancel_scheduled_repo(
-            None, None, role_name="ROLE_A", is_all=False
+            "", role_name="ROLE_A", is_all=False
         )
-
-        assert mock_set_role_data.mock_calls == [
-            call(
-                None,
-                "AROAABCDEFGHIJKLMNOPA",
-                {"RepoScheduled": 0, "ScheduledPerms": []},
-            ),
-            call(
-                None,
-                "AROAABCDEFGHIJKLMNOPC",
-                {"RepoScheduled": 0, "ScheduledPerms": []},
-            ),
-            call(
-                None,
-                "AROAABCDEFGHIJKLMNOPA",
-                {"RepoScheduled": 0, "ScheduledPerms": []},
-            ),
-        ]
 
     def test_generate_default_config(self):
         generated_config = repokid.cli.repokid_cli._generate_default_config()
@@ -852,18 +769,10 @@ class TestRepokidCLI(object):
     @patch(
         "repokid.utils.iam.remove_permissions_from_role", MagicMock(return_value=None)
     )
-    @patch("repokid.utils.iam.get_role_inline_policies", MagicMock(return_value=None))
-    @patch(
-        "repokid.utils.iam.roledata.add_new_policy_version",
-        MagicMock(return_value=None),
-    )
-    @patch("repokid.utils.iam.set_role_data", MagicMock(return_value=None))
-    @patch("repokid.utils.iam.set_role_data", MagicMock(return_value=None))
     @patch(
         "repokid.utils.iam.update_repoed_description",
         MagicMock(return_value=None),
     )
-    @patch("repokid.utils.iam.roledata.update_role_data", MagicMock(return_value=None))
     def test_remove_permissions_from_role(self):
         iam = repokid.utils.iam
 
@@ -880,22 +789,13 @@ class TestRepokidCLI(object):
         mock_role = MockRole()
 
         iam.remove_permissions_from_role(
-            "123456789012",
-            ["s3:putobjectacl"],
-            mock_role,
-            "12345-roleid",
-            None,
-            None,
-            None,
-            commit=False,
+            "123456789012", ["s3:putobjectacl"], mock_role, None, None, commit=False
         )
 
         iam.remove_permissions_from_role(
             "123456789012",
             ["s3:putobjectacl"],
             mock_role,
-            "12345-roleid",
-            None,
             {"connection_iam": dict()},
             None,
             commit=True,
@@ -905,11 +805,11 @@ class TestRepokidCLI(object):
         "repokid.commands.role.find_role_in_cache",
         MagicMock(return_value="12345-roleid"),
     )
-    @patch("repokid.commands.role.get_role_data", MagicMock(return_value=None))
     @patch(
         "repokid.commands.role.remove_permissions_from_role",
         MagicMock(return_value=None),
     )
+    @patch("repokid.commands.role.Role.fetch", MagicMock(return_value=None))
     @patch("repokid.commands.role.repokid.hooks")
     def test_remove_permissions_from_roles(self, mock_hooks):
         import json
@@ -927,10 +827,5 @@ class TestRepokidCLI(object):
             assert open("somefile.json").read() == arns
             mock_file.assert_called_with("somefile.json")
             repokid.commands.role._remove_permissions_from_roles(
-                ["s3:putobjectacl"],
-                "somefile.json",
-                None,
-                None,
-                mock_hooks,
-                commit=False,
+                ["s3:putobjectacl"], "somefile.json", None, mock_hooks, commit=False
             )
