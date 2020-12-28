@@ -1,18 +1,20 @@
-#     Copyright 2020 Netflix, Inc.
+#  Copyright 2020 Netflix, Inc.
 #
-#     Licensed under the Apache License, Version 2.0 (the "License");
-#     you may not use this file except in compliance with the License.
-#     You may obtain a copy of the License at
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
 #
-#         http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
-#     Unless required by applicable law or agreed to in writing, software
-#     distributed under the License is distributed on an "AS IS" BASIS,
-#     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#     See the License for the specific language governing permissions and
-#     limitations under the License.
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+
 from __future__ import annotations
 
+import copy
 import datetime
 import logging
 import time
@@ -26,13 +28,15 @@ from typing import Tuple
 from typing import Union
 from typing import overload
 
+from dateutil.parser import parse as ts_parse
 from pydantic import BaseModel
 from pydantic import Field
 from pydantic import PrivateAttr
 
 from repokid import CONFIG
 from repokid.exceptions import IntegrityError
-from repokid.exceptions import RoleModelError
+from repokid.exceptions import MissingRepoableServices
+from repokid.exceptions import ModelError
 from repokid.exceptions import RoleNotFoundError
 from repokid.types import RepokidConfig
 from repokid.types import RepokidHooks
@@ -117,10 +121,11 @@ class Role(BaseModel):
                 return
         policy_entry = {
             "Source": source,
-            "Discovered": datetime.datetime.now(tz=datetime.timezone.utc).isoformat(),
+            "Discovered": datetime.datetime.now().isoformat(),
             "Policy": policy,
         }
         self.policies.append(policy_entry)
+        self._calculate_no_repo_permissions()
         if store:
             self.store(fields=["Policies", "NoRepoPermissions"])
 
@@ -137,7 +142,7 @@ class Role(BaseModel):
         repoable_permissions = get_repoable_permissions(
             self.account,
             self.role_name,
-            eligible_permissions,
+            all_permissions,
             self.aa_data,
             self.no_repo_permissions,
             self.role_id,
@@ -148,11 +153,13 @@ class Role(BaseModel):
             repoable_permissions_set,
             repoable_services_set,
         ) = convert_repoable_perms_to_perms_and_services(
-            eligible_permissions, repoable_permissions
+            all_permissions, repoable_permissions
         )
-        self.repoable_services = list(
-            repoable_permissions_set.union(repoable_services_set)
+        # combine repoable services and permissions, convert to list, then sort
+        repoable_services_list = list(
+            repoable_services_set.union(repoable_permissions_set)
         )
+        self.repoable_services = sorted(repoable_services_list)
         self.repoable_permissions = len(repoable_permissions)
 
     def get_permissions_for_policy_version(
@@ -174,23 +181,23 @@ class Role(BaseModel):
         newly_added_permissions = find_newly_added_permissions(
             previous_policy.get("Policy", {}), new_policy.get("Policy", {})
         )
-        new_no_repo_permissions = {}
         current_time = int(time.time())
-        for permission, expiration in self.no_repo_permissions.items():
+
+        # iterate through a copy of self.no_repo_permissions and remove expired items from
+        # the source dict
+        for permission, expiration in copy.copy(self.no_repo_permissions).items():
             if current_time > expiration:
                 self.no_repo_permissions.pop(permission)
 
         expire_time = current_time + self._no_repo_secs
         for permission in newly_added_permissions:
-            new_no_repo_permissions[permission] = expire_time
+            self.no_repo_permissions[permission] = expire_time
 
     def get_repoed_policy(
         self, scheduled: bool = False
     ) -> Tuple[Dict[str, Any], List[str]]:
         if not self.repoable_services:
-            # TODO: handle this better, maybe by calculating repoable services on the fly
-            #  or just use a custom exception type
-            raise Exception("role needs to be updated")
+            raise MissingRepoableServices("role must be updated")
         if scheduled:
             permissions, services = get_services_and_permissions_from_repoable(
                 self.scheduled_perms
@@ -208,31 +215,29 @@ class Role(BaseModel):
         )
         return repoed_policies, deleted_policy_names
 
-    def is_eligible_for_repo(self) -> bool:
+    def is_eligible_for_repo(self) -> Tuple[bool, str]:
         if len(self.disqualified_by) > 0:
-            return False
+            return False, f"disqualified by {', '.join(self.disqualified_by)}"
         if not self.aa_data:
-            return False
+            return False, "no Access Advisor data available"
         if not self.repoable_permissions:
-            return False
+            return False, "no repoable permissions"
         stale_aa_services = self._stale_aa_services()
         if stale_aa_services:
-            return False
-        return True
+            return (
+                False,
+                f"stale Access Advisor data for {', '.join(stale_aa_services)}",
+            )
+        return True, ""
 
     def _stale_aa_services(self) -> List[str]:
-        thresh = datetime.datetime.now(tz=datetime.timezone.utc) - datetime.timedelta(
+        thresh = datetime.datetime.now() - datetime.timedelta(
             days=self.config["repo_requirements"]["oldest_aa_data_days"]
         )
         stale_services = []
         if self.aa_data:
             for service in self.aa_data:
-                if (
-                    datetime.datetime.strptime(
-                        service["lastUpdated"], "%a, %d %b %Y %H:%M:%S %Z"
-                    )
-                    < thresh
-                ):
+                if ts_parse(service["lastUpdated"]) < thresh:
                     stale_services.append(service["serviceName"])
         return stale_services
 
@@ -241,7 +246,7 @@ class Role(BaseModel):
             self.opt_out = {}
 
     def _update_refreshed(self) -> None:
-        self.refreshed = datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
+        self.refreshed = datetime.datetime.now().isoformat()
 
     def update(self, values: Dict[str, Any], store: bool = True) -> None:
         self._dirty = True
@@ -257,7 +262,7 @@ class Role(BaseModel):
     def fetch_aa_data(self, config: Optional[RepokidConfig] = None) -> None:
         config = config or CONFIG
         if not self.arn:
-            raise RoleModelError(
+            raise ModelError(
                 "missing arn on Role instance, cannot retrieve Access Advisor data"
             )
 
@@ -280,7 +285,7 @@ class Role(BaseModel):
                 self.account, self.role_name, fields=fields
             )
         else:
-            raise RoleModelError(
+            raise ModelError(
                 "missing role_id or role_name and account on Role instance"
             )
 
@@ -311,7 +316,7 @@ class Role(BaseModel):
         except RoleNotFoundError:
             create = True
 
-        self.last_updated = datetime.datetime.now(tz=datetime.timezone.utc)
+        self.last_updated = datetime.datetime.now()
 
         if create:
             # TODO: handle this case in set_role_data() to simplify logic here
@@ -364,7 +369,7 @@ class Role(BaseModel):
 
     def calculate_stats(self, source: str = "Scan", store: bool = True) -> None:
         new_stats = {
-            "Date": datetime.datetime.now(tz=datetime.timezone.utc).isoformat(),
+            "Date": datetime.datetime.now().isoformat(),
             "DisqualifiedBy": self.disqualified_by,
             "PermissionsCount": self.total_permissions,
             "RepoablePermissionsCount": self.repoable_permissions,
