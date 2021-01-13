@@ -24,17 +24,14 @@ from cloudaux.aws.iam import delete_role_policy
 from cloudaux.aws.iam import get_role_inline_policies
 from cloudaux.aws.iam import put_role_policy
 from cloudaux.aws.sts import boto3_cached_conn
-from mypy_boto3_dynamodb.service_resource import Table
 from mypy_boto3_iam.client import IAMClient
 
+import repokid.utils.permissions
 from repokid.exceptions import IAMError
 from repokid.role import Role
 from repokid.types import RepokidConfig
 from repokid.types import RepokidHooks
-from repokid.utils import roledata as roledata
-from repokid.utils.dynamo import set_role_data
 from repokid.utils.logging import log_deleted_and_repoed_policies
-from repokid.utils.roledata import partial_update_role_data
 
 LOGGER = logging.getLogger("repokid")
 MAX_AWS_POLICY_SIZE = 10240
@@ -46,7 +43,7 @@ def update_repoed_description(role_name: str, conn_details: Dict[str, Any]) -> N
         description = client.get_role(RoleName=role_name)["Role"].get("Description", "")
     except KeyError:
         return
-    date_string = datetime.datetime.utcnow().strftime("%m/%d/%y")
+    date_string = datetime.datetime.now(tz=datetime.timezone.utc).strftime("%m/%d/%y")
     if "; Repokid repoed" in description:
         new_description = re.sub(
             r"; Repokid repoed [0-9]{2}\/[0-9]{2}\/[0-9]{2}",
@@ -154,8 +151,6 @@ def remove_permissions_from_role(
     account_number: str,
     permissions: List[str],
     role: Role,
-    role_id: str,
-    dynamo_table: Table,
     config: RepokidConfig,
     hooks: RepokidHooks,
     commit: bool = False,
@@ -172,7 +167,10 @@ def remove_permissions_from_role(
     Returns:
         None
     """
-    repoed_policies, deleted_policy_names = roledata._get_repoed_policy(
+    (
+        repoed_policies,
+        deleted_policy_names,
+    ) = repokid.utils.permissions.get_repoed_policy(
         role.policies[-1]["Policy"], set(permissions)
     )
 
@@ -205,21 +203,12 @@ def remove_permissions_from_role(
             LOGGER.error(e)
 
     current_policies = get_role_inline_policies(role.dict(), **conn) or {}
-    roledata.add_new_policy_version(dynamo_table, role, current_policies, "Repo")
+    role.add_policy_version(current_policies, "Repo")
 
-    set_role_data(
-        dynamo_table, role.role_id, {"Repoed": datetime.datetime.utcnow().isoformat()}
-    )
+    role.repoed = datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
     update_repoed_description(role.role_name, conn)
-    partial_update_role_data(
-        role,
-        dynamo_table,
-        account_number,
-        config,
-        conn,
-        hooks,
-        source="ManualPermissionRepo",
-        add_no_repo=False,
+    role.gather_role_data(
+        current_policies, hooks, source="ManualPermissionRepo", add_no_repo=False
     )
     LOGGER.info(
         "Successfully removed {permissions} from role: {role} in account {account_number}".format(

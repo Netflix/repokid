@@ -11,6 +11,7 @@ tabview
 tqdm
 pip-tools
 pydantic
+python-dateutil
 pytz
 raven
 twine

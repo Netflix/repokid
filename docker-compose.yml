@@ -1,0 +1,26 @@
+version: '2'
+services:
+    dynamodb:
+        container_name: dynamodb
+        image: amazon/dynamodb-local:latest
+        entrypoint: java
+        networks:
+          - dynamo
+        command: "-jar DynamoDBLocal.jar -sharedDb -dbPath /data"
+        restart: always
+        volumes:
+          - ./dynamodb-data:/data
+        ports:
+          - "8000:8000"
+    dynamodb_admin:
+        container_name: dynamodb-admin
+        image: aaronshaf/dynamodb-admin:latest
+        networks:
+          - dynamo
+        environment:
+          - DYNAMO_ENDPOINT=http://dynamodb:8000
+        ports:
+          - "8001:8001"
+
+networks:
+    dynamo:

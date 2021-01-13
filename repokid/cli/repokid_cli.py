@@ -196,10 +196,9 @@ def config(ctx: click.Context, filename: str) -> None:
 @click.argument("account_number")
 @click.pass_context
 def update_role_cache(ctx: click.Context, account_number: str) -> None:
-    dynamo_table = ctx.obj["dynamo_table"]
     config = ctx.obj["config"]
     hooks = ctx.obj["hooks"]
-    _update_role_cache(account_number, dynamo_table, config, hooks)
+    _update_role_cache(account_number, config, hooks)
 
 
 @cli.command()
@@ -207,8 +206,7 @@ def update_role_cache(ctx: click.Context, account_number: str) -> None:
 @click.option("--inactive", default=False, help="Include inactive roles")
 @click.pass_context
 def display_role_cache(ctx: click.Context, account_number: str, inactive: bool) -> None:
-    dynamo_table = ctx.obj["dynamo_table"]
-    _display_roles(account_number, dynamo_table, inactive=inactive)
+    _display_roles(account_number, inactive=inactive)
 
 
 @cli.command()
@@ -218,8 +216,7 @@ def display_role_cache(ctx: click.Context, account_number: str, inactive: bool) 
 def find_roles_with_permissions(
     ctx: click.Context, permissions: List[str], output: str
 ) -> None:
-    dynamo_table = ctx.obj["dynamo_table"]
-    _find_roles_with_permissions(permissions, dynamo_table, output)
+    _find_roles_with_permissions(permissions, output)
 
 
 @cli.command()
@@ -230,12 +227,9 @@ def find_roles_with_permissions(
 def remove_permissions_from_roles(
     ctx: click.Context, permissions: List[str], role_file: str, commit: bool
 ) -> None:
-    dynamo_table = ctx.obj["dynamo_table"]
     config = ctx.obj["config"]
     hooks = ctx.obj["hooks"]
-    _remove_permissions_from_roles(
-        permissions, role_file, dynamo_table, config, hooks, commit=commit
-    )
+    _remove_permissions_from_roles(permissions, role_file, config, hooks, commit=commit)
 
 
 @cli.command()
@@ -243,10 +237,8 @@ def remove_permissions_from_roles(
 @click.argument("role_name")
 @click.pass_context
 def display_role(ctx: click.Context, account_number: str, role_name: str) -> None:
-    dynamo_table = ctx.obj["dynamo_table"]
     config = ctx.obj["config"]
-    hooks = ctx.obj["hooks"]
-    _display_role(account_number, role_name, dynamo_table, config, hooks)
+    _display_role(account_number, role_name, config)
 
 
 @cli.command()
@@ -257,10 +249,9 @@ def display_role(ctx: click.Context, account_number: str, role_name: str) -> Non
 def repo_role(
     ctx: click.Context, account_number: str, role_name: str, commit: bool
 ) -> None:
-    dynamo_table = ctx.obj["dynamo_table"]
     config = ctx.obj["config"]
     hooks = ctx.obj["hooks"]
-    _repo_role(account_number, role_name, dynamo_table, config, hooks, commit=commit)
+    _repo_role(account_number, role_name, config, hooks, commit=commit)
 
 
 @cli.command()
@@ -276,17 +267,10 @@ def rollback_role(
     selection: int,
     commit: bool,
 ) -> None:
-    dynamo_table = ctx.obj["dynamo_table"]
     config = ctx.obj["config"]
     hooks = ctx.obj["hooks"]
     _rollback_role(
-        account_number,
-        role_name,
-        dynamo_table,
-        config,
-        hooks,
-        selection=selection,
-        commit=commit,
+        account_number, role_name, config, hooks, selection=selection, commit=commit
     )
 
 
@@ -295,34 +279,29 @@ def rollback_role(
 @click.option("--commit", "-c", default=False, help="Commit changes")
 @click.pass_context
 def repo_all_roles(ctx: click.Context, account_number: str, commit: bool) -> None:
-    dynamo_table = ctx.obj["dynamo_table"]
     config = ctx.obj["config"]
     hooks = ctx.obj["hooks"]
     logger.info("Updating role data")
-    _update_role_cache(account_number, dynamo_table, config, hooks)
-    _repo_all_roles(
-        account_number, dynamo_table, config, hooks, commit=commit, scheduled=False
-    )
+    _update_role_cache(account_number, config, hooks)
+    _repo_all_roles(account_number, config, hooks, commit=commit, scheduled=False)
 
 
 @cli.command()
 @click.argument("account_number")
 @click.pass_context
 def schedule_repo(ctx: click.Context, account_number: str) -> None:
-    dynamo_table = ctx.obj["dynamo_table"]
     config = ctx.obj["config"]
     hooks = ctx.obj["hooks"]
     logger.info("Updating role data")
-    _update_role_cache(account_number, dynamo_table, config, hooks)
-    _schedule_repo(account_number, dynamo_table, config, hooks)
+    _update_role_cache(account_number, config, hooks)
+    _schedule_repo(account_number, config, hooks)
 
 
 @cli.command()
 @click.argument("account_number")
 @click.pass_context
 def show_scheduled_roles(ctx: click.Context, account_number: str) -> None:
-    dynamo_table = ctx.obj["dynamo_table"]
-    _show_scheduled_roles(account_number, dynamo_table)
+    _show_scheduled_roles(account_number)
 
 
 @cli.command()
@@ -333,8 +312,7 @@ def show_scheduled_roles(ctx: click.Context, account_number: str) -> None:
 def cancel_scheduled_repo(
     ctx: click.Context, account_number: str, role: str, all: bool
 ) -> None:
-    dynamo_table = ctx.obj["dynamo_table"]
-    _cancel_scheduled_repo(account_number, dynamo_table, role_name=role, is_all=all)
+    _cancel_scheduled_repo(account_number, role_name=role, is_all=all)
 
 
 @cli.command()
@@ -342,13 +320,10 @@ def cancel_scheduled_repo(
 @click.option("--commit", "-c", default=False, help="Commit changes")
 @click.pass_context
 def repo_scheduled_roles(ctx: click.Context, account_number: str, commit: bool) -> None:
-    dynamo_table = ctx.obj["dynamo_table"]
     config = ctx.obj["config"]
     hooks = ctx.obj["hooks"]
-    _update_role_cache(account_number, dynamo_table, config, hooks)
-    _repo_all_roles(
-        account_number, dynamo_table, config, hooks, commit=commit, scheduled=True
-    )
+    _update_role_cache(account_number, config, hooks)
+    _repo_all_roles(account_number, config, hooks, commit=commit, scheduled=True)
 
 
 @cli.command()
@@ -356,8 +331,7 @@ def repo_scheduled_roles(ctx: click.Context, account_number: str, commit: bool) 
 @click.option("--output", "-o", required=True, help="File to write results to")
 @click.pass_context
 def repo_stats(ctx: click.Context, account_number: str, output: str) -> None:
-    dynamo_table = ctx.obj["dynamo_table"]
-    _repo_stats(output, dynamo_table, account_number=account_number)
+    _repo_stats(output, account_number=account_number)
 
 
 if __name__ == "__main__":
