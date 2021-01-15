@@ -49,3 +49,7 @@ class DynamoDBError(Exception):
 
 class IntegrityError(Exception):
     pass
+
+
+class NotFoundError(Exception):
+    pass

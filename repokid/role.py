@@ -32,15 +32,17 @@ from dateutil.parser import parse as ts_parse
 from pydantic import BaseModel
 from pydantic import Field
 from pydantic import PrivateAttr
+from pydantic import validator
 
 from repokid import CONFIG
+from repokid.datasource.access_advisor import AccessAdvisorDatasource
 from repokid.exceptions import IntegrityError
 from repokid.exceptions import MissingRepoableServices
 from repokid.exceptions import ModelError
+from repokid.exceptions import NotFoundError
 from repokid.exceptions import RoleNotFoundError
 from repokid.types import RepokidConfig
 from repokid.types import RepokidHooks
-from repokid.utils.aardvark import get_aardvark_data
 from repokid.utils.dynamo import create_dynamodb_entry
 from repokid.utils.dynamo import get_role_by_id
 from repokid.utils.dynamo import get_role_by_name
@@ -110,6 +112,10 @@ class Role(BaseModel):
 
     def __repr__(self) -> str:
         return f"<Role {self.role_id}>"
+
+    @validator("create_date")
+    def datetime_normalize(cls, v: datetime.datetime) -> datetime.datetime:
+        return datetime.datetime.fromtimestamp(v.timestamp())
 
     def add_policy_version(
         self, policy: Dict[str, Any], source: str = "Scan", store: bool = True
@@ -259,18 +265,18 @@ class Role(BaseModel):
             fields = list(values.keys())
             self.store(fields=fields)
 
-    def fetch_aa_data(self, config: Optional[RepokidConfig] = None) -> None:
-        config = config or CONFIG
+    def fetch_aa_data(self) -> None:
         if not self.arn:
             raise ModelError(
                 "missing arn on Role instance, cannot retrieve Access Advisor data"
             )
 
-        aardvark_data = get_aardvark_data(
-            config.get("aardvark_api_location", ""), arn=self.arn
-        )
+        aardvark_data = AccessAdvisorDatasource()
 
-        self.aa_data = aardvark_data.get(self.arn)
+        try:
+            self.aa_data = aardvark_data.get(self.arn)
+        except NotFoundError:
+            self.aa_data = []
 
     def fetch(self, fields: Optional[List[str]] = None, update: bool = True) -> None:
         if self._dirty:
@@ -355,7 +361,7 @@ class Role(BaseModel):
         store: bool = True,
     ) -> None:
         config = config or CONFIG
-        self.fetch_aa_data(config=config)
+        self.fetch_aa_data()
         self.add_policy_version(current_policy, source=source, store=False)
         if add_no_repo:
             self._calculate_no_repo_permissions()
@@ -491,6 +497,7 @@ class RoleList(object):
 
     def store(self, fields: Optional[List[str]] = None) -> None:
         for role in self.roles:
+            logger.info("storing role %s", role.arn)
             role.store(fields=fields)
 
     def update_stats(self, source: str = "Scan", store: bool = True) -> None:

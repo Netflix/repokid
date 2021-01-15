@@ -15,7 +15,6 @@ import datetime
 import logging
 import time
 
-from dateutil.tz import tzlocal
 from mock import MagicMock
 from mock import call
 from mock import mock_open
@@ -155,7 +154,9 @@ ROLES = [
     {
         "Account": "123456789012",
         "Arn": "arn:aws:iam::123456789012:role/all_services_used",
-        "CreateDate": datetime.datetime(2017, 1, 31, 12, 0, 0, tzinfo=tzlocal()),
+        "CreateDate": datetime.datetime(
+            2017, 1, 31, 12, 0, 0, tzinfo=datetime.timezone.utc
+        ),
         "RoleId": "AROAABCDEFGHIJKLMNOPA",
         "RoleName": "all_services_used",
         "Active": True,
@@ -163,7 +164,9 @@ ROLES = [
     {
         "Account": "123456789012",
         "Arn": "arn:aws:iam::123456789012:role/unused_ec2",
-        "CreateDate": datetime.datetime(2017, 1, 31, 12, 0, 0, tzinfo=tzlocal()),
+        "CreateDate": datetime.datetime(
+            2017, 1, 31, 12, 0, 0, tzinfo=datetime.timezone.utc
+        ),
         "RoleId": "AROAABCDEFGHIJKLMNOPB",
         "RoleName": "unused_ec2",
         "Active": True,
@@ -171,7 +174,8 @@ ROLES = [
     {
         "Account": "123456789012",
         "Arn": "arn:aws:iam::123456789012:role/young_role",
-        "CreateDate": datetime.datetime.now(tzlocal()) - datetime.timedelta(5),
+        "CreateDate": datetime.datetime.now(datetime.timezone.utc)
+        - datetime.timedelta(5),
         "RoleId": "AROAABCDEFGHIJKLMNOPC",
         "RoleName": "young_role",
         "Active": True,
@@ -179,7 +183,8 @@ ROLES = [
     {
         "Account": "123456789012",
         "Arn": "arn:aws:iam::123456789012:role/inactive_role",
-        "CreateDate": datetime.datetime.now(tzlocal()) - datetime.timedelta(5),
+        "CreateDate": datetime.datetime.now(datetime.timezone.utc)
+        - datetime.timedelta(5),
         "RoleId": "AROAABCDEFGHIJKLMNOPD",
         "RoleName": "inactive_role",
         "Active": False,
@@ -187,7 +192,9 @@ ROLES = [
     {
         "Account": "123456789012",
         "Arn": "arn:aws:iam::123456789012:role/additional_unused_ec2",
-        "CreateDate": datetime.datetime(2017, 1, 31, 12, 0, 0, tzinfo=tzlocal()),
+        "CreateDate": datetime.datetime(
+            2017, 1, 31, 12, 0, 0, tzinfo=datetime.timezone.utc
+        ),
         "RoleId": "AROAXYZDEFGHIJKLMNOPB",
         "RoleName": "unused_ec2",
         "Active": True,
@@ -195,7 +202,9 @@ ROLES = [
     {
         "Account": "123456789012",
         "Arn": "arn:aws:iam::123456789012:role/unused_iam",
-        "CreateDate": datetime.datetime(2017, 1, 31, 12, 0, 0, tzinfo=tzlocal()),
+        "CreateDate": datetime.datetime(
+            2017, 1, 31, 12, 0, 0, tzinfo=datetime.timezone.utc
+        ),
         "RoleId": "AROAXYZDEFGHIJKLMNABC",
         "RoleName": "unused_ec2",
         "Active": True,
@@ -264,7 +273,7 @@ class TestRepokidCLI(object):
     @patch("repokid.commands.role_cache.find_and_mark_inactive")
     @patch("repokid.commands.role_cache.RoleList.store")
     @patch("repokid.commands.role_cache.Role.gather_role_data")
-    @patch("repokid.commands.role_cache.get_account_authorization_details")
+    @patch("repokid.datasource.iam.get_account_authorization_details")
     def test_repokid_update_role_cache(
         self,
         mock_get_account_authorization_details,
