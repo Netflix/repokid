@@ -12,6 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+import logging
 from typing import Dict
 from typing import Generic
 from typing import ItemsView
@@ -26,38 +27,41 @@ from typing import cast
 from repokid.plugin import RepokidPlugin
 from repokid.types import RepokidConfig
 
-T = TypeVar("T")
+logger = logging.getLogger("repokid")
+KT = TypeVar("KT")
+VT = TypeVar("VT")
 
 
-class DatasourcePlugin(RepokidPlugin, Generic[T]):
+class DatasourcePlugin(RepokidPlugin, Generic[KT, VT]):
     """A dict-like container that can be used to retrieve and store data"""
 
-    _data: Dict[str, T]
+    _data: Dict[KT, VT]
 
     def __init__(self, config: Optional[RepokidConfig] = None):
         super().__init__(config=config)
         self._data = {}
 
-    def __getitem__(self, name: str) -> T:
+    def __getitem__(self, name: KT) -> VT:
         return self._data[name]
 
-    def __iter__(self) -> Iterator[T]:
-        return iter(cast(Iterable[T], self._data))
+    def __iter__(self) -> Iterator[VT]:
+        return iter(cast(Iterable[VT], self._data))
 
-    def keys(self) -> KeysView[str]:
+    def keys(self) -> KeysView[KT]:
         return self._data.keys()
 
-    def items(self) -> ItemsView[str, T]:
+    def items(self) -> ItemsView[KT, VT]:
         return self._data.items()
 
-    def values(self) -> ValuesView[T]:
+    def values(self) -> ValuesView[VT]:
         return self._data.values()
 
-    def get(self, identifier: str) -> T:
+    def get(self, identifier: KT) -> VT:
         raise NotImplementedError
 
-    def seed(self, identifier: str) -> None:
+    def seed(self, identifier: KT) -> None:
         raise NotImplementedError
 
     def reset(self) -> None:
+        logger.debug("resetting %s", type(self).__name__)
         self._data = {}

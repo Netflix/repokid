@@ -24,3 +24,6 @@ RepokidHook = Callable[[Dict[str, Any]], Dict[str, Any]]
 RepokidHooks = DefaultDict[str, List[RepokidHook]]
 RepokidHookInput = Dict[str, Any]
 RepokidHookOutput = RepokidHookInput
+AccessAdvisorEntry = List[Dict[str, Any]]
+AardvarkResponse = Dict[str, AccessAdvisorEntry]
+IAMEntry = Dict[str, Any]

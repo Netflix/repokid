@@ -448,9 +448,9 @@ def test_role_update_by_alias(role_dict):
     assert r.repoable_permissions == 20
 
 
-@patch("repokid.role.get_aardvark_data")
+@patch("repokid.role.AccessAdvisorDatasource.get")
 def test_role_fetch_aa_data(mock_get_aardvark_data, role_dict):
-    mock_get_aardvark_data.return_value = {vars.arn: [{"a": "b"}]}
+    mock_get_aardvark_data.return_value = [{"a": "b"}]
     r = Role(**role_dict)
     r.fetch_aa_data()
     assert r.aa_data[0]

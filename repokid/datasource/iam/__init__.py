@@ -14,8 +14,6 @@
 
 import copy
 import logging
-from typing import Any
-from typing import Dict
 from typing import Optional
 
 from cloudaux.aws.iam import get_account_authorization_details
@@ -23,25 +21,26 @@ from cloudaux.aws.iam import get_account_authorization_details
 from repokid.datasource import DatasourcePlugin
 from repokid.exceptions import NotFoundError
 from repokid.plugin import Singleton
+from repokid.types import IAMEntry
 from repokid.types import RepokidConfig
 
 logger = logging.getLogger("repokid")
 
 
-class IAMDatasource(DatasourcePlugin[Dict[str, Any]], Singleton):
+class IAMDatasource(DatasourcePlugin[str, IAMEntry], Singleton):
     def __init__(self, config: Optional[RepokidConfig] = None):
         super().__init__(config=config)
 
-    def get(self, identifier: str) -> Dict[str, Any]:
-        result = self._data.get(identifier)
+    def get(self, arn: str) -> IAMEntry:
+        result = self._data.get(arn)
         if not result:
             raise NotFoundError
         return result
 
-    def seed(self, identifier: str) -> None:
-        logger.info("getting role data for account %s", identifier)
+    def seed(self, account_number: str) -> None:
+        logger.info("getting role data for account %s", account_number)
         conn = copy.deepcopy(self.config["connection_iam"])
-        conn["account_number"] = identifier
+        conn["account_number"] = account_number
         auth_details = get_account_authorization_details(filter="Role", **conn)
         auth_details_by_id = {item["RoleId"]: item for item in auth_details}
         # convert policies list to dictionary to maintain consistency with old call which returned a dict
@@ -53,11 +52,11 @@ class IAMDatasource(DatasourcePlugin[Dict[str, Any]], Singleton):
         self._data.update(auth_details_by_id)
 
 
-class ConfigDatasource(DatasourcePlugin[Dict[str, Any]], Singleton):
+class ConfigDatasource(DatasourcePlugin[str, IAMEntry], Singleton):
     def __init__(self, config: Optional[RepokidConfig] = None):
         super().__init__(config=config)
 
-    def get(self, identifier: str) -> Dict[str, Any]:
+    def get(self, identifier: str) -> IAMEntry:
         pass
 
     def seed(self, identifier: str) -> None:

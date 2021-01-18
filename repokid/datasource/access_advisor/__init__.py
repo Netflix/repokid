@@ -15,7 +15,6 @@
 import logging
 from typing import Any
 from typing import Dict
-from typing import List
 from typing import Optional
 
 import requests
@@ -24,18 +23,20 @@ from repokid.datasource import DatasourcePlugin
 from repokid.exceptions import AardvarkError
 from repokid.exceptions import NotFoundError
 from repokid.plugin import Singleton
+from repokid.types import AardvarkResponse
+from repokid.types import AccessAdvisorEntry
 from repokid.types import RepokidConfig
 
 logger = logging.getLogger("repokid")
 
 
-class AccessAdvisorDatasource(DatasourcePlugin[List[Dict[str, Any]]], Singleton):
+class AccessAdvisorDatasource(DatasourcePlugin[str, AccessAdvisorEntry], Singleton):
     def __init__(self, config: Optional[RepokidConfig] = None):
         super().__init__(config=config)
 
     def _fetch(
         self, account_number: str = "", arn: str = ""
-    ) -> Dict[str, List[Dict[str, Any]]]:
+    ) -> Dict[str, AccessAdvisorEntry]:
         """
         Make a request to the Aardvark server to get all data about a given account or ARN.
         We'll request in groups of PAGE_SIZE and check the current count to see if we're done. Keep requesting as long
@@ -53,7 +54,7 @@ class AccessAdvisorDatasource(DatasourcePlugin[List[Dict[str, Any]]], Singleton)
         if not api_location:
             raise AardvarkError("aardvark not configured")
 
-        response_data: Dict[str, List[Dict[str, Any]]] = {}
+        response_data: AardvarkResponse = {}
 
         PAGE_SIZE = 1000
         page_num = 1
@@ -88,17 +89,18 @@ class AccessAdvisorDatasource(DatasourcePlugin[List[Dict[str, Any]]], Singleton)
                     break
         return response_data
 
-    def get(self, identifier: str) -> List[Dict[str, Any]]:
-        result = self._data.get(identifier)
+    def get(self, arn: str) -> AccessAdvisorEntry:
+        result = self._data.get(arn)
         if result:
             return result
 
         # Try to get data from Aardvark
-        result = self._fetch(arn=identifier).get(identifier)
+        result = self._fetch(arn=arn).get(arn)
         if result:
+            self._data[arn] = result
             return result
         raise NotFoundError
 
-    def seed(self, identifier: str) -> None:
-        aa_data = self._fetch(account_number=identifier)
+    def seed(self, account_number: str) -> None:
+        aa_data = self._fetch(account_number=account_number)
         self._data.update(aa_data)

@@ -31,11 +31,16 @@ class RepokidPlugin:
 
 
 class Singleton:
-    _instance: Singleton
+    _instance: Optional[Singleton] = None
 
     def __new__(cls) -> Singleton:
         if not cls._instance:
             # TODO: drop this log line to debug
             logger.info("creating new instance of %s", cls.__name__)
             cls._instance = super(Singleton, cls).__new__(cls)
-        return cls._instance
+
+        # We know that this will always be a Singleton, but mypy doesn't. Rude.
+        if isinstance(cls._instance, Singleton):
+            return cls._instance
+        else:
+            raise Exception("something bad happened")
