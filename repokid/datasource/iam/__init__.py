@@ -14,6 +14,7 @@
 
 import copy
 import logging
+from typing import Dict
 from typing import Optional
 
 from cloudaux.aws.iam import get_account_authorization_details
@@ -31,13 +32,7 @@ class IAMDatasource(DatasourcePlugin[str, IAMEntry], Singleton):
     def __init__(self, config: Optional[RepokidConfig] = None):
         super().__init__(config=config)
 
-    def get(self, arn: str) -> IAMEntry:
-        result = self._data.get(arn)
-        if not result:
-            raise NotFoundError
-        return result
-
-    def seed(self, account_number: str) -> None:
+    def _fetch(self, account_number: str) -> Dict[str, IAMEntry]:
         logger.info("getting role data for account %s", account_number)
         conn = copy.deepcopy(self.config["connection_iam"])
         conn["account_number"] = account_number
@@ -49,7 +44,17 @@ class IAMDatasource(DatasourcePlugin[str, IAMEntry], Singleton):
                 item["PolicyName"]: item["PolicyDocument"]
                 for item in data["RolePolicyList"]
             }
-        self._data.update(auth_details_by_id)
+        return auth_details_by_id
+
+    def get(self, arn: str) -> IAMEntry:
+        result = self._data.get(arn)
+        if not result:
+            raise NotFoundError
+        return result
+
+    def seed(self, account_number: str) -> None:
+        fetched_data = self._fetch(account_number)
+        self._data.update(fetched_data)
 
 
 class ConfigDatasource(DatasourcePlugin[str, IAMEntry], Singleton):

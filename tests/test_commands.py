@@ -273,10 +273,12 @@ class TestRepokidCLI(object):
     @patch("repokid.commands.role_cache.find_and_mark_inactive")
     @patch("repokid.commands.role_cache.RoleList.store")
     @patch("repokid.commands.role_cache.Role.gather_role_data")
-    @patch("repokid.datasource.iam.get_account_authorization_details")
+    @patch("repokid.commands.role_cache.AccessAdvisorDatasource")
+    @patch("repokid.datasource.iam.IAMDatasource._fetch")
     def test_repokid_update_role_cache(
         self,
-        mock_get_account_authorization_details,
+        mock_iam_datasource_fetch,
+        mock_access_advisor_datasource,
         mock_gather_role_data,
         mock_role_list_store,
         mock_find_and_mark_inactive,
@@ -300,8 +302,9 @@ class TestRepokidCLI(object):
                 "PolicyDocument": ROLE_POLICIES["all_services_used"],
             }
         ]
+        role_data = {item["RoleId"]: item for item in role_data}
 
-        mock_get_account_authorization_details.side_effect = [role_data]
+        mock_iam_datasource_fetch.return_value = role_data
 
         config = {
             "aardvark_api_location": "",
@@ -323,18 +326,16 @@ class TestRepokidCLI(object):
         assert mock_gather_role_data.call_count == 3
 
         # all roles active
-        assert mock_find_and_mark_inactive.mock_calls == [
-            call(
-                account_number,
-                RoleList(
-                    [
-                        Role(**ROLES[0]),
-                        Role(**ROLES[1]),
-                        Role(**ROLES[2]),
-                    ]
-                ),
-            )
-        ]
+        assert mock_find_and_mark_inactive.mock_calls[-1] == call(
+            account_number,
+            RoleList(
+                [
+                    Role(**ROLES[0]),
+                    Role(**ROLES[1]),
+                    Role(**ROLES[2]),
+                ]
+            ),
+        )
 
     @patch("tabview.view")
     @patch("repokid.commands.role.RoleList.from_ids")
