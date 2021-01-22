@@ -19,7 +19,7 @@ from typing import Optional
 
 from cloudaux.aws.iam import get_account_authorization_details
 
-from repokid.datasource import DatasourcePlugin
+from repokid.datasource.plugin import DatasourcePlugin
 from repokid.exceptions import NotFoundError
 from repokid.plugin import Singleton
 from repokid.types import IAMEntry

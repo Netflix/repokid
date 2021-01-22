@@ -19,7 +19,7 @@ from typing import Optional
 
 import requests
 
-from repokid.datasource import DatasourcePlugin
+from repokid.datasource.plugin import DatasourcePlugin
 from repokid.exceptions import AardvarkError
 from repokid.exceptions import NotFoundError
 from repokid.plugin import Singleton
