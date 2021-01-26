@@ -201,7 +201,7 @@ def update_role_cache(ctx: click.Context, account_number: str) -> None:
 
 @cli.command()
 @click.argument("account_number")
-@click.option("--inactive", default=False, help="Include inactive roles")
+@click.option("--inactive", is_flag=True, default=False, help="Include inactive roles")
 @click.pass_context
 def display_role_cache(ctx: click.Context, account_number: str, inactive: bool) -> None:
     _display_roles(account_number, inactive=inactive)
@@ -220,7 +220,7 @@ def find_roles_with_permissions(
 @cli.command()
 @click.argument("permissions", nargs=-1)
 @click.option("--role-file", "-f", required=True, help="File to read roles from")
-@click.option("--commit", "-c", default=False, help="Commit changes")
+@click.option("--commit", "-c", is_flag=True, default=False, help="Commit changes")
 @click.pass_context
 def remove_permissions_from_roles(
     ctx: click.Context, permissions: List[str], role_file: str, commit: bool
@@ -242,7 +242,7 @@ def display_role(ctx: click.Context, account_number: str, role_name: str) -> Non
 @cli.command()
 @click.argument("account_number")
 @click.argument("role_name")
-@click.option("--commit", "-c", default=False, help="Commit changes")
+@click.option("--commit", "-c", is_flag=True, default=False, help="Commit changes")
 @click.pass_context
 def repo_role(
     ctx: click.Context, account_number: str, role_name: str, commit: bool
@@ -256,7 +256,7 @@ def repo_role(
 @click.argument("account_number")
 @click.argument("role_name")
 @click.option("--selection", "-s", required=True, type=int)
-@click.option("--commit", "-c", default=False, help="Commit changes")
+@click.option("--commit", "-c", is_flag=True, default=False, help="Commit changes")
 @click.pass_context
 def rollback_role(
     ctx: click.Context,
@@ -274,7 +274,7 @@ def rollback_role(
 
 @cli.command()
 @click.argument("account_number")
-@click.option("--commit", "-c", default=False, help="Commit changes")
+@click.option("--commit", "-c", is_flag=True, default=False, help="Commit changes")
 @click.pass_context
 def repo_all_roles(ctx: click.Context, account_number: str, commit: bool) -> None:
     config = ctx.obj["config"]
@@ -305,7 +305,7 @@ def show_scheduled_roles(ctx: click.Context, account_number: str) -> None:
 @cli.command()
 @click.argument("account_number")
 @click.option("--role", "-r", required=False, type=str)
-@click.option("--all", "-a", default=False, help="Commit changes")
+@click.option("--all", "-a", default=False)
 @click.pass_context
 def cancel_scheduled_repo(
     ctx: click.Context, account_number: str, role: str, all: bool
@@ -315,7 +315,7 @@ def cancel_scheduled_repo(
 
 @cli.command()
 @click.argument("account_number")
-@click.option("--commit", "-c", default=False, help="Commit changes")
+@click.option("--commit", "-c", is_flag=True, default=False, help="Commit changes")
 @click.pass_context
 def repo_scheduled_roles(ctx: click.Context, account_number: str, commit: bool) -> None:
     config = ctx.obj["config"]

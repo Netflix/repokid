@@ -150,7 +150,7 @@ def _rollback_role(
     role_name: str,
     config: RepokidConfig,
     hooks: RepokidHooks,
-    selection: int = 0,
+    selection: int = -1,
     commit: bool = False,
 ) -> List[str]:
     """
@@ -181,7 +181,7 @@ def _rollback_role(
         role.fetch()
 
     # no option selected, display a table of options
-    if not selection:
+    if selection < 0:
         headers = ["Number", "Source", "Discovered", "Permissions", "Services"]
         rows = []
         for index, policies_version in enumerate(role.policies):
@@ -203,25 +203,24 @@ def _rollback_role(
     conn = config["connection_iam"]
     conn["account_number"] = account_number
 
-    current_policies = get_role_inline_policies(role.dict(), **conn)
+    current_policies = get_role_inline_policies(role.dict(by_alias=True), **conn)
 
-    if selection:
-        pp = pprint.PrettyPrinter()
+    pp = pprint.PrettyPrinter()
 
-        print("Will restore the following policies:")
-        pp.pprint(role.policies[int(selection)]["Policy"])
+    print("Will restore the following policies:")
+    pp.pprint(role.policies[int(selection)]["Policy"])
 
-        print("Current policies:")
-        pp.pprint(current_policies)
+    print("Current policies:")
+    pp.pprint(current_policies)
 
-        current_permissions, _ = role.get_permissions_for_policy_version()
-        selected_permissions, _ = role.get_permissions_for_policy_version(
-            selection=selection
-        )
-        restored_permissions = selected_permissions - current_permissions
+    current_permissions, _ = role.get_permissions_for_policy_version()
+    selected_permissions, _ = role.get_permissions_for_policy_version(
+        selection=selection
+    )
+    restored_permissions = selected_permissions - current_permissions
 
-        print("\nResore will return these permissions:")
-        print("\n".join([perm for perm in sorted(restored_permissions)]))
+    print("\nResore will return these permissions:")
+    print("\n".join([perm for perm in sorted(restored_permissions)]))
 
     if not commit:
         return errors
@@ -277,6 +276,7 @@ def _rollback_role(
                 LOGGER.error(message, exc_info=True)
                 errors.append(message)
 
+    role.store()
     role.gather_role_data(current_policies, hooks, source="Restore", add_no_repo=False)
 
     if not errors:
