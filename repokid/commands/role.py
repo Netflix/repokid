@@ -236,7 +236,10 @@ def _display_role(
     for permission in permissions:
         service = permission.split(":")[0]
         action = permission.split(":")[1]
-        repoable = permission in role.repoable_services
+        repoable = (
+            permission in role.repoable_services
+            or permission.split(":")[0] in role.repoable_services
+        )
         rows.append([service, action, repoable])
 
     rows = sorted(rows, key=lambda x: (x[2], x[0], x[1]))
