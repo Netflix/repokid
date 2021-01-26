@@ -73,8 +73,10 @@ def _repo_role(
 
     continuing = True
 
-    if not role.is_eligible_for_repo():
-        continuing = False
+    eligible, reason = role.is_eligible_for_repo()
+    if not eligible:
+        errors.append(f"Role {role_name} not eligible for repo: {reason}")
+        return errors
 
     role.calculate_repo_scores(
         config["filter_config"]["AgeFilter"]["minimum_age"], hooks
@@ -120,7 +122,7 @@ def _repo_role(
             LOGGER.error(e)
             errors.append(str(e))
 
-    current_policies = get_role_inline_policies(role.dict(), **conn) or {}
+    current_policies = get_role_inline_policies(role.dict(by_alias=True), **conn) or {}
     role.add_policy_version(current_policies, source="Repo")
 
     # regardless of whether we're successful we want to unschedule the repo

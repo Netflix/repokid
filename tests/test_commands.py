@@ -435,14 +435,16 @@ class TestRepokidCLI(object):
         # first role is not repoable, second role is repoable
         test_roles = [
             ROLES_FOR_DISPLAY[0].copy(
-                update=Role(**{"RoleId": "AROAABCDEFGHIJKLMNOPA"}).dict(
-                    exclude_unset=True
-                )
+                update=Role(**{"RoleId": "AROAABCDEFGHIJKLMNOPA"}).dict()
             ),
             ROLES_FOR_DISPLAY[1].copy(
                 update=Role(
-                    **{"RoleId": "AROAABCDEFGHIJKLMNOPB", "AAData": [{"foo": "bar"}]}
-                ).dict(exclude_unset=True)
+                    **{
+                        "RoleId": "AROAABCDEFGHIJKLMNOPB",
+                        "AAData": [{"foo": "bar"}],
+                        "RepoablePermissions": 10,
+                    }
+                ).dict()
             ),
         ]
         mock_role_list_from_ids.return_value = RoleList([test_roles[0], test_roles[1]])

@@ -103,12 +103,11 @@ def test_role_add_policy_version_duplicate(
     mock_store, mock_calculate_no_repo_permissions, role_dict
 ):
     r = Role(**role_dict)
-    source = "Test"
+    source = "Fixture"
     fake_policy = vars.policies[0]["Policy"]
     assert len(r.policies) == 1
     r.add_policy_version(fake_policy, source=source, store=True)
     assert len(r.policies) == 1
-    assert r.policies[0]["Source"] != source
     assert r.policies[0]["Policy"] == fake_policy
     mock_calculate_no_repo_permissions.assert_not_called()
     mock_store.assert_not_called()
@@ -512,7 +511,6 @@ def test_role_store(
 ):
     expected = copy.deepcopy(role_dict_with_aliases)
     expected.pop("RoleId")
-    expected.pop("RoleName")
     expected.pop("Account")
     mock_get_role_by_id.return_value = {
         "LastUpdated": vars.last_updated.strftime("%Y-%m-%d %H:%M")

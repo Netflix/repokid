@@ -65,7 +65,7 @@ def _update_role_cache(
     LOGGER.info("Updating role data for account {}".format(account_number))
     for role in tqdm(roles):
         role.account = account_number
-        current_policies = iam_datasource[role.role_id]["RolePolicyList"]
+        current_policies = iam_datasource[role.role_id].get("RolePolicyList", {})
         role.gather_role_data(
             current_policies, hooks, config, source="Scan", store=False
         )
