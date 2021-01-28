@@ -18,8 +18,6 @@ clients.
 """
 from typing import List
 
-from mypy_boto3_dynamodb.service_resource import Table
-
 from repokid import CONFIG
 from repokid import get_hooks
 from repokid.commands.repo import _repo_all_roles
@@ -34,10 +32,8 @@ from repokid.commands.role_cache import _update_role_cache
 from repokid.commands.schedule import _cancel_scheduled_repo
 from repokid.commands.schedule import _schedule_repo
 from repokid.commands.schedule import _show_scheduled_roles
-from repokid.utils.dynamo import dynamo_get_or_create_table
 
 hooks = get_hooks(CONFIG.get("hooks", ["repokid.hooks.loggers"]))
-dynamo_table: Table = dynamo_get_or_create_table(**CONFIG["dynamo_db"])
 
 
 def update_role_cache(account_number: str) -> None:

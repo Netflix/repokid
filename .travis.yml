@@ -11,7 +11,7 @@ install:
 - pip install -r requirements.txt -r requirements-test.txt
 - pip install .
 script:
-- pre-commit run
+- pre-commit run -a
 - coverage run --source repokid -m py.test
 - bandit -r . -ll -ii -x repokid/tests/
 after_success:

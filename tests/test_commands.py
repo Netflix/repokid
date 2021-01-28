@@ -15,7 +15,6 @@ import datetime
 import logging
 import time
 
-from dateutil.tz import tzlocal
 from mock import MagicMock
 from mock import call
 from mock import mock_open
@@ -155,7 +154,9 @@ ROLES = [
     {
         "Account": "123456789012",
         "Arn": "arn:aws:iam::123456789012:role/all_services_used",
-        "CreateDate": datetime.datetime(2017, 1, 31, 12, 0, 0, tzinfo=tzlocal()),
+        "CreateDate": datetime.datetime(
+            2017, 1, 31, 12, 0, 0, tzinfo=datetime.timezone.utc
+        ),
         "RoleId": "AROAABCDEFGHIJKLMNOPA",
         "RoleName": "all_services_used",
         "Active": True,
@@ -163,7 +164,9 @@ ROLES = [
     {
         "Account": "123456789012",
         "Arn": "arn:aws:iam::123456789012:role/unused_ec2",
-        "CreateDate": datetime.datetime(2017, 1, 31, 12, 0, 0, tzinfo=tzlocal()),
+        "CreateDate": datetime.datetime(
+            2017, 1, 31, 12, 0, 0, tzinfo=datetime.timezone.utc
+        ),
         "RoleId": "AROAABCDEFGHIJKLMNOPB",
         "RoleName": "unused_ec2",
         "Active": True,
@@ -171,7 +174,8 @@ ROLES = [
     {
         "Account": "123456789012",
         "Arn": "arn:aws:iam::123456789012:role/young_role",
-        "CreateDate": datetime.datetime.now(tzlocal()) - datetime.timedelta(5),
+        "CreateDate": datetime.datetime.now(datetime.timezone.utc)
+        - datetime.timedelta(5),
         "RoleId": "AROAABCDEFGHIJKLMNOPC",
         "RoleName": "young_role",
         "Active": True,
@@ -179,7 +183,8 @@ ROLES = [
     {
         "Account": "123456789012",
         "Arn": "arn:aws:iam::123456789012:role/inactive_role",
-        "CreateDate": datetime.datetime.now(tzlocal()) - datetime.timedelta(5),
+        "CreateDate": datetime.datetime.now(datetime.timezone.utc)
+        - datetime.timedelta(5),
         "RoleId": "AROAABCDEFGHIJKLMNOPD",
         "RoleName": "inactive_role",
         "Active": False,
@@ -187,7 +192,9 @@ ROLES = [
     {
         "Account": "123456789012",
         "Arn": "arn:aws:iam::123456789012:role/additional_unused_ec2",
-        "CreateDate": datetime.datetime(2017, 1, 31, 12, 0, 0, tzinfo=tzlocal()),
+        "CreateDate": datetime.datetime(
+            2017, 1, 31, 12, 0, 0, tzinfo=datetime.timezone.utc
+        ),
         "RoleId": "AROAXYZDEFGHIJKLMNOPB",
         "RoleName": "unused_ec2",
         "Active": True,
@@ -195,7 +202,9 @@ ROLES = [
     {
         "Account": "123456789012",
         "Arn": "arn:aws:iam::123456789012:role/unused_iam",
-        "CreateDate": datetime.datetime(2017, 1, 31, 12, 0, 0, tzinfo=tzlocal()),
+        "CreateDate": datetime.datetime(
+            2017, 1, 31, 12, 0, 0, tzinfo=datetime.timezone.utc
+        ),
         "RoleId": "AROAXYZDEFGHIJKLMNABC",
         "RoleName": "unused_ec2",
         "Active": True,
@@ -264,10 +273,12 @@ class TestRepokidCLI(object):
     @patch("repokid.commands.role_cache.find_and_mark_inactive")
     @patch("repokid.commands.role_cache.RoleList.store")
     @patch("repokid.commands.role_cache.Role.gather_role_data")
-    @patch("repokid.commands.role_cache.get_account_authorization_details")
+    @patch("repokid.commands.role_cache.AccessAdvisorDatasource")
+    @patch("repokid.datasource.iam.IAMDatasource._fetch")
     def test_repokid_update_role_cache(
         self,
-        mock_get_account_authorization_details,
+        mock_iam_datasource_fetch,
+        mock_access_advisor_datasource,
         mock_gather_role_data,
         mock_role_list_store,
         mock_find_and_mark_inactive,
@@ -291,8 +302,9 @@ class TestRepokidCLI(object):
                 "PolicyDocument": ROLE_POLICIES["all_services_used"],
             }
         ]
+        role_data = {item["RoleId"]: item for item in role_data}
 
-        mock_get_account_authorization_details.side_effect = [role_data]
+        mock_iam_datasource_fetch.return_value = role_data
 
         config = {
             "aardvark_api_location": "",
@@ -314,18 +326,16 @@ class TestRepokidCLI(object):
         assert mock_gather_role_data.call_count == 3
 
         # all roles active
-        assert mock_find_and_mark_inactive.mock_calls == [
-            call(
-                account_number,
-                RoleList(
-                    [
-                        Role(**ROLES[0]),
-                        Role(**ROLES[1]),
-                        Role(**ROLES[2]),
-                    ]
-                ),
-            )
-        ]
+        assert mock_find_and_mark_inactive.mock_calls[-1] == call(
+            account_number,
+            RoleList(
+                [
+                    Role(**ROLES[0]),
+                    Role(**ROLES[1]),
+                    Role(**ROLES[2]),
+                ]
+            ),
+        )
 
     @patch("tabview.view")
     @patch("repokid.commands.role.RoleList.from_ids")
@@ -425,14 +435,16 @@ class TestRepokidCLI(object):
         # first role is not repoable, second role is repoable
         test_roles = [
             ROLES_FOR_DISPLAY[0].copy(
-                update=Role(**{"RoleId": "AROAABCDEFGHIJKLMNOPA"}).dict(
-                    exclude_unset=True
-                )
+                update=Role(**{"RoleId": "AROAABCDEFGHIJKLMNOPA"}).dict()
             ),
             ROLES_FOR_DISPLAY[1].copy(
                 update=Role(
-                    **{"RoleId": "AROAABCDEFGHIJKLMNOPB", "AAData": [{"foo": "bar"}]}
-                ).dict(exclude_unset=True)
+                    **{
+                        "RoleId": "AROAABCDEFGHIJKLMNOPB",
+                        "AAData": [{"foo": "bar"}],
+                        "RepoablePermissions": 10,
+                    }
+                ).dict()
             ),
         ]
         mock_role_list_from_ids.return_value = RoleList([test_roles[0], test_roles[1]])

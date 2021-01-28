@@ -23,6 +23,7 @@ from tabulate import tabulate
 from tqdm import tqdm
 
 import repokid.hooks
+from repokid.exceptions import MissingRepoableServices
 from repokid.role import Role
 from repokid.role import RoleList
 from repokid.types import RepokidConfig
@@ -235,22 +236,26 @@ def _display_role(
     for permission in permissions:
         service = permission.split(":")[0]
         action = permission.split(":")[1]
-        repoable = permission in role.repoable_services
+        is_repoable_permission = permission in role.repoable_services
+        is_repoable_service = permission.split(":")[0] in role.repoable_services
+        # repoable is is True if the action (`permission`) is in the list of repoable
+        # services OR if the service (`permission.split(":")[0]`) is in the list
+        repoable = is_repoable_permission or is_repoable_service
         rows.append([service, action, repoable])
 
     rows = sorted(rows, key=lambda x: (x[2], x[0], x[1]))
     print(tabulate(rows, headers=headers) + "\n\n")
 
-    repoed_policies, _ = role.get_repoed_policy()
-
-    if repoed_policies:
+    try:
+        repoed_policies, _ = role.get_repoed_policy()
         print(
             "Repo'd Policies: \n{}".format(
                 json.dumps(repoed_policies, indent=2, sort_keys=True)
             )
         )
-    else:
+    except MissingRepoableServices:
         print("All Policies Removed")
+        repoed_policies = {}
 
     # need to check if all policies would be too large
     if inline_policies_size_exceeds_maximum(repoed_policies):

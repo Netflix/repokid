@@ -162,6 +162,10 @@ def create_dynamodb_entry(
     values: Dict[str, Any], dynamo_table: Optional[Table] = None
 ) -> None:
     table = dynamo_table or ROLE_TABLE
+    for key, value in values.items():
+        value = _empty_string_to_dynamo_replace(value)
+        value = _datetime_to_string_replace(value)
+        values[key] = value
     try:
         table.put_item(Item=values)
     except BotoClientError:

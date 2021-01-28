@@ -34,7 +34,6 @@ from repokid.commands.schedule import _cancel_scheduled_repo
 from repokid.commands.schedule import _schedule_repo
 from repokid.commands.schedule import _show_scheduled_roles
 from repokid.types import RepokidConfig
-from repokid.utils.dynamo import dynamo_get_or_create_table
 
 logger = logging.getLogger("repokid")
 
@@ -84,7 +83,7 @@ def _generate_default_config(filename: str = "") -> RepokidConfig:
         "dynamo_db": {
             "assume_role": "RepokidRole",
             "account_number": "<DYNAMO_TABLE_ACCOUNT_NUMBER>",
-            "endpoint": "<DYNAMO_TABLE_ENDPOINT>",
+            "endpoint": "<DYNAMO_TABLE_ENDPOINT (http://localhost:8000 if using docker compose)>",
             "region": "<DYNAMO_TABLE_REGION>",
             "session_name": "repokid",
         },
@@ -182,7 +181,6 @@ def cli(ctx: click.Context) -> None:
 
     ctx.obj["config"] = config
     ctx.obj["hooks"] = get_hooks(config.get("hooks", ["repokid.hooks.loggers"]))
-    ctx.obj["dynamo_table"] = dynamo_get_or_create_table(**config["dynamo_db"])
 
 
 @cli.command()
@@ -203,7 +201,7 @@ def update_role_cache(ctx: click.Context, account_number: str) -> None:
 
 @cli.command()
 @click.argument("account_number")
-@click.option("--inactive", default=False, help="Include inactive roles")
+@click.option("--inactive", is_flag=True, default=False, help="Include inactive roles")
 @click.pass_context
 def display_role_cache(ctx: click.Context, account_number: str, inactive: bool) -> None:
     _display_roles(account_number, inactive=inactive)
@@ -222,7 +220,7 @@ def find_roles_with_permissions(
 @cli.command()
 @click.argument("permissions", nargs=-1)
 @click.option("--role-file", "-f", required=True, help="File to read roles from")
-@click.option("--commit", "-c", default=False, help="Commit changes")
+@click.option("--commit", "-c", is_flag=True, default=False, help="Commit changes")
 @click.pass_context
 def remove_permissions_from_roles(
     ctx: click.Context, permissions: List[str], role_file: str, commit: bool
@@ -244,7 +242,7 @@ def display_role(ctx: click.Context, account_number: str, role_name: str) -> Non
 @cli.command()
 @click.argument("account_number")
 @click.argument("role_name")
-@click.option("--commit", "-c", default=False, help="Commit changes")
+@click.option("--commit", "-c", is_flag=True, default=False, help="Commit changes")
 @click.pass_context
 def repo_role(
     ctx: click.Context, account_number: str, role_name: str, commit: bool
@@ -258,7 +256,7 @@ def repo_role(
 @click.argument("account_number")
 @click.argument("role_name")
 @click.option("--selection", "-s", required=True, type=int)
-@click.option("--commit", "-c", default=False, help="Commit changes")
+@click.option("--commit", "-c", is_flag=True, default=False, help="Commit changes")
 @click.pass_context
 def rollback_role(
     ctx: click.Context,
@@ -276,7 +274,7 @@ def rollback_role(
 
 @cli.command()
 @click.argument("account_number")
-@click.option("--commit", "-c", default=False, help="Commit changes")
+@click.option("--commit", "-c", is_flag=True, default=False, help="Commit changes")
 @click.pass_context
 def repo_all_roles(ctx: click.Context, account_number: str, commit: bool) -> None:
     config = ctx.obj["config"]
@@ -307,7 +305,7 @@ def show_scheduled_roles(ctx: click.Context, account_number: str) -> None:
 @cli.command()
 @click.argument("account_number")
 @click.option("--role", "-r", required=False, type=str)
-@click.option("--all", "-a", default=False, help="Commit changes")
+@click.option("--all", "-a", is_flag=True, default=False, help="cancel for all roles")
 @click.pass_context
 def cancel_scheduled_repo(
     ctx: click.Context, account_number: str, role: str, all: bool
@@ -317,7 +315,7 @@ def cancel_scheduled_repo(
 
 @cli.command()
 @click.argument("account_number")
-@click.option("--commit", "-c", default=False, help="Commit changes")
+@click.option("--commit", "-c", is_flag=True, default=False, help="Commit changes")
 @click.pass_context
 def repo_scheduled_roles(ctx: click.Context, account_number: str, commit: bool) -> None:
     config = ctx.obj["config"]

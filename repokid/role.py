@@ -32,15 +32,17 @@ from dateutil.parser import parse as ts_parse
 from pydantic import BaseModel
 from pydantic import Field
 from pydantic import PrivateAttr
+from pydantic import validator
 
 from repokid import CONFIG
+from repokid.datasource.access_advisor import AccessAdvisorDatasource
 from repokid.exceptions import IntegrityError
 from repokid.exceptions import MissingRepoableServices
 from repokid.exceptions import ModelError
+from repokid.exceptions import NotFoundError
 from repokid.exceptions import RoleNotFoundError
 from repokid.types import RepokidConfig
 from repokid.types import RepokidHooks
-from repokid.utils.aardvark import get_aardvark_data
 from repokid.utils.dynamo import create_dynamodb_entry
 from repokid.utils.dynamo import get_role_by_id
 from repokid.utils.dynamo import get_role_by_name
@@ -75,7 +77,7 @@ class Role(BaseModel):
     repoable_permissions: int = Field(default=0)
     repoable_services: List[str] = Field(default=[])
     repoed: Optional[str] = Field()
-    repo_scheduled: float = Field(default=0.0)
+    repo_scheduled: int = Field(default=0)
     role_id: str = Field(default="")
     role_name: str = Field(default="")
     scheduled_perms: List[str] = Field(default=[])
@@ -86,7 +88,6 @@ class Role(BaseModel):
     _dirty: bool = PrivateAttr(default=False)
     _default_exclude: Set[str] = {
         "role_id",
-        "role_name",
         "account",
         "config",
         "_dirty",
@@ -111,14 +112,22 @@ class Role(BaseModel):
     def __repr__(self) -> str:
         return f"<Role {self.role_id}>"
 
+    @validator("create_date")
+    def datetime_normalize(cls, v: datetime.datetime) -> datetime.datetime:
+        return datetime.datetime.fromtimestamp(v.timestamp())
+
     def add_policy_version(
         self, policy: Dict[str, Any], source: str = "Scan", store: bool = True
-    ) -> None:
+    ) -> bool:
+        if not policy:
+            logger.debug("no policy provided, not adding")
+            return False
         if self.policies:
             last_policy = self.policies[-1]["Policy"]
-            if policy == last_policy:
+            last_source = self.policies[-1]["Source"]
+            if policy == last_policy and source == last_source:
                 # we're already up to date, so this is a noop
-                return
+                return False
         policy_entry = {
             "Source": source,
             "Discovered": datetime.datetime.now().isoformat(),
@@ -128,6 +137,7 @@ class Role(BaseModel):
         self._calculate_no_repo_permissions()
         if store:
             self.store(fields=["Policies", "NoRepoPermissions"])
+        return True
 
     def calculate_repo_scores(self, minimum_age: int, hooks: RepokidHooks) -> None:
         (
@@ -173,6 +183,8 @@ class Role(BaseModel):
         )
 
     def _calculate_no_repo_permissions(self) -> None:
+        if not self.policies:
+            return
         try:
             previous_policy = self.policies[-2]
         except IndexError:
@@ -237,7 +249,7 @@ class Role(BaseModel):
         stale_services = []
         if self.aa_data:
             for service in self.aa_data:
-                if ts_parse(service["lastUpdated"]) < thresh:
+                if ts_parse(service["lastUpdated"], ignoretz=True) < thresh:
                     stale_services.append(service["serviceName"])
         return stale_services
 
@@ -252,25 +264,25 @@ class Role(BaseModel):
         self._dirty = True
         self._updated_fields.update(values.keys())
         temp_role = Role(**values)
-        role_data = temp_role.dict(exclude_unset=True, exclude=self._default_exclude)
+        role_data = temp_role.dict(exclude=self._default_exclude)
         for k, v in role_data.items():
             setattr(self, k, v)
         if store:
             fields = list(values.keys())
             self.store(fields=fields)
 
-    def fetch_aa_data(self, config: Optional[RepokidConfig] = None) -> None:
-        config = config or CONFIG
+    def fetch_aa_data(self) -> None:
         if not self.arn:
             raise ModelError(
                 "missing arn on Role instance, cannot retrieve Access Advisor data"
             )
 
-        aardvark_data = get_aardvark_data(
-            config.get("aardvark_api_location", ""), arn=self.arn
-        )
+        aardvark_data = AccessAdvisorDatasource()
 
-        self.aa_data = aardvark_data.get(self.arn)
+        try:
+            self.aa_data = aardvark_data.get(self.arn)
+        except NotFoundError:
+            self.aa_data = []
 
     def fetch(self, fields: Optional[List[str]] = None, update: bool = True) -> None:
         if self._dirty:
@@ -290,12 +302,8 @@ class Role(BaseModel):
             )
 
         if update:
-            temp_role = Role(**stored_role_data)
-            role_data = temp_role.dict(
-                exclude_unset=True, exclude=self._default_exclude
-            )
-            self.update(role_data, store=False)
-            self._updated_fields - set(role_data.keys())
+            self.update(stored_role_data, store=False)
+            self._updated_fields - set(stored_role_data.keys())
 
     def mark_inactive(self, store: bool = True) -> None:
         self.active = False
@@ -320,7 +328,11 @@ class Role(BaseModel):
 
         if create:
             # TODO: handle this case in set_role_data() to simplify logic here
-            create_dynamodb_entry(self.dict(exclude_unset=True, by_alias=True))
+            create_dynamodb_entry(
+                self.dict(
+                    by_alias=True, exclude={"config", "_dirty", "_updated_fields"}
+                )
+            )
             self._updated_fields = set()
         else:
             if fields:
@@ -338,9 +350,7 @@ class Role(BaseModel):
             else:
                 set_role_data(
                     self.role_id,
-                    self.dict(
-                        exclude_unset=True, by_alias=True, exclude=self._default_exclude
-                    ),
+                    self.dict(by_alias=True, exclude=self._default_exclude),
                 )
                 self._updated_fields = set()
         self._dirty = False
@@ -355,9 +365,12 @@ class Role(BaseModel):
         store: bool = True,
     ) -> None:
         config = config or CONFIG
-        self.fetch_aa_data(config=config)
-        self.add_policy_version(current_policy, source=source, store=False)
-        if add_no_repo:
+        self.fetch()
+        self.fetch_aa_data()
+        policy_added = self.add_policy_version(
+            current_policy, source=source, store=False
+        )
+        if policy_added and add_no_repo:
             self._calculate_no_repo_permissions()
         self._update_opt_out()
         self._update_refreshed()
@@ -491,6 +504,7 @@ class RoleList(object):
 
     def store(self, fields: Optional[List[str]] = None) -> None:
         for role in self.roles:
+            logger.info("storing role %s", role.arn)
             role.store(fields=fields)
 
     def update_stats(self, source: str = "Scan", store: bool = True) -> None:

@@ -147,7 +147,7 @@ def _cancel_scheduled_repo(
     role.fetch()
 
     if not role.repo_scheduled:
-        LOGGER.warn(
+        LOGGER.warning(
             "Repo was not scheduled for role {} in account {}".format(
                 role.role_name, account_number
             )
