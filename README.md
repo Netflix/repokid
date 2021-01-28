@@ -35,7 +35,12 @@ The table should have the following properties:
 For development, you can run dynamo [locally](http://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.html).
 
 To run locally:
-  `java -Djava.library.path=./DynamoDBLocal_lib -jar DynamoDBLocal.jar -sharedDb -inMemory -port 8010`
+
+```bash
+docker-compose up
+```
+
+The endpoint for DynamoDB will be `http://localhost:8000`. A DynamoDB admin panel can be found at `http://localhost:8001`.
 
 If you run the development version the table and index will be created for you automatically.
 

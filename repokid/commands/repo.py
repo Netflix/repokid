@@ -154,7 +154,7 @@ def _rollback_role(
     commit: bool = False,
 ) -> List[str]:
     """
-    Display the historical policy versions for a roll as a numbered list.  Restore to a specific version if selected.
+    Display the historical policy versions for a role as a numbered list.  Restore to a specific version if selected.
     Indicate changes that will be made and then actually make them if commit is selected.
 
     Args:

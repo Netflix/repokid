@@ -17,6 +17,7 @@ from typing import DefaultDict
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import TypeVar
 
 RepokidConfig = Dict[str, Any]
 RepokidFilterConfig = Optional[Dict[str, Any]]
@@ -27,3 +28,7 @@ RepokidHookOutput = RepokidHookInput
 AccessAdvisorEntry = List[Dict[str, Any]]
 AardvarkResponse = Dict[str, AccessAdvisorEntry]
 IAMEntry = Dict[str, Any]
+
+# Reusable typevars for generics
+KT = TypeVar("KT")
+VT = TypeVar("VT")

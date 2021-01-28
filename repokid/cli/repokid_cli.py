@@ -83,7 +83,7 @@ def _generate_default_config(filename: str = "") -> RepokidConfig:
         "dynamo_db": {
             "assume_role": "RepokidRole",
             "account_number": "<DYNAMO_TABLE_ACCOUNT_NUMBER>",
-            "endpoint": "<DYNAMO_TABLE_ENDPOINT>",
+            "endpoint": "<DYNAMO_TABLE_ENDPOINT (http://localhost:8000 if using docker compose)>",
             "region": "<DYNAMO_TABLE_REGION>",
             "session_name": "repokid",
         },
@@ -305,7 +305,7 @@ def show_scheduled_roles(ctx: click.Context, account_number: str) -> None:
 @cli.command()
 @click.argument("account_number")
 @click.option("--role", "-r", required=False, type=str)
-@click.option("--all", "-a", default=False)
+@click.option("--all", "-a", is_flag=True, default=False, help="cancel for all roles")
 @click.pass_context
 def cancel_scheduled_repo(
     ctx: click.Context, account_number: str, role: str, all: bool

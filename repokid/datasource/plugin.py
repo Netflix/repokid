@@ -20,16 +20,15 @@ from typing import Iterable
 from typing import Iterator
 from typing import KeysView
 from typing import Optional
-from typing import TypeVar
 from typing import ValuesView
 from typing import cast
 
 from repokid.plugin import RepokidPlugin
+from repokid.types import KT
+from repokid.types import VT
 from repokid.types import RepokidConfig
 
 logger = logging.getLogger("repokid")
-KT = TypeVar("KT")
-VT = TypeVar("VT")
 
 
 class DatasourcePlugin(RepokidPlugin, Generic[KT, VT]):

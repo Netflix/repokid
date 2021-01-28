@@ -236,10 +236,11 @@ def _display_role(
     for permission in permissions:
         service = permission.split(":")[0]
         action = permission.split(":")[1]
-        repoable = (
-            permission in role.repoable_services
-            or permission.split(":")[0] in role.repoable_services
-        )
+        is_repoable_permission = permission in role.repoable_services
+        is_repoable_service = permission.split(":")[0] in role.repoable_services
+        # repoable is is True if the action (`permission`) is in the list of repoable
+        # services OR if the service (`permission.split(":")[0]`) is in the list
+        repoable = is_repoable_permission or is_repoable_service
         rows.append([service, action, repoable])
 
     rows = sorted(rows, key=lambda x: (x[2], x[0], x[1]))

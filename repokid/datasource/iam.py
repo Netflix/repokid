@@ -57,6 +57,7 @@ class IAMDatasource(DatasourcePlugin[str, IAMEntry], Singleton):
         self._data.update(fetched_data)
 
 
+# TODO: Implement retrieval of IAM data from AWS Config
 class ConfigDatasource(DatasourcePlugin[str, IAMEntry], Singleton):
     def __init__(self, config: Optional[RepokidConfig] = None):
         super().__init__(config=config)
