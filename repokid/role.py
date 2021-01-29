@@ -365,7 +365,11 @@ class Role(BaseModel):
         store: bool = True,
     ) -> None:
         config = config or CONFIG
-        self.fetch()
+        try:
+            self.fetch()
+        except RoleNotFoundError as e:
+            # we don't have this role in DynamoDB yet, but that's okay
+            logger.debug("%s, will be created", e)
         self.fetch_aa_data()
         policy_added = self.add_policy_version(
             current_policy, source=source, store=False
