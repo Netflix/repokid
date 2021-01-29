@@ -15,6 +15,7 @@
 import logging
 from typing import Any
 from typing import Dict
+from typing import KeysView
 from typing import Optional
 
 import requests
@@ -101,6 +102,7 @@ class AccessAdvisorDatasource(DatasourcePlugin[str, AccessAdvisorEntry], Singlet
             return result
         raise NotFoundError
 
-    def seed(self, account_number: str) -> None:
+    def seed(self, account_number: str) -> KeysView[str]:
         aa_data = self._fetch(account_number=account_number)
         self._data.update(aa_data)
+        return aa_data.keys()

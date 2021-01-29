@@ -15,6 +15,7 @@
 import copy
 import logging
 from typing import Dict
+from typing import KeysView
 from typing import Optional
 
 from cloudaux.aws.iam import get_account_authorization_details
@@ -52,9 +53,11 @@ class IAMDatasource(DatasourcePlugin[str, IAMEntry], Singleton):
             raise NotFoundError
         return result
 
-    def seed(self, account_number: str) -> None:
+    def seed(self, account_number: str) -> KeysView[str]:
         fetched_data = self._fetch(account_number)
+        new_keys = fetched_data.keys()
         self._data.update(fetched_data)
+        return new_keys
 
 
 # TODO: Implement retrieval of IAM data from AWS Config
@@ -65,5 +68,5 @@ class ConfigDatasource(DatasourcePlugin[str, IAMEntry], Singleton):
     def get(self, identifier: str) -> IAMEntry:
         pass
 
-    def seed(self, identifier: str) -> None:
+    def seed(self, identifier: str) -> KeysView[str]:
         pass

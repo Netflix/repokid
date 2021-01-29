@@ -58,7 +58,7 @@ class DatasourcePlugin(RepokidPlugin, Generic[KT, VT]):
     def get(self, identifier: KT) -> VT:
         raise NotImplementedError
 
-    def seed(self, identifier: KT) -> None:
+    def seed(self, identifier: KT) -> KeysView[KT]:
         raise NotImplementedError
 
     def reset(self) -> None:
