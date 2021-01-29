@@ -10,11 +10,13 @@ from typing import Union
 
 import boto3
 from botocore.exceptions import ClientError as BotoClientError
+from botocore.exceptions import ValidationError as BotoValidationError
 from cloudaux.aws.sts import boto3_cached_conn
 from mypy_boto3_dynamodb.service_resource import Table
 from mypy_boto3_dynamodb.type_defs import GlobalSecondaryIndexTypeDef
 
 from repokid import CONFIG
+from repokid.exceptions import DynamoDBError
 from repokid.exceptions import RoleNotFoundError
 
 DYNAMO_EMPTY_STRING = "---DYNAMO-EMPTY-STRING---"
@@ -253,12 +255,15 @@ def set_role_data(
         "ExpressionAttributeValues": expression_attribute_values,
     }
     logger.debug("updating dynamodb with inputs %s", update_item_inputs)
-    table.update_item(
-        Key={"RoleId": role_id},
-        UpdateExpression=update_expression,
-        ExpressionAttributeNames=expression_attribute_names,
-        ExpressionAttributeValues=expression_attribute_values,
-    )
+    try:
+        table.update_item(
+            Key={"RoleId": role_id},
+            UpdateExpression=update_expression,
+            ExpressionAttributeNames=expression_attribute_names,
+            ExpressionAttributeValues=expression_attribute_values,
+        )
+    except BotoValidationError as e:
+        raise DynamoDBError from e
 
 
 def get_all_role_ids_for_account(

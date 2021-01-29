@@ -36,6 +36,7 @@ from pydantic import validator
 
 from repokid import CONFIG
 from repokid.datasource.access_advisor import AccessAdvisorDatasource
+from repokid.exceptions import DynamoDBError
 from repokid.exceptions import IntegrityError
 from repokid.exceptions import MissingRepoableServices
 from repokid.exceptions import ModelError
@@ -509,7 +510,10 @@ class RoleList(object):
     def store(self, fields: Optional[List[str]] = None) -> None:
         for role in self.roles:
             logger.info("storing role %s", role.arn)
-            role.store(fields=fields)
+            try:
+                role.store(fields=fields)
+            except DynamoDBError as e:
+                logger.error("could not store role %s: %s", role.arn, e, exc_info=True)
 
     def update_stats(self, source: str = "Scan", store: bool = True) -> None:
         for role in self.roles:
