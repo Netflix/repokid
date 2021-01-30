@@ -10,7 +10,6 @@ from typing import Union
 
 import boto3
 from botocore.exceptions import ClientError as BotoClientError
-from botocore.exceptions import ValidationError as BotoValidationError
 from cloudaux.aws.sts import boto3_cached_conn
 from mypy_boto3_dynamodb.service_resource import Table
 from mypy_boto3_dynamodb.type_defs import GlobalSecondaryIndexTypeDef
@@ -262,7 +261,7 @@ def set_role_data(
             ExpressionAttributeNames=expression_attribute_names,
             ExpressionAttributeValues=expression_attribute_values,
         )
-    except BotoValidationError as e:
+    except BotoClientError as e:
         raise DynamoDBError from e
 
 
