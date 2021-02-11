@@ -285,7 +285,12 @@ class Role(BaseModel):
         except NotFoundError:
             self.aa_data = []
 
-    def fetch(self, fields: Optional[List[str]] = None, update: bool = True) -> None:
+    def fetch(
+        self,
+        fields: Optional[List[str]] = None,
+        update: bool = True,
+        fetch_aa_data: bool = False,
+    ) -> None:
         if self._dirty:
             raise IntegrityError(
                 "role object has unsaved modifications, fetching may overwrite changes"
@@ -302,6 +307,8 @@ class Role(BaseModel):
                 "missing role_id or role_name and account on Role instance"
             )
 
+        if fetch_aa_data:
+            self.fetch_aa_data()
         if update:
             self.update(stored_role_data, store=False)
             self._updated_fields - set(stored_role_data.keys())
