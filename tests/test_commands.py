@@ -416,6 +416,7 @@ class TestRepokidCLI(object):
 
     @patch("repokid.hooks.call_hooks")
     @patch("repokid.commands.role_cache.Role.store")
+    @patch("repokid.role.Role.fetch")
     @patch("repokid.commands.role.RoleList.from_ids")
     @patch("repokid.commands.schedule.get_all_role_ids_for_account")
     @patch("time.time")
@@ -424,6 +425,7 @@ class TestRepokidCLI(object):
         mock_time,
         mock_get_all_role_ids_for_account,
         mock_role_list_from_ids,
+        mock_fetch,
         mock_role_store,
         mock_call_hooks,
     ):

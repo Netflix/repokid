@@ -45,6 +45,7 @@ def _schedule_repo(
         86400 * config.get("repo_schedule_period_days", 7)
     )
     for role in roles:
+        role.fetch(fetch_aa_data=True)
         if not role.aa_data:
             LOGGER.warning("Not scheduling %s; missing Access Advisor data", role.arn)
             continue
