@@ -307,11 +307,11 @@ class Role(BaseModel):
                 "missing role_id or role_name and account on Role instance"
             )
 
-        if fetch_aa_data:
-            self.fetch_aa_data()
         if update:
             self.update(stored_role_data, store=False)
             self._updated_fields - set(stored_role_data.keys())
+            if fetch_aa_data:
+                self.fetch_aa_data()
 
     def mark_inactive(self, store: bool = True) -> None:
         self.active = False
