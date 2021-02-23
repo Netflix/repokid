@@ -467,19 +467,21 @@ class TestRepokidCLI(object):
 
     @patch("repokid.hooks.call_hooks")
     @patch("repokid.commands.role.RoleList.from_ids")
-    @patch("repokid.commands.repo.get_all_role_ids_for_account")
+    @patch("repokid.commands.role.RoleList.fetch_all")
+    @patch("repokid.commands.repo.IAMDatasource.seed")
     @patch("repokid.commands.repo._repo_role")
     @patch("time.time")
     def test_repo_all_roles(
         self,
         mock_time,
         mock_repo_role,
-        mock_get_all_role_ids_for_account,
+        mock_iam_datasource_seed,
+        mock_role_list_fetch_all,
         mock_role_list_from_ids,
         mock_call_hooks,
     ):
         hooks = RepokidHooks()
-        mock_get_all_role_ids_for_account.return_value = [
+        mock_iam_datasource_seed.return_value = [
             "AROAABCDEFGHIJKLMNOPA",
             "AROAABCDEFGHIJKLMNOPB",
             "AROAABCDEFGHIJKLMNOPC",

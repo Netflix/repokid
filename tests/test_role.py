@@ -329,6 +329,7 @@ def test_role_is_eligible_for_repo_no_repoable_permissions(
 ):
     r = Role(**role_dict)
     r.repoable_permissions = []
+    r.scheduled_perms = []
     eligible, reason = r.is_eligible_for_repo()
     mock_stale_aa_services.assert_not_called()
     assert not eligible
