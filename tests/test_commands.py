@@ -468,6 +468,7 @@ class TestRepokidCLI(object):
     @patch("repokid.hooks.call_hooks")
     @patch("repokid.commands.role.RoleList.from_ids")
     @patch("repokid.commands.role.RoleList.fetch_all")
+    @patch("repokid.commands.repo.AccessAdvisorDatasource")
     @patch("repokid.commands.repo.IAMDatasource.seed")
     @patch("repokid.commands.repo._repo_role")
     @patch("time.time")
@@ -476,6 +477,7 @@ class TestRepokidCLI(object):
         mock_time,
         mock_repo_role,
         mock_iam_datasource_seed,
+        mock_aa_datasource,
         mock_role_list_fetch_all,
         mock_role_list_from_ids,
         mock_call_hooks,
