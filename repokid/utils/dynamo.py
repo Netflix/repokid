@@ -9,6 +9,7 @@ from typing import TypeVar
 from typing import Union
 
 import boto3
+from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError as BotoClientError
 from cloudaux.aws.sts import boto3_cached_conn
 from mypy_boto3_dynamodb.service_resource import Table
@@ -283,8 +284,7 @@ def get_all_role_ids_for_account(
 
     results = table.query(
         IndexName="Account",
-        KeyConditionExpression="Account = :act",
-        ExpressionAttributeValues={":act": account_number},
+        KeyConditionExpression=Key("Account").eq(account_number),
     )
     items = results.get("Items")
     if not items:

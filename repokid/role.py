@@ -233,7 +233,7 @@ class Role(BaseModel):
             return False, f"disqualified by {', '.join(self.disqualified_by)}"
         if not self.aa_data:
             return False, "no Access Advisor data available"
-        if not self.repoable_permissions:
+        if not self.repoable_permissions and not self.scheduled_perms:
             return False, "no repoable permissions"
         stale_aa_services = self._stale_aa_services()
         if stale_aa_services:
@@ -525,3 +525,7 @@ class RoleList(object):
     def update_stats(self, source: str = "Scan", store: bool = True) -> None:
         for role in self.roles:
             role.calculate_stats(source=source, store=store)
+
+    def fetch_all(self, fetch_aa_data: bool = False) -> None:
+        for role in self.roles:
+            role.fetch(fetch_aa_data=fetch_aa_data)

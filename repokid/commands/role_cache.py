@@ -83,7 +83,10 @@ def _update_role_cache(
             LOGGER.debug(
                 "Role {} filtered by {}".format(filtered_role.role_name, class_name)
             )
-            filtered_role.disqualified_by.append(class_name)
+            # There may be existing duplicate records, so we do a dance here to dedupe them.
+            disqualified_by = set(filtered_role.disqualified_by)
+            disqualified_by.add(class_name)
+            filtered_role.disqualified_by = list(disqualified_by)
 
     for role in roles:
         LOGGER.debug(

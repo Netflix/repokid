@@ -16,6 +16,7 @@ import datetime
 import json
 import logging
 import pprint
+from typing import Iterable
 from typing import List
 
 import botocore
@@ -25,13 +26,15 @@ from cloudaux.aws.iam import put_role_policy
 from tabulate import tabulate
 
 import repokid.hooks
+from repokid.datasource.access_advisor import AccessAdvisorDatasource
+from repokid.datasource.iam import IAMDatasource
 from repokid.exceptions import IAMError
+from repokid.exceptions import MissingRepoableServices
 from repokid.role import Role
 from repokid.role import RoleList
 from repokid.types import RepokidConfig
 from repokid.types import RepokidHooks
 from repokid.utils.dynamo import find_role_in_cache
-from repokid.utils.dynamo import get_all_role_ids_for_account
 from repokid.utils.dynamo import role_ids_for_all_accounts
 from repokid.utils.iam import delete_policy
 from repokid.utils.iam import inline_policies_size_exceeds_maximum
@@ -81,7 +84,13 @@ def _repo_role(
     role.calculate_repo_scores(
         config["filter_config"]["AgeFilter"]["minimum_age"], hooks
     )
-    repoed_policies, deleted_policy_names = role.get_repoed_policy(scheduled=scheduled)
+    try:
+        repoed_policies, deleted_policy_names = role.get_repoed_policy(
+            scheduled=scheduled
+        )
+    except MissingRepoableServices as e:
+        errors.append(f"Role {role_name} cannot be repoed: {e}")
+        return errors
 
     if inline_policies_size_exceeds_maximum(repoed_policies):
         error = (
@@ -309,15 +318,23 @@ def _repo_all_roles(
     Returns:
         None
     """
+    access_advisor_datasource = AccessAdvisorDatasource()
+    access_advisor_datasource.seed(account_number)
+    iam_datasource = IAMDatasource()
+    role_ids = iam_datasource.seed(account_number)
     errors = []
 
-    role_ids_in_account = get_all_role_ids_for_account(account_number)
-    roles = RoleList.from_ids(role_ids_in_account)
+    roles = RoleList.from_ids(role_ids)
+    roles.fetch_all(fetch_aa_data=True)
 
     roles = roles.get_active()
 
     if scheduled:
         roles = roles.get_scheduled()
+
+    if not roles:
+        LOGGER.info(f"No roles to repo in account {account_number}")
+        return
 
     LOGGER.info(
         "Repoing these {}roles from account {}:\n\t{}".format(
@@ -372,11 +389,15 @@ def _repo_stats(output_file: str, account_number: str = "") -> None:
     Returns:
         None
     """
-    role_ids = (
-        get_all_role_ids_for_account(account_number)
-        if account_number
-        else role_ids_for_all_accounts()
-    )
+    role_ids: Iterable[str]
+    if account_number:
+        access_advisor_datasource = AccessAdvisorDatasource()
+        access_advisor_datasource.seed(account_number)
+        iam_datasource = IAMDatasource()
+        role_ids = iam_datasource.seed(account_number)
+    else:
+        role_ids = role_ids_for_all_accounts()
+
     headers = [
         "RoleId",
         "Role Name",
