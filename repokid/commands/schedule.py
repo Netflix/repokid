@@ -40,12 +40,12 @@ def _schedule_repo(
     scheduled_roles = []
     role_ids = get_all_role_ids_for_account(account_number)
     roles = RoleList.from_ids(role_ids)
+    roles.fetch_all(fetch_aa_data=True)
 
     scheduled_time = int(time.time()) + (
         86400 * config.get("repo_schedule_period_days", 7)
     )
     for role in roles:
-        role.fetch(fetch_aa_data=True)
         if not role.aa_data:
             LOGGER.warning("Not scheduling %s; missing Access Advisor data", role.arn)
             continue
