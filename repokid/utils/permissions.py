@@ -369,19 +369,23 @@ def get_repoed_policy(
                     continue
 
                 statement_actions = get_actions_from_statement(statement)
+                new_actions = {
+                    action
+                    for action in statement_actions
+                    if action not in repoable_permissions
+                    and action.split(":")[0] not in repoable_permissions
+                }
 
-                if not statement_actions.intersection(repoable_permissions):
+                if statement_actions == new_actions:
                     # No permissions are being taken away; let's not modify this statement at all.
                     continue
-
-                statement_actions = statement_actions.difference(repoable_permissions)
 
                 # get_actions_from_statement has already inverted this so our new statement should be 'Action'
                 if "NotAction" in statement:
                     del statement["NotAction"]
 
                 # by putting this into a set, we lose order, which may be confusing to someone.
-                statement["Action"] = sorted(list(statement_actions))
+                statement["Action"] = sorted(list(new_actions))
 
                 # mark empty statements to be removed
                 if len(statement["Action"]) == 0:

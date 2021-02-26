@@ -17,21 +17,14 @@ import logging
 import re
 from typing import Any
 from typing import Dict
-from typing import List
 
 import botocore
 from cloudaux.aws.iam import delete_role_policy
-from cloudaux.aws.iam import get_role_inline_policies
 from cloudaux.aws.iam import put_role_policy
 from cloudaux.aws.sts import boto3_cached_conn
 from mypy_boto3_iam.client import IAMClient
 
-import repokid.utils.permissions
 from repokid.exceptions import IAMError
-from repokid.role import Role
-from repokid.types import RepokidConfig
-from repokid.types import RepokidHooks
-from repokid.utils.logging import log_deleted_and_repoed_policies
 
 LOGGER = logging.getLogger("repokid")
 MAX_AWS_POLICY_SIZE = 10240
@@ -78,7 +71,7 @@ def inline_policies_size_exceeds_maximum(policies: Dict[str, Any]) -> bool:
 
 
 def delete_policy(
-    name: str, role: Role, account_number: str, conn: Dict[str, Any]
+    name: str, role_name: str, account_number: str, conn: Dict[str, Any]
 ) -> None:
     """Deletes the specified IAM Role inline policy.
 
@@ -93,20 +86,20 @@ def delete_policy(
     """
     LOGGER.info(
         "Deleting policy with name {} from {} in account {}".format(
-            name, role.role_name, account_number
+            name, role_name, account_number
         )
     )
     try:
-        delete_role_policy(RoleName=role.role_name, PolicyName=name, **conn)
+        delete_role_policy(RoleName=role_name, PolicyName=name, **conn)
     except botocore.exceptions.ClientError as e:
         raise IAMError(
-            f"Error deleting policy: {name} from role: {role.role_name} in account {account_number}"
+            f"Error deleting policy: {name} from role: {role_name} in account {account_number}"
         ) from e
 
 
 def replace_policies(
     repoed_policies: Dict[str, Any],
-    role: Role,
+    role_name: str,
     account_number: str,
     conn: Dict[str, Any],
 ) -> None:
@@ -124,7 +117,7 @@ def replace_policies(
     LOGGER.info(
         "Replacing Policies With: \n{} (role: {} account: {})".format(
             json.dumps(repoed_policies, indent=2, sort_keys=True),
-            role.role_name,
+            role_name,
             account_number,
         )
     )
@@ -132,7 +125,7 @@ def replace_policies(
     for policy_name, policy in repoed_policies.items():
         try:
             put_role_policy(
-                RoleName=role.role_name,
+                RoleName=role_name,
                 PolicyName=policy_name,
                 PolicyDocument=json.dumps(policy, indent=2, sort_keys=True),
                 **conn,
@@ -140,78 +133,8 @@ def replace_policies(
 
         except botocore.exceptions.ClientError as e:
             error = "Exception calling PutRolePolicy on {role}/{policy} in account {account}".format(
-                role=role.role_name,
+                role=role_name,
                 policy=policy_name,
                 account=account_number,
             )
             raise IAMError(error) from e
-
-
-def remove_permissions_from_role(
-    account_number: str,
-    permissions: List[str],
-    role: Role,
-    config: RepokidConfig,
-    hooks: RepokidHooks,
-    commit: bool = False,
-) -> None:
-    """Remove the list of permissions from the provided role.
-
-    Args:
-        account_number (string)
-        permissions (list<string>)
-        role (Role object)
-        role_id (string)
-        commit (bool)
-
-    Returns:
-        None
-    """
-    (
-        repoed_policies,
-        deleted_policy_names,
-    ) = repokid.utils.permissions.get_repoed_policy(
-        role.policies[-1]["Policy"], set(permissions)
-    )
-
-    if inline_policies_size_exceeds_maximum(repoed_policies):
-        LOGGER.error(
-            "Policies would exceed the AWS size limit after repo for role: {} in account {}.  "
-            "Please manually minify.".format(role.role_name, account_number)
-        )
-        return
-
-    if not commit:
-        log_deleted_and_repoed_policies(
-            deleted_policy_names, repoed_policies, role.role_name, account_number
-        )
-        return
-
-    conn = config["connection_iam"]
-    conn["account_number"] = account_number
-
-    for name in deleted_policy_names:
-        try:
-            delete_policy(name, role, account_number, conn)
-        except IAMError as e:
-            LOGGER.error(e)
-
-    if repoed_policies:
-        try:
-            replace_policies(repoed_policies, role, account_number, conn)
-        except IAMError as e:
-            LOGGER.error(e)
-
-    current_policies = get_role_inline_policies(role.dict(), **conn) or {}
-    role.add_policy_version(current_policies, "Repo")
-
-    role.repoed = datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
-    update_repoed_description(role.role_name, conn)
-    role.gather_role_data(
-        current_policies, hooks, source="ManualPermissionRepo", add_no_repo=False
-    )
-    LOGGER.info(
-        "Successfully removed {permissions} from role: {role} in account {account_number}".format(
-            permissions=permissions, role=role.role_name, account_number=account_number
-        )
-    )

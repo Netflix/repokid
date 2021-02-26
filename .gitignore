@@ -1,4 +1,5 @@
 .idea/
+.run/
 venv/
 *.pyc
 *.json

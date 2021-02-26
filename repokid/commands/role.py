@@ -32,7 +32,6 @@ from repokid.utils.dynamo import find_role_in_cache
 from repokid.utils.dynamo import get_all_role_ids_for_account
 from repokid.utils.dynamo import role_ids_for_all_accounts
 from repokid.utils.iam import inline_policies_size_exceeds_maximum
-from repokid.utils.iam import remove_permissions_from_role
 from repokid.utils.permissions import get_permissions_in_policy
 from repokid.utils.permissions import get_services_in_permissions
 
@@ -295,11 +294,9 @@ def _remove_permissions_from_roles(
         role_name = arn.name.split("/")[-1]
 
         role_id = find_role_in_cache(role_name, account_number)
-        role = Role(role_id=role_id)
+        role = Role(role_id=role_id, config=config)
         role.fetch()
 
-        remove_permissions_from_role(
-            account_number, permissions, role, config, hooks, commit=commit
-        )
+        role.remove_permissions(permissions, hooks, commit=commit)
 
         repokid.hooks.call_hooks(hooks, "AFTER_REPO", {"role": role})
