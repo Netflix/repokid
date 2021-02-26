@@ -38,7 +38,7 @@ class IAMDatasource(DatasourcePlugin[str, IAMEntry], Singleton):
 
     def _fetch_account(self, account_number: str) -> Dict[str, IAMEntry]:
         logger.info("getting role data for account %s", account_number)
-        conn = copy.deepcopy(self.config["connection_iam"])
+        conn = copy.deepcopy(self.config.get("connection_iam", {}))
         conn["account_number"] = account_number
         auth_details = get_account_authorization_details(filter="Role", **conn)
         auth_details_by_id = {item["RoleId"]: item for item in auth_details}
