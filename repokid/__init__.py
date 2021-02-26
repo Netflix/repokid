@@ -42,7 +42,7 @@ def init_config() -> RepokidConfig:
         None
     """
     load_config_paths = [
-        os.path.join(os.getcwd(), "config.json"),
+        os.environ.get("REPOKID_CONFIG_LOCATION", os.path.join(os.getcwd(), "config.json")),
         "/etc/repokid/config.json",
         "/apps/repokid/config.json",
     ]
