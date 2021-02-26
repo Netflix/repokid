@@ -15,7 +15,7 @@
 import logging
 from typing import Any
 from typing import Dict
-from typing import KeysView
+from typing import Iterable
 from typing import Optional
 
 import requests
@@ -102,7 +102,14 @@ class AccessAdvisorDatasource(DatasourcePlugin[str, AccessAdvisorEntry], Singlet
             return result
         raise NotFoundError
 
-    def seed(self, account_number: str) -> KeysView[str]:
-        aa_data = self._fetch(account_number=account_number)
-        self._data.update(aa_data)
-        return aa_data.keys()
+    def _get_arns_for_account(self, account_number: str) -> Iterable[str]:
+        return filter(lambda x: x.split(":")[4] == account_number, self.keys())
+
+    def seed(self, account_number: str) -> Iterable[str]:
+        if account_number not in self._seeded:
+            aa_data = self._fetch(account_number=account_number)
+            self._data.update(aa_data)
+            self._seeded.append(account_number)
+            return aa_data.keys()
+        else:
+            return self._get_arns_for_account(account_number)

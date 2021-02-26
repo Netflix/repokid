@@ -18,7 +18,7 @@ from typing import Generic
 from typing import ItemsView
 from typing import Iterable
 from typing import Iterator
-from typing import KeysView
+from typing import List
 from typing import Optional
 from typing import ValuesView
 from typing import cast
@@ -35,10 +35,12 @@ class DatasourcePlugin(RepokidPlugin, Generic[KT, VT]):
     """A dict-like container that can be used to retrieve and store data"""
 
     _data: Dict[KT, VT]
+    _seeded: List[str]
 
     def __init__(self, config: Optional[RepokidConfig] = None):
         super().__init__(config=config)
         self._data = {}
+        self._seeded = []
 
     def __getitem__(self, name: KT) -> VT:
         return self._data[name]
@@ -46,7 +48,7 @@ class DatasourcePlugin(RepokidPlugin, Generic[KT, VT]):
     def __iter__(self) -> Iterator[VT]:
         return iter(cast(Iterable[VT], self._data))
 
-    def keys(self) -> KeysView[KT]:
+    def keys(self) -> Iterable[KT]:
         return self._data.keys()
 
     def items(self) -> ItemsView[KT, VT]:
@@ -58,7 +60,7 @@ class DatasourcePlugin(RepokidPlugin, Generic[KT, VT]):
     def get(self, identifier: KT) -> VT:
         raise NotImplementedError
 
-    def seed(self, identifier: KT) -> KeysView[KT]:
+    def seed(self, identifier: KT) -> Iterable[KT]:
         raise NotImplementedError
 
     def reset(self) -> None:
