@@ -95,7 +95,7 @@ class Role(BaseModel):
     stats: List[Dict[str, Any]] = Field(default=[])
     tags: List[Dict[str, Any]] = Field(default=[])
     total_permissions: Optional[int] = Field()
-    config: RepokidConfig = Field(default=CONFIG)
+    config: Union[RepokidConfig, None] = Field(default=CONFIG)
     _dirty: bool = PrivateAttr(default=False)
     _default_exclude: Set[str] = {
         "role_id",
@@ -126,6 +126,12 @@ class Role(BaseModel):
     @validator("create_date")
     def datetime_normalize(cls, v: datetime.datetime) -> datetime.datetime:
         return datetime.datetime.fromtimestamp(v.timestamp())
+
+    @validator("config")
+    def fix_none_config(cls, v: Optional[RepokidConfig]) -> RepokidConfig:
+        if v is None:
+            return CONFIG
+        return v
 
     def add_policy_version(
         self, policy: Dict[str, Any], source: str = "Scan", store: bool = True
@@ -255,7 +261,7 @@ class Role(BaseModel):
 
     def _stale_aa_services(self) -> List[str]:
         thresh = datetime.datetime.now() - datetime.timedelta(
-            days=self.config["repo_requirements"]["oldest_aa_data_days"]
+            days=self.config["repo_requirements"]["oldest_aa_data_days"]  # type: ignore
         )
         stale_services = []
         if self.aa_data:
@@ -300,7 +306,8 @@ class Role(BaseModel):
 
     def _fetch_iam_data(self) -> IAMEntry:
         iam_datasource = IAMDatasource()
-        return iam_datasource.get(self.role_id)
+        role_data = iam_datasource.get(self.role_id)
+        return role_data.get("RolePolicyList", [])
 
     def fetch(
         self,
@@ -475,7 +482,7 @@ class Role(BaseModel):
             )
             return
 
-        conn = self.config["connection_iam"]
+        conn = self.config["connection_iam"]  # type: ignore
         conn["account_number"] = self.account
 
         for name in deleted_policy_names:
@@ -495,7 +502,12 @@ class Role(BaseModel):
 
         self.repoed = datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
         update_repoed_description(self.role_name, conn)
-        self.gather_role_data(hooks, source="ManualPermissionRepo", add_no_repo=False)
+        self.gather_role_data(
+            hooks,
+            current_policies=current_policies,
+            source="ManualPermissionRepo",
+            add_no_repo=False,
+        )
         logger.info(
             "Successfully removed {permissions} from role: {role} in account {account_number}".format(
                 permissions=permissions,
@@ -516,7 +528,7 @@ class Role(BaseModel):
             return errors
 
         self.calculate_repo_scores(
-            self.config["filter_config"]["AgeFilter"]["minimum_age"], hooks
+            self.config["filter_config"]["AgeFilter"]["minimum_age"], hooks  # type: ignore
         )
         try:
             repoed_policies, deleted_policy_names = self.get_repoed_policy(
@@ -548,7 +560,7 @@ class Role(BaseModel):
             )
             return errors
 
-        conn = self.config["connection_iam"]
+        conn = self.config["connection_iam"]  # type: ignore
         conn["account_number"] = self.account
 
         for name in deleted_policy_names:
@@ -580,7 +592,12 @@ class Role(BaseModel):
             # repos will stay scheduled until they are successful
             self.repoed = datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
             update_repoed_description(self.role_name, conn)
-            self.gather_role_data(hooks, source="Repo", add_no_repo=False)
+            self.gather_role_data(
+                hooks,
+                current_policies=current_policies,
+                source="Repo",
+                add_no_repo=False,
+            )
             logger.info(
                 "Successfully repoed role: {} in account {}".format(
                     self.role_name, self.account
@@ -648,10 +665,8 @@ class RoleList(object):
         fields: Optional[List[str]] = None,
         config: Optional[RepokidConfig] = None,
     ) -> RoleList:
-        # ignoring type here for the config kwarg, which is Optional here but
-        # not-technically-optional-but-has-a-default in the Role init
         role_list = cls(
-            [Role(role_id=role_id, config=config) for role_id in id_list], config=config  # type: ignore
+            [Role(role_id=role_id, config=config) for role_id in id_list], config=config
         )
         if fetch:
             map(

@@ -31,7 +31,9 @@ from repokid.types import RepokidConfig
 logger = logging.getLogger("repokid")
 
 
-class AccessAdvisorDatasource(DatasourcePlugin[str, AccessAdvisorEntry], Singleton):
+class AccessAdvisorDatasource(
+    DatasourcePlugin[str, AccessAdvisorEntry], metaclass=Singleton
+):
     def __init__(self, config: Optional[RepokidConfig] = None):
         super().__init__(config=config)
 

@@ -66,3 +66,4 @@ class DatasourcePlugin(RepokidPlugin, Generic[KT, VT]):
     def reset(self) -> None:
         logger.debug("resetting %s", type(self).__name__)
         self._data = {}
+        self._seeded = []

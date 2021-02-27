@@ -66,7 +66,7 @@ def _update_role_cache(
     LOGGER.info("Updating role data for account {}".format(account_number))
     for role in tqdm(roles):
         role.account = account_number
-        role.gather_role_data(config, source="Scan", store=False)
+        role.gather_role_data(hooks, config=config, source="Scan", store=False)
 
     LOGGER.info("Finding inactive roles in account {}".format(account_number))
     find_and_mark_inactive(account_number, roles)

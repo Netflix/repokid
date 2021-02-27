@@ -31,9 +31,10 @@ from repokid.types import RepokidConfig
 logger = logging.getLogger("repokid")
 
 
-class IAMDatasource(DatasourcePlugin[str, IAMEntry], Singleton):
+class IAMDatasource(DatasourcePlugin[str, IAMEntry], metaclass=Singleton):
+    _arn_to_id: Dict[str, str] = {}
+
     def __init__(self, config: Optional[RepokidConfig] = None):
-        self._arn_to_id: Dict[str, str] = {}
         super().__init__(config=config)
 
     def _fetch_account(self, account_number: str) -> Dict[str, IAMEntry]:
@@ -75,18 +76,17 @@ class IAMDatasource(DatasourcePlugin[str, IAMEntry], Singleton):
         return filter(lambda x: x.split(":")[4] == account_number, self.keys())
 
     def seed(self, account_number: str) -> Iterable[str]:
-        if account_number not in self._seeded:
-            fetched_data = self._fetch_account(account_number)
-            new_keys = fetched_data.keys()
-            self._data.update(fetched_data)
-            self._seeded.append(account_number)
-            return new_keys
-        else:
+        if account_number in self._seeded:
             return self._get_arns_for_account(account_number)
+        fetched_data = self._fetch_account(account_number)
+        new_keys = fetched_data.keys()
+        self._data.update(fetched_data)
+        self._seeded.append(account_number)
+        return new_keys
 
 
 # TODO: Implement retrieval of IAM data from AWS Config
-class ConfigDatasource(DatasourcePlugin[str, IAMEntry], Singleton):
+class ConfigDatasource(DatasourcePlugin[str, IAMEntry], metaclass=Singleton):
     def __init__(self, config: Optional[RepokidConfig] = None):
         super().__init__(config=config)
 

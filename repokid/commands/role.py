@@ -295,7 +295,7 @@ def _remove_permissions_from_roles(
         role_name = arn.name.split("/")[-1]
 
         role_id = find_role_in_cache(role_name, account_number)
-        role = Role(role_id=role_id, config=config)  # type: ignore
+        role = Role(role_id=role_id, config=config)
         role.fetch()
 
         role.remove_permissions(permissions, hooks, commit=commit)
