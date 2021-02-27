@@ -782,44 +782,6 @@ class TestRepokidCLI(object):
                 ROLE_POLICIES, mock_role, "123456789012", {}
             )
 
-    # TODO: move this test to Role tests
-    # @patch("repokid.utils.iam.delete_policy", MagicMock(return_value=None))
-    # @patch("repokid.utils.iam.replace_policies", MagicMock(return_value=None))
-    # @patch(
-    #     "repokid.utils.iam.remove_permissions_from_role", MagicMock(return_value=None)
-    # )
-    # @patch(
-    #     "repokid.utils.iam.update_repoed_description",
-    #     MagicMock(return_value=None),
-    # )
-    # def test_remove_permissions_from_role(self):
-    #     iam = repokid.utils.iam
-    #
-    #     class MockRole:
-    #         role_name = "role_name"
-    #         role_id = "12345-roleid"
-    #         policies = [
-    #             dict(Policy=policy) for _, policy in list(ROLE_POLICIES.items())
-    #         ]
-    #
-    #         def as_dict(self):
-    #             return dict(RoleName=self.role_name, policies=self.policies)
-    #
-    #     mock_role = MockRole()
-    #
-    #     iam.remove_permissions_from_role(
-    #         "123456789012", ["s3:putobjectacl"], mock_role, None, None, commit=False
-    #     )
-    #
-    #     iam.remove_permissions_from_role(
-    #         "123456789012",
-    #         ["s3:putobjectacl"],
-    #         mock_role,
-    #         {"connection_iam": dict()},
-    #         None,
-    #         commit=True,
-    #     )
-
     @patch(
         "repokid.commands.role.find_role_in_cache",
         MagicMock(return_value="12345-roleid"),
