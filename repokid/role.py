@@ -28,6 +28,7 @@ from typing import Tuple
 from typing import Union
 from typing import overload
 
+from cloudaux.aws.iam import get_role_inline_policies
 from dateutil.parser import parse as ts_parse
 from pydantic import BaseModel
 from pydantic import Field
@@ -36,18 +37,27 @@ from pydantic import validator
 
 from repokid import CONFIG
 from repokid.datasource.access_advisor import AccessAdvisorDatasource
+from repokid.datasource.iam import IAMDatasource
 from repokid.exceptions import DynamoDBError
+from repokid.exceptions import IAMError
 from repokid.exceptions import IntegrityError
 from repokid.exceptions import MissingRepoableServices
 from repokid.exceptions import ModelError
 from repokid.exceptions import NotFoundError
 from repokid.exceptions import RoleNotFoundError
+from repokid.hooks import call_hooks
+from repokid.types import IAMEntry
 from repokid.types import RepokidConfig
 from repokid.types import RepokidHooks
 from repokid.utils.dynamo import create_dynamodb_entry
 from repokid.utils.dynamo import get_role_by_id
 from repokid.utils.dynamo import get_role_by_name
 from repokid.utils.dynamo import set_role_data
+from repokid.utils.iam import delete_policy
+from repokid.utils.iam import inline_policies_size_exceeds_maximum
+from repokid.utils.iam import replace_policies
+from repokid.utils.iam import update_repoed_description
+from repokid.utils.logging import log_deleted_and_repoed_policies
 from repokid.utils.permissions import convert_repoable_perms_to_perms_and_services
 from repokid.utils.permissions import find_newly_added_permissions
 from repokid.utils.permissions import get_permissions_in_policy
@@ -85,7 +95,7 @@ class Role(BaseModel):
     stats: List[Dict[str, Any]] = Field(default=[])
     tags: List[Dict[str, Any]] = Field(default=[])
     total_permissions: Optional[int] = Field()
-    config: RepokidConfig = Field(default=CONFIG)
+    config: Union[RepokidConfig, None] = Field(default=CONFIG)
     _dirty: bool = PrivateAttr(default=False)
     _default_exclude: Set[str] = {
         "role_id",
@@ -116,6 +126,12 @@ class Role(BaseModel):
     @validator("create_date")
     def datetime_normalize(cls, v: datetime.datetime) -> datetime.datetime:
         return datetime.datetime.fromtimestamp(v.timestamp())
+
+    @validator("config")
+    def fix_none_config(cls, v: Optional[RepokidConfig]) -> RepokidConfig:
+        if v is None:
+            return CONFIG
+        return v
 
     def add_policy_version(
         self, policy: Dict[str, Any], source: str = "Scan", store: bool = True
@@ -245,7 +261,7 @@ class Role(BaseModel):
 
     def _stale_aa_services(self) -> List[str]:
         thresh = datetime.datetime.now() - datetime.timedelta(
-            days=self.config["repo_requirements"]["oldest_aa_data_days"]
+            days=self.config["repo_requirements"]["oldest_aa_data_days"]  # type: ignore
         )
         stale_services = []
         if self.aa_data:
@@ -279,11 +295,19 @@ class Role(BaseModel):
             )
 
         aardvark_data = AccessAdvisorDatasource()
+        if self.account:
+            # We'll go ahead and seed this whole account
+            aardvark_data.seed(self.account)
 
         try:
             self.aa_data = aardvark_data.get(self.arn)
         except NotFoundError:
             self.aa_data = []
+
+    def _fetch_iam_data(self) -> IAMEntry:
+        iam_datasource = IAMDatasource()
+        role_data = iam_datasource.get(self.role_id)
+        return role_data.get("RolePolicyList", [])
 
     def fetch(
         self,
@@ -303,6 +327,7 @@ class Role(BaseModel):
                 self.account, self.role_name, fields=fields
             )
         else:
+            # TODO: we can pull role_name and account from an ARN, support that too
             raise ModelError(
                 "missing role_id or role_name and account on Role instance"
             )
@@ -365,8 +390,8 @@ class Role(BaseModel):
 
     def gather_role_data(
         self,
-        current_policy: Dict[str, Any],
         hooks: RepokidHooks,
+        current_policies: Optional[Dict[str, Any]] = None,
         config: Optional[RepokidConfig] = None,
         source: str = "Scan",
         add_no_repo: bool = True,
@@ -380,8 +405,9 @@ class Role(BaseModel):
             logger.debug("%s, will be created", e)
         self.active = True
         self.fetch_aa_data()
+        current_policies = current_policies or self._fetch_iam_data()
         policy_added = self.add_policy_version(
-            current_policy, source=source, store=False
+            current_policies, source=source, store=False
         )
         if policy_added and add_no_repo:
             self._calculate_no_repo_permissions()
@@ -423,9 +449,164 @@ class Role(BaseModel):
         if store:
             self.store(fields=["stats"])
 
+    def remove_permissions(
+        self, permissions: List[str], hooks: RepokidHooks, commit: bool = False
+    ) -> None:
+        """Remove the list of permissions from the provided role.
+
+        Args:
+            account_number (string)
+            permissions (list<string>)
+            role (Role object)
+            role_id (string)
+            commit (bool)
+
+        Returns:
+            None
+        """
+        (
+            repoed_policies,
+            deleted_policy_names,
+        ) = get_repoed_policy(self.policies[-1]["Policy"], set(permissions))
+
+        if inline_policies_size_exceeds_maximum(repoed_policies):
+            logger.error(
+                "Policies would exceed the AWS size limit after repo for role: {} in account {}.  "
+                "Please manually minify.".format(self.role_name, self.account)
+            )
+            return
+
+        if not commit:
+            log_deleted_and_repoed_policies(
+                deleted_policy_names, repoed_policies, self.role_name, self.account
+            )
+            return
+
+        conn = self.config["connection_iam"]  # type: ignore
+        conn["account_number"] = self.account
+
+        for name in deleted_policy_names:
+            try:
+                delete_policy(name, self.role_name, self.account, conn)
+            except IAMError as e:
+                logger.error(e)
+
+        if repoed_policies:
+            try:
+                replace_policies(repoed_policies, self.role_name, self.account, conn)
+            except IAMError as e:
+                logger.error(e)
+
+        current_policies = get_role_inline_policies(self.dict(), **conn) or {}
+        self.add_policy_version(current_policies, "Repo")
+
+        self.repoed = datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
+        update_repoed_description(self.role_name, conn)
+        self.gather_role_data(
+            hooks,
+            current_policies=current_policies,
+            source="ManualPermissionRepo",
+            add_no_repo=False,
+        )
+        logger.info(
+            "Successfully removed {permissions} from role: {role} in account {account_number}".format(
+                permissions=permissions,
+                role=self.role_name,
+                account_number=self.account,
+            )
+        )
+
+    def repo(
+        self, hooks: RepokidHooks, commit: bool = False, scheduled: bool = False
+    ) -> List[str]:
+        errors: List[str] = []
+
+        eligible, reason = self.is_eligible_for_repo()
+        if not eligible:
+            errors.append(f"Role {self.role_name} not eligible for repo: {reason}")
+            return errors
+
+        self.calculate_repo_scores(
+            self.config["filter_config"]["AgeFilter"]["minimum_age"], hooks  # type: ignore
+        )
+        try:
+            repoed_policies, deleted_policy_names = self.get_repoed_policy(
+                scheduled=scheduled
+            )
+        except MissingRepoableServices as e:
+            errors.append(f"Role {self.role_name} cannot be repoed: {e}")
+            return errors
+
+        if inline_policies_size_exceeds_maximum(repoed_policies):
+            error = (
+                "Policies would exceed the AWS size limit after repo for role: {} in account {}.  "
+                "Please manually minify.".format(self.role_name, self.account)
+            )
+            logger.error(error)
+            errors.append(error)
+            self.repo_scheduled = 0
+            self.scheduled_perms = []
+            self.store(["repo_scheduled", "scheduled_perms"])
+            return errors
+
+        if not commit:
+            log_deleted_and_repoed_policies(
+                deleted_policy_names, repoed_policies, self.role_name, self.account
+            )
+            return errors
+
+        conn = self.config["connection_iam"]  # type: ignore
+        conn["account_number"] = self.account
+
+        for name in deleted_policy_names:
+            try:
+                delete_policy(name, self.role_name, self.account, conn)
+            except IAMError as e:
+                logger.error(e)
+                errors.append(str(e))
+
+        if repoed_policies:
+            try:
+                replace_policies(repoed_policies, self.role_name, self.account, conn)
+            except IAMError as e:
+                logger.error(e)
+                errors.append(str(e))
+
+        current_policies = (
+            get_role_inline_policies(self.dict(by_alias=True), **conn) or {}
+        )
+        self.add_policy_version(current_policies, source="Repo")
+
+        # regardless of whether we're successful we want to unschedule the repo
+        self.repo_scheduled = 0
+        self.scheduled_perms = []
+
+        call_hooks(hooks, "AFTER_REPO", {"role": self, "errors": errors})
+
+        if not errors:
+            # repos will stay scheduled until they are successful
+            self.repoed = datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
+            update_repoed_description(self.role_name, conn)
+            self.gather_role_data(
+                hooks,
+                current_policies=current_policies,
+                source="Repo",
+                add_no_repo=False,
+            )
+            logger.info(
+                "Successfully repoed role: {} in account {}".format(
+                    self.role_name, self.account
+                )
+            )
+        self.store()
+        return []
+
 
 class RoleList(object):
-    def __init__(self, role_object_list: List[Role]):
+    def __init__(
+        self, role_object_list: List[Role], config: Optional[RepokidConfig] = None
+    ):
+        self.config = config or CONFIG
         self.roles: List[Role] = role_object_list
 
     @overload
@@ -475,11 +656,17 @@ class RoleList(object):
         cls,
         id_list: Iterable[str],
         fetch: bool = True,
+        fetch_aa_data: bool = True,
         fields: Optional[List[str]] = None,
+        config: Optional[RepokidConfig] = None,
     ) -> RoleList:
-        role_list = cls([Role(role_id=role_id) for role_id in id_list])
+        role_list = cls(
+            [Role(role_id=role_id, config=config) for role_id in id_list], config=config
+        )
         if fetch:
-            map(lambda r: r.fetch(fields=fields), role_list)
+            map(
+                lambda r: r.fetch(fields=fields, fetch_aa_data=fetch_aa_data), role_list
+            )
         return role_list
 
     def append(self, role: Role) -> None:

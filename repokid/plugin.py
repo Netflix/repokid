@@ -14,6 +14,8 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
+from typing import Dict
 from typing import Optional
 
 from repokid import CONFIG
@@ -30,17 +32,16 @@ class RepokidPlugin:
             self.config = CONFIG
 
 
-class Singleton:
-    _instance: Optional[Singleton] = None
+class M_A(type):
+    pass
 
-    def __new__(cls) -> Singleton:
-        if not cls._instance:
-            # TODO: drop this log line to debug
-            logger.info("creating new instance of %s", cls.__name__)
-            cls._instance = super(Singleton, cls).__new__(cls)
 
-        # We know that this will always be a Singleton, but mypy doesn't. Rude.
-        if isinstance(cls._instance, Singleton):
-            return cls._instance
-        else:
-            raise Exception("something bad happened")
+class Singleton(M_A):
+    _instances: Dict[str, Singleton] = {}
+
+    def __call__(cls, *args: Any, **kwargs: Any) -> Singleton:
+        if cls.__name__ not in cls._instances:
+            cls._instances[cls.__name__] = super(Singleton, cls).__call__(
+                *args, **kwargs
+            )
+        return cls._instances[cls.__name__]

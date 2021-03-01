@@ -449,7 +449,8 @@ def test_role_update_by_alias(role_dict):
 
 
 @patch("repokid.role.AccessAdvisorDatasource.get")
-def test_role_fetch_aa_data(mock_get_aardvark_data, role_dict):
+@patch("repokid.role.AccessAdvisorDatasource.seed")
+def test_role_fetch_aa_data(mock_seed_aardvark_data, mock_get_aardvark_data, role_dict):
     mock_get_aardvark_data.return_value = [{"a": "b"}]
     r = Role(**role_dict)
     r.fetch_aa_data()

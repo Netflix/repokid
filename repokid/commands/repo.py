@@ -12,7 +12,6 @@
 #     See the License for the specific language governing permissions and
 #     limitations under the License.
 import csv
-import datetime
 import json
 import logging
 import pprint
@@ -28,19 +27,12 @@ from tabulate import tabulate
 import repokid.hooks
 from repokid.datasource.access_advisor import AccessAdvisorDatasource
 from repokid.datasource.iam import IAMDatasource
-from repokid.exceptions import IAMError
-from repokid.exceptions import MissingRepoableServices
 from repokid.role import Role
 from repokid.role import RoleList
 from repokid.types import RepokidConfig
 from repokid.types import RepokidHooks
 from repokid.utils.dynamo import find_role_in_cache
 from repokid.utils.dynamo import role_ids_for_all_accounts
-from repokid.utils.iam import delete_policy
-from repokid.utils.iam import inline_policies_size_exceeds_maximum
-from repokid.utils.iam import replace_policies
-from repokid.utils.iam import update_repoed_description
-from repokid.utils.logging import log_deleted_and_repoed_policies
 from repokid.utils.permissions import get_services_in_permissions
 
 LOGGER = logging.getLogger("repokid")
@@ -67,91 +59,11 @@ def _repo_role(
     Returns:
         None
     """
-    errors: List[str] = []
-
     role_id = find_role_in_cache(role_name, account_number)
     # only load partial data that we need to determine if we should keep going
-    role = Role(role_id=role_id)
+    role = Role(role_id=role_id, config=config)
     role.fetch()
-
-    continuing = True
-
-    eligible, reason = role.is_eligible_for_repo()
-    if not eligible:
-        errors.append(f"Role {role_name} not eligible for repo: {reason}")
-        return errors
-
-    role.calculate_repo_scores(
-        config["filter_config"]["AgeFilter"]["minimum_age"], hooks
-    )
-    try:
-        repoed_policies, deleted_policy_names = role.get_repoed_policy(
-            scheduled=scheduled
-        )
-    except MissingRepoableServices as e:
-        errors.append(f"Role {role_name} cannot be repoed: {e}")
-        return errors
-
-    if inline_policies_size_exceeds_maximum(repoed_policies):
-        error = (
-            "Policies would exceed the AWS size limit after repo for role: {} in account {}.  "
-            "Please manually minify.".format(role_name, account_number)
-        )
-        LOGGER.error(error)
-        errors.append(error)
-        continuing = False
-
-    # if we aren't repoing for some reason, unschedule the role
-    if not continuing:
-        role.repo_scheduled = 0
-        role.scheduled_perms = []
-        role.store(["repo_scheduled", "scheduled_perms"])
-        return errors
-
-    if not commit:
-        log_deleted_and_repoed_policies(
-            deleted_policy_names, repoed_policies, role_name, account_number
-        )
-        return errors
-
-    conn = config["connection_iam"]
-    conn["account_number"] = account_number
-
-    for name in deleted_policy_names:
-        try:
-            delete_policy(name, role, account_number, conn)
-        except IAMError as e:
-            LOGGER.error(e)
-            errors.append(str(e))
-
-    if repoed_policies:
-        try:
-            replace_policies(repoed_policies, role, account_number, conn)
-        except IAMError as e:
-            LOGGER.error(e)
-            errors.append(str(e))
-
-    current_policies = get_role_inline_policies(role.dict(by_alias=True), **conn) or {}
-    role.add_policy_version(current_policies, source="Repo")
-
-    # regardless of whether we're successful we want to unschedule the repo
-    role.repo_scheduled = 0
-    role.scheduled_perms = []
-
-    repokid.hooks.call_hooks(hooks, "AFTER_REPO", {"role": role, "errors": errors})
-
-    if not errors:
-        # repos will stay scheduled until they are successful
-        role.repoed = datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
-        update_repoed_description(role.role_name, conn)
-        role.gather_role_data(current_policies, hooks, source="Repo", add_no_repo=False)
-        LOGGER.info(
-            "Successfully repoed role: {} in account {}".format(
-                role.role_name, account_number
-            )
-        )
-    role.store()
-    return errors
+    return role.repo(hooks, commit=commit, scheduled=scheduled)
 
 
 def _rollback_role(
@@ -286,7 +198,9 @@ def _rollback_role(
                 errors.append(message)
 
     role.store()
-    role.gather_role_data(current_policies, hooks, source="Restore", add_no_repo=False)
+    role.gather_role_data(
+        hooks, current_policies=current_policies, source="Restore", add_no_repo=False
+    )
 
     if not errors:
         LOGGER.info(
@@ -324,14 +238,10 @@ def _repo_all_roles(
     role_ids = iam_datasource.seed(account_number)
     errors = []
 
-    roles = RoleList.from_ids(role_ids)
-    roles.fetch_all(fetch_aa_data=True)
-
+    roles = RoleList.from_ids(role_ids, config=config)
     roles = roles.get_active()
-
     if scheduled:
         roles = roles.get_scheduled()
-
     if not roles:
         LOGGER.info(f"No roles to repo in account {account_number}")
         return
@@ -353,23 +263,15 @@ def _repo_all_roles(
     for role in roles:
         if limit >= 0 and count == limit:
             break
-        error = _repo_role(
-            account_number,
-            role.role_name,
-            config,
-            hooks,
-            commit=commit,
-            scheduled=scheduled,
-        )
-        if error:
-            errors.append(error)
+        role_errors = role.repo(hooks, commit=commit, scheduled=scheduled)
+        if role_errors:
+            errors.extend(role_errors)
         repoed.append(role)
         count += 1
 
     if errors:
-        LOGGER.error(f"Error(s) during repo: {errors} (account: {account_number})")
-    else:
-        LOGGER.info(f"Successfully repoed {count} roles in account {account_number}")
+        LOGGER.error(f"Error(s) during repo in account: {account_number}: {errors}")
+    LOGGER.info(f"Successfully repoed {count} roles in account {account_number}")
 
     repokid.hooks.call_hooks(
         hooks,

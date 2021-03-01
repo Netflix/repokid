@@ -199,29 +199,31 @@ def get_role_by_name(
     fields: Optional[List[str]] = None,
     dynamo_table: Optional[Table] = None,
 ) -> Dict[str, Any]:
-    table = dynamo_table or ROLE_TABLE
-
-    # TODO: implement fields handling
-    results = table.query(
-        IndexName="RoleName",
-        KeyConditionExpression="RoleName = :rn",
-        ExpressionAttributeValues={":rn": role_name},
-    )
-    items = results.get("Items")
-    if len(items) < 1:
-        raise RoleNotFoundError(f"{role_name} in {account_id} not found in DynamoDB")
-
-    if len(items) > 1:
-        # multiple results, so we'll grab the first match that's active
-        for r in items:
-            if r.get("Active") and isinstance(r, dict):
-                return r
-
-    # we only have one result
-    if not isinstance(items[0], dict):
-        raise RoleNotFoundError(f"{role_name} in {account_id} not found in DynamoDB")
-    else:
-        return items[0]
+    # TODO: make this work
+    raise NotImplementedError("this doesn't work")
+    # table = dynamo_table or ROLE_TABLE
+    #
+    # # TODO: implement fields handling
+    # results = table.query(
+    #     IndexName="RoleName",
+    #     KeyConditionExpression="RoleName = :rn",
+    #     ExpressionAttributeValues={":rn": role_name},
+    # )
+    # items = results.get("Items")
+    # if len(items) < 1:
+    #     raise RoleNotFoundError(f"{role_name} in {account_id} not found in DynamoDB")
+    #
+    # if len(items) > 1:
+    #     # multiple results, so we'll grab the first match that's active
+    #     for r in items:
+    #         if r.get("Active") and isinstance(r, dict):
+    #             return r
+    #
+    # # we only have one result
+    # if not isinstance(items[0], dict):
+    #     raise RoleNotFoundError(f"{role_name} in {account_id} not found in DynamoDB")
+    # else:
+    #     return items[0]
 
 
 def set_role_data(

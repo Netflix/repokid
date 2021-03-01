@@ -274,7 +274,7 @@ class TestRepokidCLI(object):
     @patch("repokid.commands.role_cache.RoleList.store")
     @patch("repokid.commands.role_cache.Role.gather_role_data")
     @patch("repokid.commands.role_cache.AccessAdvisorDatasource")
-    @patch("repokid.datasource.iam.IAMDatasource._fetch")
+    @patch("repokid.datasource.iam.IAMDatasource._fetch_account")
     def test_repokid_update_role_cache(
         self,
         mock_iam_datasource_fetch,
@@ -470,7 +470,7 @@ class TestRepokidCLI(object):
     @patch("repokid.commands.role.RoleList.fetch_all")
     @patch("repokid.commands.repo.AccessAdvisorDatasource")
     @patch("repokid.commands.repo.IAMDatasource.seed")
-    @patch("repokid.commands.repo._repo_role")
+    @patch("repokid.role.Role.repo")
     @patch("time.time")
     def test_repo_all_roles(
         self,
@@ -544,10 +544,10 @@ class TestRepokidCLI(object):
         repokid.commands.repo._repo_all_roles("", {}, hooks, scheduled=True)
 
         assert mock_repo_role.mock_calls == [
-            call("", "ROLE_A", {}, hooks, commit=False, scheduled=False),
-            call("", "ROLE_B", {}, hooks, commit=False, scheduled=False),
-            call("", "ROLE_C", {}, hooks, commit=False, scheduled=False),
-            call("", "ROLE_C", {}, hooks, commit=False, scheduled=True),
+            call(hooks, commit=False, scheduled=False),
+            call(hooks, commit=False, scheduled=False),
+            call(hooks, commit=False, scheduled=False),
+            call(hooks, commit=False, scheduled=True),
         ]
 
         assert mock_call_hooks.mock_calls == [
@@ -758,7 +758,7 @@ class TestRepokidCLI(object):
 
         with raises(IAMError):
             repokid.utils.iam.delete_policy(
-                "PolicyName", mock_role, "123456789012", dict()
+                "PolicyName", mock_role.role_name, "123456789012", dict()
             )
 
     def test_replace_policies(self):
@@ -782,49 +782,12 @@ class TestRepokidCLI(object):
                 ROLE_POLICIES, mock_role, "123456789012", {}
             )
 
-    @patch("repokid.utils.iam.delete_policy", MagicMock(return_value=None))
-    @patch("repokid.utils.iam.replace_policies", MagicMock(return_value=None))
-    @patch(
-        "repokid.utils.iam.remove_permissions_from_role", MagicMock(return_value=None)
-    )
-    @patch(
-        "repokid.utils.iam.update_repoed_description",
-        MagicMock(return_value=None),
-    )
-    def test_remove_permissions_from_role(self):
-        iam = repokid.utils.iam
-
-        class MockRole:
-            role_name = "role_name"
-            role_id = "12345-roleid"
-            policies = [
-                dict(Policy=policy) for _, policy in list(ROLE_POLICIES.items())
-            ]
-
-            def as_dict(self):
-                return dict(RoleName=self.role_name, policies=self.policies)
-
-        mock_role = MockRole()
-
-        iam.remove_permissions_from_role(
-            "123456789012", ["s3:putobjectacl"], mock_role, None, None, commit=False
-        )
-
-        iam.remove_permissions_from_role(
-            "123456789012",
-            ["s3:putobjectacl"],
-            mock_role,
-            {"connection_iam": dict()},
-            None,
-            commit=True,
-        )
-
     @patch(
         "repokid.commands.role.find_role_in_cache",
         MagicMock(return_value="12345-roleid"),
     )
     @patch(
-        "repokid.commands.role.remove_permissions_from_role",
+        "repokid.role.Role.remove_permissions",
         MagicMock(return_value=None),
     )
     @patch("repokid.commands.role.Role.fetch", MagicMock(return_value=None))
@@ -845,5 +808,5 @@ class TestRepokidCLI(object):
             assert open("somefile.json").read() == arns
             mock_file.assert_called_with("somefile.json")
             repokid.commands.role._remove_permissions_from_roles(
-                ["s3:putobjectacl"], "somefile.json", None, mock_hooks, commit=False
+                ["s3:putobjectacl"], "somefile.json", {}, mock_hooks, commit=False
             )
