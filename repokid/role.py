@@ -520,7 +520,6 @@ class Role(BaseModel):
         self, hooks: RepokidHooks, commit: bool = False, scheduled: bool = False
     ) -> List[str]:
         errors: List[str] = []
-        continuing = True
 
         eligible, reason = self.is_eligible_for_repo()
         if not eligible:
@@ -545,10 +544,6 @@ class Role(BaseModel):
             )
             logger.error(error)
             errors.append(error)
-            continuing = False
-
-        # if we aren't repoing for some reason, unschedule the role
-        if not continuing:
             self.repo_scheduled = 0
             self.scheduled_perms = []
             self.store(["repo_scheduled", "scheduled_perms"])
