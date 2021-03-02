@@ -42,12 +42,15 @@ def init_config() -> RepokidConfig:
         None
     """
     load_config_paths = [
+        os.environ.get("REPOKID_CONFIG_LOCATION"),
         os.path.join(os.getcwd(), "config.json"),
         "/etc/repokid/config.json",
         "/apps/repokid/config.json",
     ]
     config: RepokidConfig = {}
     for path in load_config_paths:
+        if not path:
+            continue
         try:
             with open(path, "r") as f:
                 print("Loaded config from {}".format(path))
