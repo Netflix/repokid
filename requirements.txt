@@ -4,7 +4,7 @@
 #
 #    pip-compile --no-emit-index-url --output-file=requirements.txt requirements.in
 #
-bleach==3.2.1             # via readme-renderer
+bleach==3.3.0             # via readme-renderer
 boto3-stubs[dynamodb,iam,sns,sqs]==1.16.34.0  # via -r requirements.in
 boto3==1.16.35            # via -r requirements.in, cloudaux
 boto==2.49.0              # via cloudaux
