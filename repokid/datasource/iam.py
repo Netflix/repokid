@@ -72,12 +72,15 @@ class IAMDatasource(DatasourcePlugin[str, IAMEntry], metaclass=Singleton):
             raise NotFoundError
         return result
 
-    def _get_arns_for_account(self, account_number: str) -> Iterable[str]:
-        return filter(lambda x: x.split(":")[4] == account_number, self.keys())
+    def _get_ids_for_account(self, account_number: str) -> Iterable[str]:
+        ids_for_account = [
+            k for k, v in self.items() if v["Arn"].split(":")[4] == account_number
+        ]
+        return ids_for_account
 
     def seed(self, account_number: str) -> Iterable[str]:
         if account_number in self._seeded:
-            return self._get_arns_for_account(account_number)
+            return self._get_ids_for_account(account_number)
         fetched_data = self._fetch_account(account_number)
         new_keys = fetched_data.keys()
         self._data.update(fetched_data)
