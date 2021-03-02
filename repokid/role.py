@@ -664,9 +664,7 @@ class RoleList(object):
             [Role(role_id=role_id, config=config) for role_id in id_list], config=config
         )
         if fetch:
-            map(
-                lambda r: r.fetch(fields=fields, fetch_aa_data=fetch_aa_data), role_list
-            )
+            role_list.fetch_all(fetch_aa_data=fetch_aa_data, fields=fields)
         return role_list
 
     def append(self, role: Role) -> None:
@@ -714,6 +712,8 @@ class RoleList(object):
         for role in self.roles:
             role.calculate_stats(source=source, store=store)
 
-    def fetch_all(self, fetch_aa_data: bool = False) -> None:
+    def fetch_all(
+        self, fetch_aa_data: bool = False, fields: Optional[List[str]] = None
+    ) -> None:
         for role in self.roles:
-            role.fetch(fetch_aa_data=fetch_aa_data)
+            role.fetch(fetch_aa_data=fetch_aa_data, fields=fields)
