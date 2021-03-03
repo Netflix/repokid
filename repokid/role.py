@@ -277,16 +277,19 @@ class Role(BaseModel):
     def _update_refreshed(self) -> None:
         self.refreshed = datetime.datetime.now().isoformat()
 
-    def update(self, values: Dict[str, Any], store: bool = True) -> None:
-        self._dirty = True
+    def update(
+        self, values: Dict[str, Any], store: bool = True, dirty: bool = True
+    ) -> None:
+        self._dirty = dirty
         self._updated_fields.update(values.keys())
         temp_role = Role(**values)
-        role_data = temp_role.dict(exclude=self._default_exclude)
+        role_data = temp_role.dict(exclude={"config", "_dirty", "_updated_fields"})
         for k, v in role_data.items():
             setattr(self, k, v)
         if store:
             fields = list(values.keys())
             self.store(fields=fields)
+            self._dirty = False
 
     def fetch_aa_data(self) -> None:
         if not self.arn:
@@ -333,7 +336,7 @@ class Role(BaseModel):
             )
 
         if update:
-            self.update(stored_role_data, store=False)
+            self.update(stored_role_data, store=False, dirty=False)
             self._updated_fields - set(stored_role_data.keys())
             if fetch_aa_data:
                 self.fetch_aa_data()
