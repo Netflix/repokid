@@ -134,7 +134,11 @@ class Role(BaseModel):
         return v
 
     def add_policy_version(
-        self, policy: Dict[str, Any], source: str = "Scan", store: bool = True
+        self,
+        policy: Dict[str, Any],
+        source: str = "Scan",
+        store: bool = True,
+        add_no_repo: bool = True,
     ) -> bool:
         if not policy:
             logger.debug("no policy provided, not adding")
@@ -151,7 +155,8 @@ class Role(BaseModel):
             "Policy": policy,
         }
         self.policies.append(policy_entry)
-        self._calculate_no_repo_permissions()
+        if add_no_repo:
+            self._calculate_no_repo_permissions()
         if store:
             self.store(fields=["Policies", "NoRepoPermissions"])
         return True
@@ -412,7 +417,7 @@ class Role(BaseModel):
         self.fetch_aa_data()
         current_policies = current_policies or self._fetch_iam_data()
         policy_added = self.add_policy_version(
-            current_policies, source=source, store=False
+            current_policies, source=source, store=False, add_no_repo=add_no_repo
         )
         if policy_added and add_no_repo:
             self._calculate_no_repo_permissions()
