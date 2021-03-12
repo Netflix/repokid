@@ -32,7 +32,7 @@ from repokid.role import RoleList
 from repokid.types import RepokidConfig
 from repokid.types import RepokidHooks
 from repokid.utils.dynamo import find_role_in_cache
-from repokid.utils.dynamo import role_ids_for_all_accounts
+from repokid.utils.dynamo import role_arns_for_all_accounts
 from repokid.utils.permissions import get_services_in_permissions
 
 LOGGER = logging.getLogger("repokid")
@@ -235,10 +235,10 @@ def _repo_all_roles(
     access_advisor_datasource = AccessAdvisorDatasource()
     access_advisor_datasource.seed(account_number)
     iam_datasource = IAMDatasource()
-    role_ids = iam_datasource.seed(account_number)
+    role_arns = iam_datasource.seed(account_number)
     errors = []
 
-    roles = RoleList.from_ids(role_ids, config=config)
+    roles = RoleList.from_arns(role_arns, config=config)
     roles = roles.get_active()
     if scheduled:
         roles = roles.get_scheduled()
@@ -296,9 +296,9 @@ def _repo_stats(output_file: str, account_number: str = "") -> None:
         access_advisor_datasource = AccessAdvisorDatasource()
         access_advisor_datasource.seed(account_number)
         iam_datasource = IAMDatasource()
-        role_ids = iam_datasource.seed(account_number)
+        role_arns = iam_datasource.seed(account_number)
     else:
-        role_ids = role_ids_for_all_accounts()
+        role_arns = role_arns_for_all_accounts()
 
     headers = [
         "RoleId",
@@ -312,8 +312,8 @@ def _repo_stats(output_file: str, account_number: str = "") -> None:
         "Disqualified By",
     ]
     rows = []
-    roles = RoleList.from_ids(
-        role_ids, fields=["RoleId", "RoleName", "Account", "Active", "Stats"]
+    roles = RoleList.from_arns(
+        role_arns, fields=["RoleId", "RoleName", "Account", "Active", "Stats"]
     )
 
     for role in roles:

@@ -18,7 +18,6 @@ from tqdm import tqdm
 from repokid.datasource.access_advisor import AccessAdvisorDatasource
 from repokid.datasource.iam import IAMDatasource
 from repokid.filters.utils import get_filter_plugins
-from repokid.role import Role
 from repokid.role import RoleList
 from repokid.types import RepokidConfig
 from repokid.types import RepokidHooks
@@ -58,10 +57,10 @@ def _update_role_cache(
     access_advisor_datasource = AccessAdvisorDatasource()
     access_advisor_datasource.seed(account_number)
     iam_datasource = IAMDatasource()
-    role_ids = iam_datasource.seed(account_number)
+    role_arns = iam_datasource.seed(account_number)
 
-    # We only iterate over the newly-seeded data (`role_ids`) so we don't duplicate work for runs on multiple accounts
-    roles = RoleList([Role(**iam_datasource[role_id]) for role_id in role_ids])
+    # We only iterate over the newly-seeded data (`role_arns`) so we don't duplicate work for runs on multiple accounts
+    roles = RoleList.from_arns(role_arns)
 
     LOGGER.info("Updating role data for account {}".format(account_number))
     for role in tqdm(roles):

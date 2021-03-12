@@ -115,6 +115,7 @@ def get_services_and_permissions_from_repoable(
 
 def get_repoable_permissions(
     account_number: str,
+    arn: str,
     role_name: str,
     permissions: Set[str],
     aa_data: List[Dict[str, Any]],
@@ -164,6 +165,7 @@ def get_repoable_permissions(
             "potentially_repoable_permissions": potentially_repoable_permissions,
             "minimum_age": minimum_age,
             "role_id": role_id,
+            "arn": arn,
         },
     )
 

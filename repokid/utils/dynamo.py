@@ -13,6 +13,7 @@ from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError as BotoClientError
 from cloudaux.aws.sts import boto3_cached_conn
 from mypy_boto3_dynamodb.service_resource import Table
+from mypy_boto3_dynamodb.type_defs import AttributeDefinitionTypeDef
 from mypy_boto3_dynamodb.type_defs import GlobalSecondaryIndexTypeDef
 
 from repokid import CONFIG
@@ -23,6 +24,42 @@ DYNAMO_EMPTY_STRING = "---DYNAMO-EMPTY-STRING---"
 T = TypeVar("T", str, Dict[Any, Any], List[Any])
 
 logger = logging.getLogger("repokid")
+
+_indexes = [
+    GlobalSecondaryIndexTypeDef(
+        {
+            "IndexName": "RoleName",
+            "KeySchema": [{"AttributeName": "RoleName", "KeyType": "HASH"}],
+            "Projection": {"ProjectionType": "KEYS_ONLY"},
+            "ProvisionedThroughput": {
+                "ReadCapacityUnits": 10,
+                "WriteCapacityUnits": 10,
+            },
+        }
+    ),
+    GlobalSecondaryIndexTypeDef(
+        {
+            "IndexName": "Account",
+            "KeySchema": [{"AttributeName": "Account", "KeyType": "HASH"}],
+            "Projection": {"ProjectionType": "KEYS_ONLY"},
+            "ProvisionedThroughput": {
+                "ReadCapacityUnits": 10,
+                "WriteCapacityUnits": 10,
+            },
+        }
+    ),
+    GlobalSecondaryIndexTypeDef(
+        {
+            "IndexName": "Arn",
+            "KeySchema": [{"AttributeName": "Arn", "KeyType": "HASH"}],
+            "Projection": {"ProjectionType": "ALL"},
+            "ProvisionedThroughput": {
+                "ReadCapacityUnits": 10,
+                "WriteCapacityUnits": 10,
+            },
+        }
+    ),
+]
 
 
 def _empty_string_from_dynamo_replace(obj: T) -> T:
@@ -83,6 +120,44 @@ def _datetime_to_string_replace(
         return obj
 
 
+def _has_index(table: Table, index_name: str) -> bool:
+    for i in table.global_secondary_indexes:
+        if i["IndexName"] == index_name:
+            return True
+    return False
+
+
+def _attributes_from_index(
+    index: GlobalSecondaryIndexTypeDef,
+) -> List[AttributeDefinitionTypeDef]:
+    attributes: List[AttributeDefinitionTypeDef] = []
+    for attribute in index["KeySchema"]:
+        attributes.append(
+            {"AttributeName": attribute["AttributeName"], "AttributeType": "S"}
+        )
+    return attributes
+
+
+def _ensure_indexes(
+    table: Table, desired_indexes: List[GlobalSecondaryIndexTypeDef]
+) -> None:
+    to_add: List[GlobalSecondaryIndexTypeDef] = []
+    for i in desired_indexes:
+        if not _has_index(table, i["IndexName"]):
+            to_add.append(i)
+
+    index_updates = [{"Create": i} for i in to_add]
+    attribute_updates = []
+    for i in to_add:
+        attribute_updates.extend(_attributes_from_index(i))
+
+    if to_add:
+        table.update(
+            GlobalSecondaryIndexUpdates=index_updates,
+            AttributeDefinitions=attribute_updates,
+        )
+
+
 def dynamo_get_or_create_table(
     account_number: str,
     session_name: str,
@@ -120,6 +195,7 @@ def dynamo_get_or_create_table(
 
     for table in resource.tables.all():
         if table.name == "repokid_roles":
+            _ensure_indexes(table, _indexes)
             return table
 
     table = resource.create_table(
@@ -129,32 +205,10 @@ def dynamo_get_or_create_table(
             {"AttributeName": "RoleId", "AttributeType": "S"},
             {"AttributeName": "RoleName", "AttributeType": "S"},
             {"AttributeName": "Account", "AttributeType": "S"},
+            {"AttributeName": "Arn", "AttributeType": "S"},
         ],
         ProvisionedThroughput={"ReadCapacityUnits": 50, "WriteCapacityUnits": 50},
-        GlobalSecondaryIndexes=[
-            GlobalSecondaryIndexTypeDef(
-                {
-                    "IndexName": "Account",
-                    "KeySchema": [{"AttributeName": "Account", "KeyType": "HASH"}],
-                    "Projection": {"ProjectionType": "KEYS_ONLY"},
-                    "ProvisionedThroughput": {
-                        "ReadCapacityUnits": 10,
-                        "WriteCapacityUnits": 10,
-                    },
-                }
-            ),
-            GlobalSecondaryIndexTypeDef(
-                {
-                    "IndexName": "RoleName",
-                    "KeySchema": [{"AttributeName": "RoleName", "KeyType": "HASH"}],
-                    "Projection": {"ProjectionType": "KEYS_ONLY"},
-                    "ProvisionedThroughput": {
-                        "ReadCapacityUnits": 10,
-                        "WriteCapacityUnits": 10,
-                    },
-                }
-            ),
-        ],
+        GlobalSecondaryIndexes=_indexes,
     )
 
     return table
@@ -193,37 +247,37 @@ def get_role_by_id(
         raise RoleNotFoundError(f"Role ID {role_id} not found in DynamoDB")
 
 
-def get_role_by_name(
-    account_id: str,
-    role_name: str,
+def get_role_by_arn(
+    arn: str,
     fields: Optional[List[str]] = None,
     dynamo_table: Optional[Table] = None,
 ) -> Dict[str, Any]:
-    # TODO: make this work
-    raise NotImplementedError("this doesn't work")
-    # table = dynamo_table or ROLE_TABLE
-    #
-    # # TODO: implement fields handling
-    # results = table.query(
-    #     IndexName="RoleName",
-    #     KeyConditionExpression="RoleName = :rn",
-    #     ExpressionAttributeValues={":rn": role_name},
-    # )
-    # items = results.get("Items")
-    # if len(items) < 1:
-    #     raise RoleNotFoundError(f"{role_name} in {account_id} not found in DynamoDB")
-    #
-    # if len(items) > 1:
-    #     # multiple results, so we'll grab the first match that's active
-    #     for r in items:
-    #         if r.get("Active") and isinstance(r, dict):
-    #             return r
-    #
-    # # we only have one result
-    # if not isinstance(items[0], dict):
-    #     raise RoleNotFoundError(f"{role_name} in {account_id} not found in DynamoDB")
-    # else:
-    #     return items[0]
+    table = dynamo_table or ROLE_TABLE
+
+    query_input = {
+        "IndexName": "Arn",
+        "KeyConditionExpression": Key("Arn").eq(arn),
+    }
+
+    if fields:
+        query_input["ProjectionExpression"] = ", ".join(fields)
+
+    results = table.query(**query_input)
+    items = results.get("Items")
+    if len(items) < 1:
+        raise RoleNotFoundError(f"{arn} not found in DynamoDB")
+
+    if len(items) > 1:
+        # multiple results, so we'll grab the first match that's active
+        for r in items:
+            if r.get("Active") and isinstance(r, dict):
+                return r
+
+    # we only have one result
+    if not isinstance(items[0], dict):
+        raise RoleNotFoundError(f"{arn} not found in DynamoDB")
+    else:
+        return items[0]
 
 
 def set_role_data(
@@ -350,7 +404,7 @@ def find_role_in_cache(
     return ""
 
 
-def role_ids_for_all_accounts(dynamo_table: Optional[Table] = None) -> List[str]:
+def role_arns_for_all_accounts(dynamo_table: Optional[Table] = None) -> List[str]:
     """
     Get a list of all role IDs for all accounts by scanning the Dynamo table
 
@@ -363,15 +417,15 @@ def role_ids_for_all_accounts(dynamo_table: Optional[Table] = None) -> List[str]
     table = dynamo_table or ROLE_TABLE
     role_ids: List[str] = []
 
-    response = table.scan(ProjectionExpression="RoleId")
-    role_ids.extend([str(role_dict["RoleId"]) for role_dict in response["Items"]])
+    response = table.scan(ProjectionExpression="Arn")
+    role_ids.extend([str(role_dict["Arn"]) for role_dict in response["Items"]])
 
     while "LastEvaluatedKey" in response:
         response = table.scan(
-            ProjectionExpression="RoleId",
+            ProjectionExpression="Arn",
             ExclusiveStartKey=response["LastEvaluatedKey"],
         )
-        role_ids.extend([str(role_dict["RoleId"]) for role_dict in response["Items"]])
+        role_ids.extend([str(role_dict["Arn"]) for role_dict in response["Items"]])
     return role_ids
 
 

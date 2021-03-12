@@ -31,7 +31,7 @@ from repokid.types import RepokidConfig
 from repokid.types import RepokidHooks
 from repokid.utils.dynamo import find_role_in_cache
 from repokid.utils.dynamo import get_all_role_ids_for_account
-from repokid.utils.dynamo import role_ids_for_all_accounts
+from repokid.utils.dynamo import role_arns_for_all_accounts
 from repokid.utils.iam import inline_policies_size_exceeds_maximum
 from repokid.utils.permissions import get_permissions_in_policy
 from repokid.utils.permissions import get_services_in_permissions
@@ -106,7 +106,7 @@ def _find_roles_with_permissions(permissions: List[str], output_file: str) -> No
         None
     """
     arns: List[str] = list()
-    role_ids = role_ids_for_all_accounts()
+    role_ids = role_arns_for_all_accounts()
     roles = RoleList.from_ids(
         role_ids, fields=["Policies", "RoleName", "Arn", "Active"]
     )

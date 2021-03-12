@@ -14,13 +14,13 @@
 
 import copy
 import logging
-from typing import Any
 from typing import Dict
 from typing import Iterable
 from typing import Optional
 
 from cloudaux.aws.iam import get_account_authorization_details
-from cloudaux.aws.iam import get_role_inline_policies
+from cloudaux.orchestration.aws.iam.role import FLAGS
+from cloudaux.orchestration.aws.iam.role import get_role
 
 from repokid.datasource.plugin import DatasourcePlugin
 from repokid.exceptions import NotFoundError
@@ -42,8 +42,8 @@ class IAMDatasource(DatasourcePlugin[str, IAMEntry], metaclass=Singleton):
         conn = copy.deepcopy(self.config.get("connection_iam", {}))
         conn["account_number"] = account_number
         auth_details = get_account_authorization_details(filter="Role", **conn)
-        auth_details_by_id = {item["RoleId"]: item for item in auth_details}
-        self._arn_to_id.update({item["Arn"]: item["RoleId"] for item in auth_details})
+        auth_details_by_id = {item["Arn"]: item for item in auth_details}
+        self._arn_to_id.update({item["RoleId"]: item["Arn"] for item in auth_details})
         # convert policies list to dictionary to maintain consistency with old call which returned a dict
         for _, data in auth_details_by_id.items():
             data["RolePolicyList"] = {
@@ -53,24 +53,25 @@ class IAMDatasource(DatasourcePlugin[str, IAMEntry], metaclass=Singleton):
         return auth_details_by_id
 
     def _fetch(self, arn: str) -> IAMEntry:
-        # TODO: sort out arn vs role_id here
-        # we probably only have role_id, which isn't sufficient for this implementation
         logger.info("getting role data for role %s", arn)
         conn = copy.deepcopy(self.config["connection_iam"])
         conn["account_number"] = arn.split(":")[4]
         role = {"RoleName": arn.split("/")[-1]}
-        role_policies: Dict[str, Any] = get_role_inline_policies(role, **conn)
-        if not role_policies:
+        role_info = get_role(role, flags=FLAGS.INLINE_POLICIES, **conn)
+        self._arn_to_id[arn] = role_info["RoleId"]
+        if not role_info:
             raise NotFoundError
-        self._data[arn] = role_policies
-        return role_policies
+        self._data[arn] = role_info["InlinePolicies"]
+        return role_info["InlinePolicies"]  # type: ignore
 
-    def get(self, role_id: str) -> IAMEntry:
-        result = self._data.get(role_id)
+    def get(self, arn: str) -> IAMEntry:
+        result = self._data.get(arn)
         if not result:
-            # TODO: call _fetch()
-            raise NotFoundError
+            return self._fetch(arn)
         return result
+
+    def get_id_for_arn(self, arn: str) -> Optional[str]:
+        return self._arn_to_id.get(arn)
 
     def _get_ids_for_account(self, account_number: str) -> Iterable[str]:
         ids_for_account = [
