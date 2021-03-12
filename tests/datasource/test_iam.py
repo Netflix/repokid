@@ -15,9 +15,11 @@ def test_iam_get():
     assert result == expected
 
 
-def test_iam_get_fallback_not_found():
+@patch("repokid.datasource.iam.IAMDatasource._fetch")
+def test_iam_get_fallback_not_found(mock_fetch):
+    mock_fetch.side_effect = NotFoundError
     ds = IAMDatasource()
-    arn = "pretend_arn"
+    arn = "arn:aws:iam::12345678901:role/test"
     with pytest.raises(NotFoundError):
         _ = ds.get(arn)
 

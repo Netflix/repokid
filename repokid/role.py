@@ -116,13 +116,15 @@ class Role(BaseModel):
         underscore_attrs_are_private = True
 
     def __eq__(self, other: object) -> bool:
-        return self.role_id == other
+        if not self.arn:
+            return False
+        return self.arn == other
 
     def __hash__(self) -> int:
-        return hash(self.role_id)
+        return hash(self.arn)
 
     def __repr__(self) -> str:
-        return f"<Role {self.role_id}>"
+        return f"<{self.arn}>"
 
     @root_validator(pre=True)
     def derive_from_arn(cls, values: Dict[str, Any]) -> Dict[str, Any]:
@@ -335,7 +337,7 @@ class Role(BaseModel):
     def _fetch_iam_data(self) -> IAMEntry:
         iam_datasource = IAMDatasource()
         role_data = iam_datasource.get(self.arn)
-        role_id = iam_datasource.get_id_for_arn(self.arn)
+        role_id = role_data.get("RoleId")
         if role_id:
             self.role_id = role_id
         return role_data
@@ -659,7 +661,7 @@ class RoleList(object):
         return len(self.roles)
 
     def __repr__(self) -> str:
-        return str([role.role_id for role in self.roles])
+        return str([role.arn for role in self.roles])
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, RoleList):

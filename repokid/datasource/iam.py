@@ -43,7 +43,7 @@ class IAMDatasource(DatasourcePlugin[str, IAMEntry], metaclass=Singleton):
         conn["account_number"] = account_number
         auth_details = get_account_authorization_details(filter="Role", **conn)
         auth_details_by_id = {item["Arn"]: item for item in auth_details}
-        self._arn_to_id.update({item["RoleId"]: item["Arn"] for item in auth_details})
+        self._arn_to_id.update({item["Arn"]: item["RoleId"] for item in auth_details})
         # convert policies list to dictionary to maintain consistency with old call which returned a dict
         for _, data in auth_details_by_id.items():
             data["RolePolicyList"] = {

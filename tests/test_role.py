@@ -460,6 +460,7 @@ def test_role_fetch_aa_data(mock_seed_aardvark_data, mock_get_aardvark_data, rol
 def test_role_fetch_aa_data_no_arn(role_dict):
     role_data = copy.deepcopy(role_dict)
     role_data.pop("arn")
+    role_data.pop("account")
     r = Role(**role_data)
     with pytest.raises(ModelError):
         r.fetch_aa_data()
@@ -476,11 +477,11 @@ def test_role_fetch(mock_get_role_by_id, role_dict):
     assert r.repoable_permissions == 20
 
 
-@patch("repokid.role.get_role_by_name")
-def test_role_fetch_no_id(mock_get_role_by_name, role_dict):
+@patch("repokid.role.get_role_by_arn")
+def test_role_fetch_no_id(mock_get_role_by_arn, role_dict):
     stored_role_data = copy.deepcopy(role_dict)
     stored_role_data["repoable_permissions"] = 20
-    mock_get_role_by_name.return_value = stored_role_data
+    mock_get_role_by_arn.return_value = stored_role_data
     local_role_data = copy.deepcopy(role_dict)
     local_role_data.pop("role_id")
     r = Role(**local_role_data)
@@ -495,7 +496,7 @@ def test_role_fetch_not_found(role_dict):
     local_role_data.pop("role_name")
     local_role_data.pop("account")
     r = Role(**local_role_data)
-    with pytest.raises(ModelError):
+    with pytest.raises(RoleNotFoundError):
         r.fetch()
 
 

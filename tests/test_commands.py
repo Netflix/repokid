@@ -272,13 +272,15 @@ ROLES_FOR_DISPLAY = [
 class TestRepokidCLI(object):
     @patch("repokid.commands.role_cache.find_and_mark_inactive")
     @patch("repokid.commands.role_cache.RoleList.store")
-    @patch("repokid.commands.role_cache.Role.gather_role_data")
+    @patch("repokid.role.Role.gather_role_data")
+    @patch("repokid.role.Role.fetch")
     @patch("repokid.commands.role_cache.AccessAdvisorDatasource")
-    @patch("repokid.datasource.iam.IAMDatasource._fetch_account")
+    @patch("repokid.datasource.iam.get_account_authorization_details")
     def test_repokid_update_role_cache(
         self,
-        mock_iam_datasource_fetch,
+        mock_get_account_authorization_details,
         mock_access_advisor_datasource,
+        mock_role_fetch,
         mock_gather_role_data,
         mock_role_list_store,
         mock_find_and_mark_inactive,
@@ -302,9 +304,8 @@ class TestRepokidCLI(object):
                 "PolicyDocument": ROLE_POLICIES["all_services_used"],
             }
         ]
-        role_data = {item["RoleId"]: item for item in role_data}
 
-        mock_iam_datasource_fetch.return_value = role_data
+        mock_get_account_authorization_details.return_value = role_data
 
         config = {
             "aardvark_api_location": "",
@@ -415,7 +416,7 @@ class TestRepokidCLI(object):
         ]
 
     @patch("repokid.hooks.call_hooks")
-    @patch("repokid.commands.role_cache.Role.store")
+    @patch("repokid.role.Role.store")
     @patch("repokid.role.Role.fetch")
     @patch("repokid.commands.role.RoleList.from_ids")
     @patch("repokid.commands.schedule.get_all_role_ids_for_account")
@@ -466,7 +467,7 @@ class TestRepokidCLI(object):
         ]
 
     @patch("repokid.hooks.call_hooks")
-    @patch("repokid.commands.role.RoleList.from_ids")
+    @patch("repokid.commands.role.RoleList.from_arns")
     @patch("repokid.commands.role.RoleList.fetch_all")
     @patch("repokid.commands.repo.AccessAdvisorDatasource")
     @patch("repokid.commands.repo.IAMDatasource.seed")
@@ -479,14 +480,14 @@ class TestRepokidCLI(object):
         mock_iam_datasource_seed,
         mock_aa_datasource,
         mock_role_list_fetch_all,
-        mock_role_list_from_ids,
+        mock_role_list_from_arns,
         mock_call_hooks,
     ):
         hooks = RepokidHooks()
         mock_iam_datasource_seed.return_value = [
-            "AROAABCDEFGHIJKLMNOPA",
-            "AROAABCDEFGHIJKLMNOPB",
-            "AROAABCDEFGHIJKLMNOPC",
+            "arn:aws:iam::123456789012:role/ROLE_A",
+            "arn:aws:iam::123456789012:role/ROLE_B",
+            "arn:aws:iam::123456789012:role/ROLE_C",
         ]
         roles = RoleList(
             [
@@ -529,7 +530,7 @@ class TestRepokidCLI(object):
         # time is past ROLE_C but before ROLE_A
         mock_time.return_value = 10
 
-        mock_role_list_from_ids.return_value = RoleList(
+        mock_role_list_from_arns.return_value = RoleList(
             [
                 roles[0],
                 roles[1],
@@ -577,8 +578,8 @@ class TestRepokidCLI(object):
             ),
         ]
 
-    @patch("repokid.commands.role_cache.Role.fetch")
-    @patch("repokid.commands.role_cache.Role.store")
+    @patch("repokid.role.Role.fetch")
+    @patch("repokid.role.Role.store")
     @patch("repokid.commands.role.RoleList.from_ids")
     @patch("repokid.commands.schedule.find_role_in_cache")
     @patch("repokid.commands.schedule.get_all_role_ids_for_account")
