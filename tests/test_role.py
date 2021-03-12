@@ -490,7 +490,9 @@ def test_role_fetch_no_id(mock_get_role_by_arn, role_dict):
     assert r.repoable_permissions == 20
 
 
-def test_role_fetch_not_found(role_dict):
+@patch("repokid.role.get_role_by_arn")
+def test_role_fetch_not_found(mock_get_role_by_arn, role_dict):
+    mock_get_role_by_arn.side_effect = RoleNotFoundError
     local_role_data = copy.deepcopy(role_dict)
     local_role_data.pop("role_id")
     local_role_data.pop("role_name")
