@@ -1,0 +1,401 @@
+#  Copyright 2021 Netflix, Inc.
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+from repokid.utils.permissions import (
+    remove_actions_from_policies,
+    tidy_policies,
+    get_repoed_policies_v2,
+)
+
+
+def test_remove_actions_from_policies():
+    """
+    This tests a few things:
+     - removing an entire service
+     - removing an individual action
+     - removing a subset of an expanded wildcard action
+     - removing all of an expanded wildcard action
+     - ensuring NOREPO policy statements are not touched
+     - ensuring Deny policy statements are not touched
+    """
+    repoable_permissions = {
+        "ec2",
+        "sqs:sendmessage",
+        "sqs:changemessagevisibilitybatch",
+    }
+    policies = {
+        "partial_repo_policy": {
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Sid": "test-sid",
+                    "Action": [
+                        "ec2:Describe*",
+                        "sqs:SendMessage",
+                        "sqs:GetMessage",
+                        "sqs:Change*",
+                    ],
+                },
+                {
+                    "Effect": "Allow",
+                    "Sid": "NOREPOtest-sid",
+                    "Action": [
+                        "ec2:Describe*",
+                        "sqs:SendMessage",
+                        "sqs:GetMessage",
+                    ],
+                },
+                {
+                    "Effect": "Deny",
+                    "Sid": "test-deny",
+                    "Action": [
+                        "iam:Create*",
+                    ],
+                },
+            ],
+        },
+        "full_repo_policy": {
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Sid": "test-sid",
+                    "Action": [
+                        "ec2:Describe*",
+                        "sqs:SendMessage",
+                    ],
+                },
+            ],
+        },
+        "no_repo_policy": {
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Sid": "test-sid",
+                    "Action": [
+                        "sqs:GetMessage",
+                    ],
+                },
+                {
+                    "Effect": "Allow",
+                    "Sid": "NOREPOtest-sid",
+                    "Action": [
+                        "ec2:Describe*",
+                        "sqs:SendMessage",
+                        "sqs:GetMessage",
+                    ],
+                },
+            ],
+        },
+    }
+    expected_policies = {
+        "partial_repo_policy": {
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Sid": "test-sid",
+                    "Action": [
+                        "sqs:changemessagevisibility",
+                        "sqs:getmessage",
+                    ],
+                },
+                {
+                    "Effect": "Allow",
+                    "Sid": "NOREPOtest-sid",
+                    "Action": [
+                        "ec2:Describe*",
+                        "sqs:SendMessage",
+                        "sqs:GetMessage",
+                    ],
+                },
+                {
+                    "Effect": "Deny",
+                    "Sid": "test-deny",
+                    "Action": [
+                        "iam:Create*",
+                    ],
+                },
+            ],
+        },
+        "full_repo_policy": {
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Sid": "test-sid",
+                    "Action": [],
+                },
+            ],
+        },
+        "no_repo_policy": {
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Sid": "test-sid",
+                    "Action": [
+                        "sqs:getmessage",
+                    ],
+                },
+                {
+                    "Effect": "Allow",
+                    "Sid": "NOREPOtest-sid",
+                    "Action": [
+                        "ec2:Describe*",
+                        "sqs:SendMessage",
+                        "sqs:GetMessage",
+                    ],
+                },
+            ],
+        },
+    }
+    result = remove_actions_from_policies(
+        policies, repoable_permissions, exclude_prefix="NOREPO"
+    )
+    assert result == expected_policies
+
+
+def test_tidy_policies():
+    policies = {
+        "partial_repo_policy": {
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Sid": "test-sid",
+                    "Action": [],
+                },
+                {
+                    "Effect": "Allow",
+                    "Sid": "NOREPOtest-sid",
+                    "Action": [
+                        "ec2:Describe*",
+                        "sqs:SendMessage",
+                        "sqs:GetMessage",
+                    ],
+                },
+                {
+                    "Effect": "Deny",
+                    "Sid": "test-deny",
+                    "Action": [
+                        "iam:Create*",
+                    ],
+                },
+            ],
+        },
+        "full_repo_policy": {
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Sid": "test-sid",
+                    "Action": [],
+                },
+            ],
+        },
+        "no_repo_policy": {
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Sid": "test-sid",
+                    "Action": [
+                        "sqs:getmessage",
+                    ],
+                },
+                {
+                    "Effect": "Allow",
+                    "Sid": "NOREPOtest-sid",
+                    "Action": [
+                        "ec2:Describe*",
+                        "sqs:SendMessage",
+                        "sqs:GetMessage",
+                    ],
+                },
+            ],
+        },
+    }
+    expected_policies = {
+        "partial_repo_policy": {
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Sid": "NOREPOtest-sid",
+                    "Action": [
+                        "ec2:Describe*",
+                        "sqs:SendMessage",
+                        "sqs:GetMessage",
+                    ],
+                },
+                {
+                    "Effect": "Deny",
+                    "Sid": "test-deny",
+                    "Action": [
+                        "iam:Create*",
+                    ],
+                },
+            ],
+        },
+        "full_repo_policy": {
+            "Statement": [],
+        },
+        "no_repo_policy": {
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Sid": "test-sid",
+                    "Action": [
+                        "sqs:getmessage",
+                    ],
+                },
+                {
+                    "Effect": "Allow",
+                    "Sid": "NOREPOtest-sid",
+                    "Action": [
+                        "ec2:Describe*",
+                        "sqs:SendMessage",
+                        "sqs:GetMessage",
+                    ],
+                },
+            ],
+        },
+    }
+    expected_empty_policy_names = ["full_repo_policy"]
+    tidied_policies, empty_policy_names = tidy_policies(policies)
+    assert tidied_policies == expected_policies
+    assert empty_policy_names == expected_empty_policy_names
+
+
+def test_get_repoed_policies_v2():
+    repoable_permissions = {
+        "ec2",
+        "sqs:sendmessage",
+        "sqs:changemessagevisibilitybatch",
+    }
+    policies = {
+        "partial_repo_policy": {
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Sid": "test-sid",
+                    "Action": [
+                        "ec2:Describe*",
+                        "sqs:SendMessage",
+                        "sqs:GetMessage",
+                        "sqs:Change*",
+                    ],
+                },
+                {
+                    "Effect": "Allow",
+                    "Sid": "test-sid",
+                    "Action": [
+                        "sqs:SendMessage",
+                    ],
+                },
+                {
+                    "Effect": "Allow",
+                    "Sid": "NOREPOtest-sid",
+                    "Action": [
+                        "ec2:Describe*",
+                        "sqs:SendMessage",
+                        "sqs:GetMessage",
+                    ],
+                },
+                {
+                    "Effect": "Deny",
+                    "Sid": "test-deny",
+                    "Action": [
+                        "iam:Create*",
+                    ],
+                },
+            ],
+        },
+        "full_repo_policy": {
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Sid": "test-sid",
+                    "Action": [
+                        "ec2:Describe*",
+                        "sqs:SendMessage",
+                    ],
+                },
+            ],
+        },
+        "no_repo_policy": {
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Sid": "test-sid",
+                    "Action": [
+                        "sqs:GetMessage",
+                    ],
+                },
+                {
+                    "Effect": "Allow",
+                    "Sid": "NOREPOtest-sid",
+                    "Action": [
+                        "ec2:Describe*",
+                        "sqs:SendMessage",
+                        "sqs:GetMessage",
+                    ],
+                },
+            ],
+        },
+    }
+    expected_policies = {
+        "partial_repo_policy": {
+            "Statement": [
+                {
+                    "Action": ["sqs:changemessagevisibility", "sqs:getmessage"],
+                    "Effect": "Allow",
+                    "Sid": "test-sid",
+                },
+                {
+                    "Action": ["ec2:Describe*", "sqs:SendMessage", "sqs:GetMessage"],
+                    "Effect": "Allow",
+                    "Sid": "NOREPOtest-sid",
+                },
+                {
+                    "Effect": "Deny",
+                    "Sid": "test-deny",
+                    "Action": [
+                        "iam:Create*",
+                    ],
+                },
+            ],
+        },
+        "full_repo_policy": {
+            "Statement": [],
+        },
+        "no_repo_policy": {
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Sid": "test-sid",
+                    "Action": [
+                        "sqs:getmessage",
+                    ],
+                },
+                {
+                    "Effect": "Allow",
+                    "Sid": "NOREPOtest-sid",
+                    "Action": [
+                        "ec2:Describe*",
+                        "sqs:SendMessage",
+                        "sqs:GetMessage",
+                    ],
+                },
+            ],
+        },
+    }
+    expected_empty_policy_names = ["full_repo_policy"]
+    repoed_policies, empty_policy_names = get_repoed_policies_v2(
+        policies, repoable_permissions
+    )
+    assert repoed_policies == expected_policies
+    assert empty_policy_names == expected_empty_policy_names

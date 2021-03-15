@@ -33,6 +33,7 @@ from dateutil.parser import parse as ts_parse
 from pydantic import BaseModel
 from pydantic import Field
 from pydantic import PrivateAttr
+from pydantic import root_validator
 from pydantic import validator
 
 from repokid import CONFIG
@@ -50,8 +51,8 @@ from repokid.types import IAMEntry
 from repokid.types import RepokidConfig
 from repokid.types import RepokidHooks
 from repokid.utils.dynamo import create_dynamodb_entry
+from repokid.utils.dynamo import get_role_by_arn
 from repokid.utils.dynamo import get_role_by_id
-from repokid.utils.dynamo import get_role_by_name
 from repokid.utils.dynamo import set_role_data
 from repokid.utils.iam import delete_policy
 from repokid.utils.iam import inline_policies_size_exceeds_maximum
@@ -115,17 +116,35 @@ class Role(BaseModel):
         underscore_attrs_are_private = True
 
     def __eq__(self, other: object) -> bool:
-        return self.role_id == other
+        if not self.arn:
+            return False
+        return self.arn == other
 
     def __hash__(self) -> int:
-        return hash(self.role_id)
+        return hash(self.arn)
 
     def __repr__(self) -> str:
-        return f"<Role {self.role_id}>"
+        return f"<{self.arn}>"
+
+    @root_validator(pre=True)
+    def derive_from_arn(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        arn = values.get("arn") or values.get("Arn")
+        account = values.get("account") or values.get("Account")
+        role_name = values.get("role_name") or values.get("RoleName")
+        if arn and not account:
+            values["account"] = arn.split(":")[4]
+        if arn and not role_name:
+            values["role_name"] = arn.split("/")[-1]
+        if account and role_name and not arn:
+            values["arn"] = f"arn:aws:iam::{account}:role/{role_name}"
+        return values
 
     @validator("create_date")
-    def datetime_normalize(cls, v: datetime.datetime) -> datetime.datetime:
-        return datetime.datetime.fromtimestamp(v.timestamp())
+    def datetime_normalize(cls, v: datetime.datetime) -> Optional[datetime.datetime]:
+        if isinstance(v, datetime.datetime):
+            return datetime.datetime.fromtimestamp(v.timestamp())
+        else:
+            return None
 
     @validator("config")
     def fix_none_config(cls, v: Optional[RepokidConfig]) -> RepokidConfig:
@@ -173,6 +192,7 @@ class Role(BaseModel):
             return
         repoable_permissions = get_repoable_permissions(
             self.account,
+            self.arn,
             self.role_name,
             all_permissions,
             self.aa_data,
@@ -316,8 +336,11 @@ class Role(BaseModel):
 
     def _fetch_iam_data(self) -> IAMEntry:
         iam_datasource = IAMDatasource()
-        role_data = iam_datasource.get(self.role_id)
-        return role_data.get("RolePolicyList", [])
+        role_data = iam_datasource.get(self.arn)
+        role_id = role_data.get("RoleId")
+        if role_id:
+            self.role_id = role_id
+        return role_data
 
     def fetch(
         self,
@@ -332,10 +355,8 @@ class Role(BaseModel):
 
         if self.role_id:
             stored_role_data = get_role_by_id(self.role_id, fields=fields)
-        elif self.role_name and self.account:
-            stored_role_data = get_role_by_name(
-                self.account, self.role_name, fields=fields
-            )
+        elif self.arn:
+            stored_role_data = get_role_by_arn(self.arn, fields=fields)
         else:
             # TODO: we can pull role_name and account from an ARN, support that too
             raise ModelError(
@@ -356,7 +377,7 @@ class Role(BaseModel):
     def store(self, fields: Optional[List[str]] = None) -> None:
         create = False
         try:
-            remote_role_data = Role(role_id=self.role_id)
+            remote_role_data = Role(role_id=self.role_id, arn=self.arn)
             remote_role_data.fetch(fields=["LastUpdated"])
             if (
                 remote_role_data.last_updated
@@ -640,7 +661,7 @@ class RoleList(object):
         return len(self.roles)
 
     def __repr__(self) -> str:
-        return str([role.role_id for role in self.roles])
+        return str([role.arn for role in self.roles])
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, RoleList):
@@ -672,6 +693,22 @@ class RoleList(object):
     ) -> RoleList:
         role_list = cls(
             [Role(role_id=role_id, config=config) for role_id in id_list], config=config
+        )
+        if fetch:
+            role_list.fetch_all(fetch_aa_data=fetch_aa_data, fields=fields)
+        return role_list
+
+    @classmethod
+    def from_arns(
+        cls,
+        arn_list: Iterable[str],
+        fetch: bool = True,
+        fetch_aa_data: bool = True,
+        fields: Optional[List[str]] = None,
+        config: Optional[RepokidConfig] = None,
+    ) -> RoleList:
+        role_list = cls(
+            [Role(arn=arn, config=config) for arn in arn_list], config=config
         )
         if fetch:
             role_list.fetch_all(fetch_aa_data=fetch_aa_data, fields=fields)
