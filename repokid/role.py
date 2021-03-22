@@ -302,6 +302,9 @@ class Role(BaseModel):
     def _update_refreshed(self) -> None:
         self.refreshed = datetime.datetime.now().isoformat()
 
+    def _update_tags(self, tags: List[Dict[str, str]]) -> None:
+        self.tags = tags
+
     def update(
         self, values: Dict[str, Any], store: bool = True, dirty: bool = True
     ) -> None:
@@ -436,12 +439,15 @@ class Role(BaseModel):
             logger.debug("%s, will be created", e)
         self.active = True
         self.fetch_aa_data()
-        current_policies = current_policies or self._fetch_iam_data()
-        policy_added = self.add_policy_version(
-            current_policies, source=source, store=False, add_no_repo=add_no_repo
-        )
+        iam_data = self._fetch_iam_data()
+        current_policies = current_policies or iam_data.get("RolePolicyList", {})
+        if current_policies:
+            policy_added = self.add_policy_version(
+                current_policies, source=source, store=False, add_no_repo=add_no_repo
+            )
         if policy_added and add_no_repo:
             self._calculate_no_repo_permissions()
+        self._update_tags(iam_data.get("Tags", []))
         self._update_opt_out()
         self._update_refreshed()
         minimum_age = config["filter_config"]["AgeFilter"]["minimum_age"]
