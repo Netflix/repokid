@@ -445,8 +445,8 @@ class Role(BaseModel):
             policy_added = self.add_policy_version(
                 current_policies, source=source, store=False, add_no_repo=add_no_repo
             )
-        if policy_added and add_no_repo:
-            self._calculate_no_repo_permissions()
+            if policy_added and add_no_repo:
+                self._calculate_no_repo_permissions()
         self._update_tags(iam_data.get("Tags", []))
         self._update_opt_out()
         self._update_refreshed()
