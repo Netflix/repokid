@@ -57,12 +57,12 @@ class IAMDatasource(DatasourcePlugin[str, IAMEntry], metaclass=Singleton):
         conn = copy.deepcopy(self.config["connection_iam"])
         conn["account_number"] = arn.split(":")[4]
         role = {"RoleName": arn.split("/")[-1]}
-        role_info = get_role(role, flags=FLAGS.INLINE_POLICIES, **conn)
+        role_info: IAMEntry = get_role(role, flags=FLAGS.INLINE_POLICIES, **conn)
         self._arn_to_id[arn] = role_info["RoleId"]
         if not role_info:
             raise NotFoundError
-        self._data[arn] = role_info["InlinePolicies"]
-        return role_info["InlinePolicies"]  # type: ignore
+        self._data[arn] = role_info
+        return role_info
 
     def get(self, arn: str) -> IAMEntry:
         result = self._data.get(arn)

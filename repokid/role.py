@@ -425,7 +425,7 @@ class Role(BaseModel):
     def gather_role_data(
         self,
         hooks: RepokidHooks,
-        current_policies: Optional[Dict[str, Any]] = None,
+        current_policies: Dict[str, Any] = {},
         config: Optional[RepokidConfig] = None,
         source: str = "Scan",
         add_no_repo: bool = True,
@@ -440,13 +440,15 @@ class Role(BaseModel):
         self.active = True
         self.fetch_aa_data()
         iam_data = self._fetch_iam_data()
-        current_policies = current_policies or iam_data.get("RolePolicyList", {})
-        if current_policies:
-            policy_added = self.add_policy_version(
-                current_policies, source=source, store=False, add_no_repo=add_no_repo
+        if not current_policies:
+            current_policies = iam_data.get("RolePolicyList", {}) or iam_data.get(
+                "InlinePolicies", {}
             )
-            if policy_added and add_no_repo:
-                self._calculate_no_repo_permissions()
+        policy_added = self.add_policy_version(
+            current_policies, source=source, store=False, add_no_repo=add_no_repo
+        )
+        if policy_added and add_no_repo:
+            self._calculate_no_repo_permissions()
         self._update_tags(iam_data.get("Tags", []))
         self._update_opt_out()
         self._update_refreshed()
@@ -769,4 +771,7 @@ class RoleList(object):
         self, fetch_aa_data: bool = False, fields: Optional[List[str]] = None
     ) -> None:
         for role in self.roles:
-            role.fetch(fetch_aa_data=fetch_aa_data, fields=fields)
+            try:
+                role.fetch(fetch_aa_data=fetch_aa_data, fields=fields)
+            except RoleNotFoundError:
+                logger.info(RoleNotFoundError)
