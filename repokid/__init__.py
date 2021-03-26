@@ -27,7 +27,7 @@ from repokid.types import RepokidConfig
 from repokid.types import RepokidHook
 from repokid.types import RepokidHooks
 
-__version__ = "0.18.2"
+__version__ = "0.18.3"
 
 
 def init_config() -> RepokidConfig:
