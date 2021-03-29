@@ -40,14 +40,9 @@ def find_and_mark_inactive(account_number: str, active_roles: RoleList) -> None:
     Returns:
         None
     """
-
-    # TODO: clean up and simplify this logic. We're getting a RoleList, converting to a set,
-    #  and subtracting it from a set of known roles. This is strange and confusing.
-    active_roles_set = set(active_roles)
     known_roles = set(get_all_role_ids_for_account(account_number))
-    inactive_role_ids = known_roles - active_roles_set
+    inactive_roles = {role for role in active_roles if role.role_id not in known_roles}
 
-    inactive_roles = RoleList.from_ids(inactive_role_ids, fields=["Active", "Arn"])
     for role in inactive_roles:
         if role.active:
             role.mark_inactive()
