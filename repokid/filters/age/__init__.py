@@ -34,7 +34,10 @@ class AgeFilter(Filter):
 
         too_young = RoleList([])
         for role in input_list:
-            if role.create_date and role.create_date > now - ago:
+            if not role.create_date:
+                LOGGER.warning(f"Role {role.role_name} is missing create_date")
+                too_young.append(role)
+            elif role.create_date > now - ago:
                 LOGGER.info(
                     "Role {name} created too recently to cleanup. ({date})".format(
                         name=role.role_name, date=role.create_date

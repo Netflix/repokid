@@ -140,9 +140,13 @@ class Role(BaseModel):
         return values
 
     @validator("create_date")
-    def datetime_normalize(cls, v: datetime.datetime) -> Optional[datetime.datetime]:
+    def datetime_normalize(
+        cls, v: Union[datetime.datetime, str]
+    ) -> Optional[datetime.datetime]:
         if isinstance(v, datetime.datetime):
             return datetime.datetime.fromtimestamp(v.timestamp())
+        elif isinstance(v, str):
+            return ts_parse(v)
         else:
             return None
 
@@ -343,6 +347,9 @@ class Role(BaseModel):
         role_id = role_data.get("RoleId")
         if role_id:
             self.role_id = role_id
+        create_date = role_data.get("CreateDate")
+        if create_date:
+            self.create_date = create_date
         return role_data
 
     def fetch(
