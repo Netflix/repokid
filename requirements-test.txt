@@ -69,7 +69,6 @@ pluggy==0.13.1
 pre-commit==2.9.3
     # via -r requirements-test.in
 py==1.10.0
-
     # via pytest
 pycodestyle==2.6.0
     # via
