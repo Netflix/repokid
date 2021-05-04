@@ -18,7 +18,7 @@ import logging
 from repokid.filters import Filter
 from repokid.role import RoleList
 
-LOGGER = logging.getLogger("repokid")
+log = logging.getLogger("repokid")
 
 
 class AgeFilter(Filter):
@@ -27,7 +27,7 @@ class AgeFilter(Filter):
         if self.config:
             days_delta = self.config.get("minimum_age", 90)
         else:
-            LOGGER.info("Minimum age not set in config, using default 90 days")
+            log.info("Minimum age not set in config, using default 90 days")
             days_delta = 90
 
         ago = datetime.timedelta(days=days_delta)
@@ -35,13 +35,16 @@ class AgeFilter(Filter):
         too_young = RoleList([])
         for role in input_list:
             if not role.create_date:
-                LOGGER.warning(f"Role {role.role_name} is missing create_date")
+                log.warning(f"Role {role.role_name} is missing create_date")
                 too_young.append(role)
-            elif role.create_date > now - ago:
-                LOGGER.info(
-                    "Role {name} created too recently to cleanup. ({date})".format(
-                        name=role.role_name, date=role.create_date
-                    )
+                continue
+
+            # Ensure create_date is an offset-naive datetime
+            create_date = datetime.datetime.fromtimestamp(role.create_date.timestamp())
+
+            if create_date > now - ago:
+                log.info(
+                    f"Role {role.role_name} created too recently to cleanup. ({create_date})"
                 )
                 too_young.append(role)
         return too_young
