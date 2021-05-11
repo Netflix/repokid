@@ -7,6 +7,7 @@ from repokid import CONFIG
 from repokid import get_hooks
 from repokid.commands.repo import _rollback_role
 from repokid.dispatcher.types import Message
+from repokid.exceptions import RoleStoreError
 from repokid.role import Role
 from repokid.utils.dynamo import find_role_in_cache
 from repokid.utils.permissions import get_permissions_in_policy
@@ -144,7 +145,13 @@ def opt_out(message: Message) -> ResponderReturn:
             "expire": expire_epoch,
         }
         role.opt_out = new_opt_out
-        role.store(fields=["opt_out"])
+        try:
+            role.store(fields=["opt_out"])
+        except RoleStoreError:
+            return ResponderReturn(
+                successful=False,
+                return_message=f"Failed to opt out role {message.role_name} in account {message.account}",
+            )
         return ResponderReturn(
             successful=True,
             return_message="Role {} in account {} opted-out until {}".format(
@@ -177,7 +184,13 @@ def remove_opt_out(message: Message) -> ResponderReturn:
         )
     else:
         role.opt_out = {}
-        role.store(fields=["opt_out"])
+        try:
+            role.store(fields=["opt_out"])
+        except RoleStoreError:
+            return ResponderReturn(
+                successful=False,
+                return_message=f"Failed to cancel opt out for role {message.role_name} in account {message.account}",
+            )
         return ResponderReturn(
             successful=True,
             return_message="Cancelled opt-out for role {} in account {}".format(

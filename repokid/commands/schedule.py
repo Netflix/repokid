@@ -18,6 +18,7 @@ from datetime import datetime as dt
 from tabulate import tabulate
 
 import repokid.hooks
+from repokid.exceptions import RoleStoreError
 from repokid.role import Role
 from repokid.role import RoleList
 from repokid.types import RepokidConfig
@@ -64,7 +65,10 @@ def _schedule_repo(
         # freeze the scheduled perms to whatever is repoable right now
         role.repo_scheduled = scheduled_time
         role.scheduled_perms = role.repoable_services
-        role.store(["repo_scheduled", "scheduled_perms"])
+        try:
+            role.store(["repo_scheduled", "scheduled_perms"])
+        except RoleStoreError:
+            logging.exception("failed to store role", exc_info=True)
 
         scheduled_roles.append(role)
 
@@ -126,7 +130,10 @@ def _cancel_scheduled_repo(
         for role in roles:
             role.repo_scheduled = 0
             role.scheduled_perms = []
-            role.store(["repo_scheduled", "scheduled_perms"])
+            try:
+                role.store(["repo_scheduled", "scheduled_perms"])
+            except RoleStoreError:
+                LOGGER.exception("failed to store role", exc_info=True)
 
         LOGGER.info(
             "Canceled scheduled repo for roles: {}".format(
@@ -137,10 +144,8 @@ def _cancel_scheduled_repo(
 
     role_id = find_role_in_cache(role_name, account_number)
     if not role_id:
-        LOGGER.warn(
-            "Could not find role with name {} in account {}".format(
-                role_name, account_number
-            )
+        LOGGER.warning(
+            f"Could not find role with name {role_name} in account {account_number}"
         )
         return
 
@@ -157,7 +162,12 @@ def _cancel_scheduled_repo(
 
     role.repo_scheduled = 0
     role.scheduled_perms = []
-    role.store(["repo_scheduled", "scheduled_perms"])
+    try:
+        role.store(["repo_scheduled", "scheduled_perms"])
+    except RoleStoreError:
+        LOGGER.exception("failed to store role", exc_info=True)
+        raise
+
     LOGGER.info(
         "Successfully cancelled scheduled repo for role {} in account {}".format(
             role.role_name, role.account

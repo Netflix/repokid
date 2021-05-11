@@ -18,7 +18,7 @@ import pprint
 from typing import Iterable
 from typing import List
 
-import botocore
+from botocore.exceptions import ClientError
 from cloudaux.aws.iam import delete_role_policy
 from cloudaux.aws.iam import get_role_inline_policies
 from cloudaux.aws.iam import put_role_policy
@@ -27,6 +27,7 @@ from tabulate import tabulate
 import repokid.hooks
 from repokid.datasource.access_advisor import AccessAdvisorDatasource
 from repokid.datasource.iam import IAMDatasource
+from repokid.exceptions import RoleStoreError
 from repokid.role import Role
 from repokid.role import RoleList
 from repokid.types import RepokidConfig
@@ -164,12 +165,8 @@ def _rollback_role(
                 **conn,
             )
 
-        except botocore.exceptions.ClientError as e:
-            message = (
-                "Unable to push policy {}.  Error: {} (role: {} account {})".format(
-                    policy_name, e.message, role.role_name, account_number
-                )
-            )
+        except ClientError:
+            message = f"Unable to push policy {policy_name}. (role: {role.role_name} account {account_number})"
             LOGGER.error(message, exc_info=True)
             errors.append(message)
 
@@ -190,17 +187,19 @@ def _rollback_role(
                     RoleName=role.role_name, PolicyName=policy_name, **conn
                 )
 
-            except botocore.exceptions.ClientError as e:
-                message = "Unable to delete policy {}.  Error: {} (role: {} account {})".format(
-                    policy_name, e.message, role.role_name, account_number
-                )
+            except ClientError:
+                message = f"Unable to delete policy {policy_name}.  (role: {role.role_name} account {account_number})"
                 LOGGER.error(message, exc_info=True)
                 errors.append(message)
 
-    role.store()
-    role.gather_role_data(
-        hooks, current_policies=current_policies, source="Restore", add_no_repo=False
-    )
+    try:
+        role.store()
+    except RoleStoreError:
+        message = (
+            f"failed to store role data for {role.role_name} in account {role.account}"
+        )
+        errors.append(message)
+        LOGGER.exception(message, exc_info=True)
 
     if not errors:
         LOGGER.info(
