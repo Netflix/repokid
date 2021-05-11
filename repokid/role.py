@@ -40,17 +40,18 @@ from repokid import CONFIG
 from repokid.datasource.access_advisor import AccessAdvisorDatasource
 from repokid.datasource.iam import IAMDatasource
 from repokid.exceptions import DynamoDBError
+from repokid.exceptions import DynamoDBMaxItemSizeError
 from repokid.exceptions import IAMError
 from repokid.exceptions import IntegrityError
 from repokid.exceptions import MissingRepoableServices
 from repokid.exceptions import ModelError
 from repokid.exceptions import NotFoundError
 from repokid.exceptions import RoleNotFoundError
+from repokid.exceptions import RoleStoreError
 from repokid.hooks import call_hooks
 from repokid.types import IAMEntry
 from repokid.types import RepokidConfig
 from repokid.types import RepokidHooks
-from repokid.utils.dynamo import create_dynamodb_entry
 from repokid.utils.dynamo import get_role_by_arn
 from repokid.utils.dynamo import get_role_by_id
 from repokid.utils.dynamo import set_role_data
@@ -98,10 +99,12 @@ class Role(BaseModel):
     total_permissions: Optional[int] = Field()
     config: Union[RepokidConfig, None] = Field(default=CONFIG)
     _dirty: bool = PrivateAttr(default=False)
-    _default_exclude: Set[str] = {
+    _keys: Set[str] = {
         "role_id",
         "account",
         "config",
+    }
+    _meta: Set[str] = {
         "_dirty",
         "_updated_fields",
     }
@@ -183,6 +186,16 @@ class Role(BaseModel):
         if store:
             self.store(fields=["Policies", "NoRepoPermissions"])
         return True
+
+    def _remove_oldest_policy_version(self) -> None:
+        if len(self.policies) > 0:
+            removed = self.policies.pop(0)
+            source = removed.get("Source")
+            discovered = removed.get("Discovered")
+            logger.info(
+                f"removing policy discovered by {source} on {discovered} from {self.role_name}"
+            )
+            self._updated_fields.add("policies")
 
     def calculate_repo_scores(self, minimum_age: int, hooks: RepokidHooks) -> None:
         (
@@ -379,10 +392,10 @@ class Role(BaseModel):
             if fetch_aa_data:
                 self.fetch_aa_data()
 
-    def mark_inactive(self, store: bool = True) -> None:
+    def mark_inactive(self, store: bool = False) -> None:
         self.active = False
         if store:
-            self.store(fields=["Active"])
+            self.store(fields=["active"])
 
     def store(self, fields: Optional[List[str]] = None) -> None:
         create = False
@@ -400,34 +413,56 @@ class Role(BaseModel):
 
         self.last_updated = datetime.datetime.now()
 
-        if create:
-            # TODO: handle this case in set_role_data() to simplify logic here
-            create_dynamodb_entry(
-                self.dict(
-                    by_alias=True, exclude={"config", "_dirty", "_updated_fields"}
-                )
-            )
-            self._updated_fields = set()
-        else:
-            if fields:
-                include_fields = set(fields)
-                include_fields.add("last_updated")
+        set_role_data_args: Dict[str, Any] = {
+            "by_alias": True,
+        }
+        # If fields are specified, we need to add last_updated to make sure it gets set
+        if fields:
+            include_fields = set(fields)
+            include_fields.add("last_updated")
+            set_role_data_args["include_fields"] = include_fields
+
+        # Exclude key fields unless this is a newly-created item. Key fields cannot be included
+        # in DynamoDB update calls.
+        exclude_fields = self._meta
+        if not create:
+            exclude_fields.update(self._keys)
+        set_role_data_args["exclude_fields"] = exclude_fields
+
+        attempts = 0
+        max_retries = 3
+        while attempts < max_retries:
+            try:
                 set_role_data(
                     self.role_id,
-                    self.dict(
-                        include=include_fields,
-                        by_alias=True,
-                        exclude=self._default_exclude,
-                    ),
+                    self.dict(**set_role_data_args),
+                    create=create,
                 )
-                self._updated_fields - set(fields)
-            else:
-                set_role_data(
-                    self.role_id,
-                    self.dict(by_alias=True, exclude=self._default_exclude),
+                self._updated_fields = (
+                    self._updated_fields - set(fields) if fields else set()
                 )
-                self._updated_fields = set()
-        self._dirty = False
+                # model is still dirty if we haven't stored all updated fields
+                self._dirty = len(self._updated_fields) > 0
+                return
+            except DynamoDBMaxItemSizeError:
+                logger.info(
+                    "role %s too big for DynamoDB, removing oldest policy version",
+                    self.role_name,
+                )
+                self._remove_oldest_policy_version()
+                attempts += 1
+                continue
+            except DynamoDBError:
+                logger.info(
+                    "failed attempt %d to store role %s in DynamoDB",
+                    attempts,
+                    self.role_name,
+                    exc_info=True,
+                )
+                attempts += 1
+                continue
+        # If we've made it this far, the role was not stored
+        raise RoleStoreError(f"failed to store {self.arn} in DynamoDB")
 
     def gather_role_data(
         self,
@@ -644,7 +679,10 @@ class Role(BaseModel):
                     self.role_name, self.account
                 )
             )
-        self.store()
+        try:
+            self.store()
+        except RoleStoreError:
+            logger.exception("failed to store role after repo", exc_info=True)
         return []
 
 
@@ -767,7 +805,7 @@ class RoleList(object):
             logger.info("storing role %s", role.arn)
             try:
                 role.store(fields=fields)
-            except DynamoDBError as e:
+            except RoleStoreError as e:
                 logger.error("could not store role %s: %s", role.arn, e, exc_info=True)
 
     def update_stats(self, source: str = "Scan", store: bool = True) -> None:
@@ -780,5 +818,5 @@ class RoleList(object):
         for role in self.roles:
             try:
                 role.fetch(fetch_aa_data=fetch_aa_data, fields=fields)
-            except RoleNotFoundError:
-                logger.info(RoleNotFoundError)
+            except RoleNotFoundError as e:
+                logger.info(e)

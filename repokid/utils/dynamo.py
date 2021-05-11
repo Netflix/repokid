@@ -18,6 +18,7 @@ from mypy_boto3_dynamodb.type_defs import GlobalSecondaryIndexTypeDef
 
 from repokid import CONFIG
 from repokid.exceptions import DynamoDBError
+from repokid.exceptions import DynamoDBMaxItemSizeError
 from repokid.exceptions import RoleNotFoundError
 
 DYNAMO_EMPTY_STRING = "---DYNAMO-EMPTY-STRING---"
@@ -281,11 +282,16 @@ def get_role_by_arn(
 
 
 def set_role_data(
-    role_id: str, update_keys: Dict[str, Any], dynamo_table: Optional[Table] = None
+    role_id: str,
+    update_keys: Dict[str, Any],
+    dynamo_table: Optional[Table] = None,
+    create: bool = False,
 ) -> None:
     table = dynamo_table or ROLE_TABLE
     if not update_keys:
         return
+    if create:
+        create_dynamodb_entry(update_keys, dynamo_table)
 
     update_expression = "SET "
     expression_attribute_names = {}
@@ -319,7 +325,13 @@ def set_role_data(
             ExpressionAttributeValues=expression_attribute_values,
         )
     except BotoClientError as e:
-        raise DynamoDBError from e
+        error = e.response.get("Error", {})
+        code = error.get("Code", "")
+        message = error.get("Message", "")
+        if code == "ValidationException" and "maximum allowed size" in message:
+            raise DynamoDBMaxItemSizeError from e
+        else:
+            raise DynamoDBError from e
 
 
 def get_all_role_ids_for_account(
