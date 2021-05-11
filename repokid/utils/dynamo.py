@@ -292,6 +292,7 @@ def set_role_data(
         return
     if create:
         create_dynamodb_entry(update_keys, dynamo_table)
+        return
 
     update_expression = "SET "
     expression_attribute_names = {}

@@ -102,9 +102,9 @@ class Role(BaseModel):
     _keys: Set[str] = {
         "role_id",
         "account",
-        "config",
     }
     _meta: Set[str] = {
+        "config",
         "_dirty",
         "_updated_fields",
     }
@@ -420,14 +420,14 @@ class Role(BaseModel):
         if fields:
             include_fields = set(fields)
             include_fields.add("last_updated")
-            set_role_data_args["include_fields"] = include_fields
+            set_role_data_args["include"] = include_fields
 
         # Exclude key fields unless this is a newly-created item. Key fields cannot be included
         # in DynamoDB update calls.
         exclude_fields = self._meta
         if not create:
             exclude_fields.update(self._keys)
-        set_role_data_args["exclude_fields"] = exclude_fields
+        set_role_data_args["exclude"] = exclude_fields
 
         attempts = 0
         max_retries = 3
