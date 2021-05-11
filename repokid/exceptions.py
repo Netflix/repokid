@@ -35,6 +35,10 @@ class MissingRepoableServices(RoleError):
     pass
 
 
+class RoleStoreError(RoleError):
+    pass
+
+
 class IAMError(Exception):
     pass
 
@@ -52,4 +56,8 @@ class IntegrityError(Exception):
 
 
 class NotFoundError(Exception):
+    pass
+
+
+class DynamoDBMaxItemSizeError(Exception):
     pass

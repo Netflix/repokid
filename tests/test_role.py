@@ -394,17 +394,17 @@ def test_role_update_opt_out_future(role_dict):
 def test_role_mark_inactive(mock_store, role_dict):
     r = Role(**role_dict)
     r.active = True
-    r.mark_inactive()
+    r.mark_inactive(store=True)
     assert not r.active
     mock_store.assert_called_once()
-    assert mock_store.call_args[1]["fields"] == ["Active"]
+    assert mock_store.call_args[1]["fields"] == ["active"]
 
 
 @patch("repokid.role.Role.store")
 def test_role_mark_inactive_no_store(mock_store, role_dict):
     r = Role(**role_dict)
     r.active = True
-    r.mark_inactive(store=False)
+    r.mark_inactive()
     assert not r.active
     mock_store.assert_not_called()
 
@@ -418,9 +418,7 @@ def test_role_update(role_dict):
 
 @patch("repokid.role.get_role_by_id")
 @patch("repokid.role.set_role_data")
-def test_role_update_store(
-    mock_set_role_data, mock_get_role_by_id, role_dict, role_dict_with_aliases
-):
+def test_role_update_store(mock_set_role_data, mock_get_role_by_id, role_dict):
     expected = {"RepoablePermissions": 20, "LastUpdated": vars.last_updated}
     mock_get_role_by_id.return_value = {
         "LastUpdated": vars.last_updated.strftime("%Y-%m-%d %H:%M")
@@ -577,7 +575,7 @@ def test_role_store_remote_updated(
 
 
 @patch("repokid.role.get_role_by_id")
-@patch("repokid.role.create_dynamodb_entry")
+@patch("repokid.utils.dynamo.create_dynamodb_entry")
 def test_role_store_create(
     mock_create_dynamodb_entry, mock_get_role_by_id, role_dict, role_dict_with_aliases
 ):
