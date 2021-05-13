@@ -17,7 +17,13 @@ import logging
 from typing import List
 from typing import Optional
 
-import click
+from click import Command
+from click import Context
+from click import Group
+from click import argument
+from click import group
+from click import option
+from click import pass_context
 
 from repokid import CONFIG
 from repokid import get_hooks
@@ -155,23 +161,23 @@ def _generate_default_config(filename: str = "") -> RepokidConfig:
     return config_dict
 
 
-class AliasedGroup(click.Group):
+class AliasedGroup(Group):
     """AliasedGroup provides backward compatibility with the previous Repokid CLI commands"""
 
-    def get_command(self, ctx: click.Context, cmd_name: str) -> Optional[click.Command]:
-        rv = click.Group.get_command(self, ctx, cmd_name)
+    def get_command(self, ctx: Context, cmd_name: str) -> Optional[Command]:
+        rv = Group.get_command(self, ctx, cmd_name)
         if rv:
             return rv
         dashed = cmd_name.replace("_", "-")
         for cmd in self.list_commands(ctx):
             if cmd == dashed:
-                return click.Group.get_command(self, ctx, cmd)
+                return Group.get_command(self, ctx, cmd)
         return None
 
 
-@click.group(cls=AliasedGroup)
-@click.pass_context
-def cli(ctx: click.Context) -> None:
+@group(cls=AliasedGroup)
+@pass_context
+def cli(ctx: Context) -> None:
     ctx.ensure_object(dict)
 
     if not CONFIG:
@@ -184,46 +190,46 @@ def cli(ctx: click.Context) -> None:
 
 
 @cli.command()
-@click.argument("filename")
-@click.pass_context
-def config(ctx: click.Context, filename: str) -> None:
+@argument("filename")
+@pass_context
+def config(ctx: Context, filename: str) -> None:
     _generate_default_config(filename=filename)
 
 
 @cli.command()
-@click.argument("account_number")
-@click.pass_context
-def update_role_cache(ctx: click.Context, account_number: str) -> None:
+@argument("account_number")
+@pass_context
+def update_role_cache(ctx: Context, account_number: str) -> None:
     config = ctx.obj["config"]
     hooks = ctx.obj["hooks"]
     _update_role_cache(account_number, config, hooks)
 
 
 @cli.command()
-@click.argument("account_number")
-@click.option("--inactive", is_flag=True, default=False, help="Include inactive roles")
-@click.pass_context
-def display_role_cache(ctx: click.Context, account_number: str, inactive: bool) -> None:
+@argument("account_number")
+@option("--inactive", is_flag=True, default=False, help="Include inactive roles")
+@pass_context
+def display_role_cache(ctx: Context, account_number: str, inactive: bool) -> None:
     _display_roles(account_number, inactive=inactive)
 
 
 @cli.command()
-@click.argument("permissions", nargs=-1)
-@click.option("--output", "-o", required=False, help="File to write results to")
-@click.pass_context
+@argument("permissions", nargs=-1)
+@option("--output", "-o", required=False, help="File to write results to")
+@pass_context
 def find_roles_with_permissions(
-    ctx: click.Context, permissions: List[str], output: str
+    ctx: Context, permissions: List[str], output: str
 ) -> None:
     _find_roles_with_permissions(permissions, output)
 
 
 @cli.command()
-@click.argument("permissions", nargs=-1)
-@click.option("--role-file", "-f", required=True, help="File to read roles from")
-@click.option("--commit", "-c", is_flag=True, default=False, help="Commit changes")
-@click.pass_context
+@argument("permissions", nargs=-1)
+@option("--role-file", "-f", required=True, help="File to read roles from")
+@option("--commit", "-c", is_flag=True, default=False, help="Commit changes")
+@pass_context
 def remove_permissions_from_roles(
-    ctx: click.Context, permissions: List[str], role_file: str, commit: bool
+    ctx: Context, permissions: List[str], role_file: str, commit: bool
 ) -> None:
     config = ctx.obj["config"]
     hooks = ctx.obj["hooks"]
@@ -231,35 +237,33 @@ def remove_permissions_from_roles(
 
 
 @cli.command()
-@click.argument("account_number")
-@click.argument("role_name")
-@click.pass_context
-def display_role(ctx: click.Context, account_number: str, role_name: str) -> None:
+@argument("account_number")
+@argument("role_name")
+@pass_context
+def display_role(ctx: Context, account_number: str, role_name: str) -> None:
     config = ctx.obj["config"]
     _display_role(account_number, role_name, config)
 
 
 @cli.command()
-@click.argument("account_number")
-@click.argument("role_name")
-@click.option("--commit", "-c", is_flag=True, default=False, help="Commit changes")
-@click.pass_context
-def repo_role(
-    ctx: click.Context, account_number: str, role_name: str, commit: bool
-) -> None:
+@argument("account_number")
+@argument("role_name")
+@option("--commit", "-c", is_flag=True, default=False, help="Commit changes")
+@pass_context
+def repo_role(ctx: Context, account_number: str, role_name: str, commit: bool) -> None:
     config = ctx.obj["config"]
     hooks = ctx.obj["hooks"]
     _repo_role(account_number, role_name, config, hooks, commit=commit)
 
 
 @cli.command()
-@click.argument("account_number")
-@click.argument("role_name")
-@click.option("--selection", "-s", required=True, type=int)
-@click.option("--commit", "-c", is_flag=True, default=False, help="Commit changes")
-@click.pass_context
+@argument("account_number")
+@argument("role_name")
+@option("--selection", "-s", required=True, type=int)
+@option("--commit", "-c", is_flag=True, default=False, help="Commit changes")
+@pass_context
 def rollback_role(
-    ctx: click.Context,
+    ctx: Context,
     account_number: str,
     role_name: str,
     selection: int,
@@ -273,10 +277,10 @@ def rollback_role(
 
 
 @cli.command()
-@click.argument("account_number")
-@click.option("--commit", "-c", is_flag=True, default=False, help="Commit changes")
-@click.pass_context
-def repo_all_roles(ctx: click.Context, account_number: str, commit: bool) -> None:
+@argument("account_number")
+@option("--commit", "-c", is_flag=True, default=False, help="Commit changes")
+@pass_context
+def repo_all_roles(ctx: Context, account_number: str, commit: bool) -> None:
     config = ctx.obj["config"]
     hooks = ctx.obj["hooks"]
     logger.info("Updating role data")
@@ -285,9 +289,9 @@ def repo_all_roles(ctx: click.Context, account_number: str, commit: bool) -> Non
 
 
 @cli.command()
-@click.argument("account_number")
-@click.pass_context
-def schedule_repo(ctx: click.Context, account_number: str) -> None:
+@argument("account_number")
+@pass_context
+def schedule_repo(ctx: Context, account_number: str) -> None:
     config = ctx.obj["config"]
     hooks = ctx.obj["hooks"]
     logger.info("Updating role data")
@@ -296,28 +300,28 @@ def schedule_repo(ctx: click.Context, account_number: str) -> None:
 
 
 @cli.command()
-@click.argument("account_number")
-@click.pass_context
-def show_scheduled_roles(ctx: click.Context, account_number: str) -> None:
+@argument("account_number")
+@pass_context
+def show_scheduled_roles(ctx: Context, account_number: str) -> None:
     _show_scheduled_roles(account_number)
 
 
 @cli.command()
-@click.argument("account_number")
-@click.option("--role", "-r", required=False, type=str)
-@click.option("--all", "-a", is_flag=True, default=False, help="cancel for all roles")
-@click.pass_context
+@argument("account_number")
+@option("--role", "-r", required=False, type=str)
+@option("--all", "-a", is_flag=True, default=False, help="cancel for all roles")
+@pass_context
 def cancel_scheduled_repo(
-    ctx: click.Context, account_number: str, role: str, all: bool
+    ctx: Context, account_number: str, role: str, all: bool
 ) -> None:
     _cancel_scheduled_repo(account_number, role_name=role, is_all=all)
 
 
 @cli.command()
-@click.argument("account_number")
-@click.option("--commit", "-c", is_flag=True, default=False, help="Commit changes")
-@click.pass_context
-def repo_scheduled_roles(ctx: click.Context, account_number: str, commit: bool) -> None:
+@argument("account_number")
+@option("--commit", "-c", is_flag=True, default=False, help="Commit changes")
+@pass_context
+def repo_scheduled_roles(ctx: Context, account_number: str, commit: bool) -> None:
     config = ctx.obj["config"]
     hooks = ctx.obj["hooks"]
     _update_role_cache(account_number, config, hooks)
@@ -325,10 +329,10 @@ def repo_scheduled_roles(ctx: click.Context, account_number: str, commit: bool) 
 
 
 @cli.command()
-@click.argument("account_number")
-@click.option("--output", "-o", required=True, help="File to write results to")
-@click.pass_context
-def repo_stats(ctx: click.Context, account_number: str, output: str) -> None:
+@argument("account_number")
+@option("--output", "-o", required=True, help="File to write results to")
+@pass_context
+def repo_stats(ctx: Context, account_number: str, output: str) -> None:
     _repo_stats(output, account_number=account_number)
 
 
