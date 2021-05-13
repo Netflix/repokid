@@ -4,55 +4,130 @@
 #
 #    pip-compile --no-emit-index-url --output-file=requirements-test.txt requirements-test.in
 #
-appdirs==1.4.4            # via black, virtualenv
-attrs==21.2.0             # via pytest
-bandit==1.7.0             # via -r requirements-test.in
-black==21.5b1             # via -r requirements-test.in
-certifi==2020.12.5        # via requests
-cfgv==3.2.0               # via pre-commit
-chardet==4.0.0            # via requests
-click==7.1.2              # via black
-coverage==5.5             # via coveralls
-coveralls==3.0.1          # via -r requirements-test.in
-distlib==0.3.1            # via virtualenv
-docopt==0.6.2             # via coveralls
-filelock==3.0.12          # via virtualenv
-flake8-import-order==0.18.1  # via -r requirements-test.in
-flake8==3.9.2             # via -r requirements-test.in
-gitdb==4.0.7              # via gitpython
-gitpython==3.1.14         # via bandit
-identify==2.2.4           # via pre-commit
-idna==2.10                # via requests
-importlib-metadata==4.0.1  # via flake8, pluggy, pre-commit, pytest, stevedore, virtualenv
-iniconfig==1.1.1          # via pytest
-mccabe==0.6.1             # via flake8
-mock==4.0.3               # via -r requirements-test.in
-mypy-extensions==0.4.3    # via black, mypy
-mypy==0.812               # via -r requirements-test.in
-nodeenv==1.6.0            # via pre-commit
-packaging==20.9           # via pytest
-pathspec==0.8.1           # via black
-pbr==5.6.0                # via stevedore
-pluggy==0.13.1            # via pytest
-pre-commit==2.12.1        # via -r requirements-test.in
-py==1.10.0                # via pytest
-pycodestyle==2.7.0        # via flake8, flake8-import-order
-pyflakes==2.3.1           # via flake8
-pyparsing==2.4.7          # via packaging
-pytest==6.2.4             # via -r requirements-test.in
-python-dateutil==2.8.1    # via -r requirements-test.in
-pyyaml==5.4.1             # via bandit, pre-commit
-regex==2021.4.4           # via black
-requests==2.25.1          # via coveralls
-six==1.16.0               # via bandit, python-dateutil, virtualenv
-smmap==4.0.0              # via gitdb
-stevedore==3.3.0          # via bandit
-toml==0.10.2              # via black, pre-commit, pytest
-typed-ast==1.4.3          # via black, mypy
-typing-extensions==3.10.0.0  # via black, importlib-metadata, mypy
-urllib3==1.26.4           # via requests
-virtualenv==20.4.6        # via pre-commit
-zipp==3.4.1               # via importlib-metadata
+appdirs==1.4.4
+    # via
+    #   black
+    #   virtualenv
+attrs==21.2.0
+    # via pytest
+bandit==1.7.0
+    # via -r requirements-test.in
+black==21.5b1
+    # via -r requirements-test.in
+certifi==2020.12.5
+    # via requests
+cfgv==3.2.0
+    # via pre-commit
+chardet==4.0.0
+    # via requests
+click==8.0.0
+    # via black
+coverage==5.5
+    # via coveralls
+coveralls==3.0.1
+    # via -r requirements-test.in
+distlib==0.3.1
+    # via virtualenv
+docopt==0.6.2
+    # via coveralls
+filelock==3.0.12
+    # via virtualenv
+flake8-import-order==0.18.1
+    # via -r requirements-test.in
+flake8==3.9.2
+    # via -r requirements-test.in
+gitdb==4.0.7
+    # via gitpython
+gitpython==3.1.16
+    # via bandit
+identify==2.2.4
+    # via pre-commit
+idna==2.10
+    # via requests
+importlib-metadata==4.0.1
+    # via
+    #   flake8
+    #   pluggy
+    #   pre-commit
+    #   pytest
+    #   stevedore
+    #   virtualenv
+iniconfig==1.1.1
+    # via pytest
+mccabe==0.6.1
+    # via flake8
+mock==4.0.3
+    # via -r requirements-test.in
+mypy-extensions==0.4.3
+    # via
+    #   black
+    #   mypy
+mypy==0.812
+    # via -r requirements-test.in
+nodeenv==1.6.0
+    # via pre-commit
+packaging==20.9
+    # via pytest
+pathspec==0.8.1
+    # via black
+pbr==5.6.0
+    # via stevedore
+pluggy==0.13.1
+    # via pytest
+pre-commit==2.12.1
+    # via -r requirements-test.in
+py==1.10.0
+    # via pytest
+pycodestyle==2.7.0
+    # via
+    #   flake8
+    #   flake8-import-order
+pyflakes==2.3.1
+    # via flake8
+pyparsing==2.4.7
+    # via packaging
+pytest==6.2.4
+    # via -r requirements-test.in
+python-dateutil==2.8.1
+    # via -r requirements-test.in
+pyyaml==5.4.1
+    # via
+    #   bandit
+    #   pre-commit
+regex==2021.4.4
+    # via black
+requests==2.25.1
+    # via coveralls
+six==1.16.0
+    # via
+    #   bandit
+    #   python-dateutil
+    #   virtualenv
+smmap==4.0.0
+    # via gitdb
+stevedore==3.3.0
+    # via bandit
+toml==0.10.2
+    # via
+    #   black
+    #   pre-commit
+    #   pytest
+typed-ast==1.4.3
+    # via
+    #   black
+    #   mypy
+typing-extensions==3.10.0.0
+    # via
+    #   black
+    #   gitpython
+    #   importlib-metadata
+    #   mypy
+urllib3==1.26.4
+    # via requests
+virtualenv==20.4.6
+    # via pre-commit
+zipp==3.4.1
+    # via importlib-metadata
 
 # The following packages are considered to be unsafe in a requirements file:
 # setuptools
