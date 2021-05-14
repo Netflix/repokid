@@ -830,6 +830,8 @@ class RoleList(object):
                 role.store(fields=fields)
             except RoleStoreError as e:
                 logger.error("could not store role %s: %s", role.arn, e, exc_info=True)
+            except IntegrityError as e:
+                logger.error("could not store role %s: %s", role.arn, e, exc_info=True)
 
     def update_stats(self, source: str = "Scan", store: bool = True) -> None:
         for role in self.roles:
