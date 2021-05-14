@@ -20,6 +20,7 @@ from typing import Set
 from typing import Tuple
 
 import repokid.hooks
+from repokid.role import Role
 from repokid.role import RoleList
 from repokid.types import RepokidHooks
 from repokid.utils.dynamo import get_all_role_ids_for_account
@@ -41,7 +42,9 @@ def find_and_mark_inactive(account_number: str, active_roles: RoleList) -> None:
         None
     """
     known_roles = set(get_all_role_ids_for_account(account_number))
-    inactive_roles = {role for role in active_roles if role.role_id not in known_roles}
+    inactive_roles: Set[Role] = {
+        role for role in active_roles if role.role_id not in known_roles
+    }
 
     for role in inactive_roles:
         if role.active:

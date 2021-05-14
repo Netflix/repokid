@@ -1,5 +1,6 @@
 import copy
 import datetime
+import fnmatch
 import logging
 import time
 from collections import defaultdict
@@ -12,9 +13,11 @@ from typing import Set
 from typing import Tuple
 
 from policyuniverse import all_permissions
-from policyuniverse import expand_policy
-from policyuniverse import get_actions_from_statement
+from policyuniverse.expander_minimizer import expand_policy
+from policyuniverse.expander_minimizer import get_actions_from_statement
+from policyuniverse.expander_minimizer import minimize_statement_actions
 
+from repokid.exceptions import IAMActionError
 from repokid.hooks import call_hooks
 from repokid.types import RepokidHooks
 
@@ -37,7 +40,7 @@ class RepoablePermissionDecision(object):
 
 
 def find_newly_added_permissions(
-    old_policy: Dict[str, Any], new_policy: Dict[str, Any]
+    old_policy: Dict[str, Any], new_policy: Dict[str, Any], minimize: bool = True
 ) -> Set[str]:
     """
     Compare and old version of policies to a new version and return a set of permissions that were added.  This will
@@ -46,13 +49,17 @@ def find_newly_added_permissions(
     Args:
         old_policy
         new_policy
+        minimize
 
     Returns:
         set: Exapnded set of permissions that are in the new policy and not the old one
     """
     old_permissions, _ = get_permissions_in_policy(old_policy)
     new_permissions, _ = get_permissions_in_policy(new_policy)
-    return new_permissions - old_permissions
+    newly_added = new_permissions - old_permissions
+    if minimize:
+        newly_added = _minimize_actions(newly_added)
+    return newly_added
 
 
 def convert_repoable_perms_to_perms_and_services(
@@ -213,24 +220,30 @@ def get_permissions_in_policy(
         policy = expand_policy(policy=policy, expand_deny=False) if policy else {}
         for statement in policy.get("Statement"):
             if statement["Effect"].lower() == "allow":
-                total_permissions = total_permissions.union(
-                    get_actions_from_statement(statement)
-                )
+                statement_actions = get_actions_from_statement(statement)
+                total_permissions = total_permissions.union(statement_actions)
                 if not (
                     "Sid" in statement
                     and statement["Sid"].startswith(STATEMENT_SKIP_SID)
                 ):
                     # No Sid
                     # Sid exists, but doesn't start with STATEMENT_SKIP_SID
-                    eligible_permissions = eligible_permissions.union(
-                        get_actions_from_statement(statement)
-                    )
+                    eligible_permissions = eligible_permissions.union(statement_actions)
 
     weird_permissions = total_permissions.difference(all_permissions)
     if weird_permissions and warn_unknown_perms:
         logger.warning("Unknown permissions found: {}".format(weird_permissions))
 
     return total_permissions, eligible_permissions
+
+
+def _minimize_actions(actions: Set[str]) -> Set[str]:
+    temp_statement = {"Effect": "Allow", "Action": list(actions)}
+    try:
+        minimized_actions = set(minimize_statement_actions(temp_statement))
+    except Exception as e:
+        raise IAMActionError("could not minimize actions") from e
+    return minimized_actions
 
 
 def _get_potentially_repoable_permissions(
@@ -256,7 +269,7 @@ def _get_potentially_repoable_permissions(
     potentially_repoable_permissions = {
         permission: RepoablePermissionDecision()
         for permission in permissions
-        if permission not in no_repo_list
+        if not fnmatch.filter(no_repo_list, permission)
     }
 
     used_services = set()

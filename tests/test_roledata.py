@@ -51,9 +51,18 @@ class TestRoledata(object):
         new_policy = ROLE_POLICIES["unused_ec2"]
 
         new_perms = repokid.utils.permissions.find_newly_added_permissions(
-            old_policy, new_policy
+            old_policy, new_policy, minimize=False
         )
         assert new_perms == {"ec2:allocatehosts", "ec2:associateaddress"}
+
+    def test_find_newly_added_permissions_minimize(self):
+        old_policy = ROLE_POLICIES["all_services_used"]
+        new_policy = ROLE_POLICIES["unused_ec2"]
+
+        new_perms = repokid.utils.permissions.find_newly_added_permissions(
+            old_policy, new_policy, minimize=True
+        )
+        assert new_perms == {"ec2:allocateh*", "ec2:associatea*"}
 
     def test_convert_repoable_perms_to_perms_and_services(self):
         all_perms = {"a:j", "a:k", "b:l", "c:m", "c:n"}

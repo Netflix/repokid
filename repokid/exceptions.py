@@ -61,3 +61,7 @@ class NotFoundError(Exception):
 
 class DynamoDBMaxItemSizeError(Exception):
     pass
+
+
+class IAMActionError(Exception):
+    pass

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import copy
 import datetime
+import fnmatch
 import logging
 import time
 from typing import Any
@@ -41,6 +42,7 @@ from repokid.datasource.access_advisor import AccessAdvisorDatasource
 from repokid.datasource.iam import IAMDatasource
 from repokid.exceptions import DynamoDBError
 from repokid.exceptions import DynamoDBMaxItemSizeError
+from repokid.exceptions import IAMActionError
 from repokid.exceptions import IAMError
 from repokid.exceptions import IntegrityError
 from repokid.exceptions import MissingRepoableServices
@@ -249,9 +251,19 @@ class Role(BaseModel):
         except IndexError:
             previous_policy = {}
         new_policy = self.policies[-1]
-        newly_added_permissions = find_newly_added_permissions(
-            previous_policy.get("Policy", {}), new_policy.get("Policy", {})
-        )
+        try:
+            newly_added_permissions = find_newly_added_permissions(
+                previous_policy.get("Policy", {}),
+                new_policy.get("Policy", {}),
+                minimize=True,
+            )
+        except IAMActionError:
+            logger.error(
+                "failed to calculate no-repo permissions for %s",
+                self.arn,
+                exc_info=True,
+            )
+            return
         current_time = int(time.time())
 
         # iterate through a copy of self.no_repo_permissions and remove expired items from
@@ -261,8 +273,10 @@ class Role(BaseModel):
                 self.no_repo_permissions.pop(permission)
 
         expire_time = current_time + self._no_repo_secs
+        existing_no_repo = self.no_repo_permissions.keys()
         for permission in newly_added_permissions:
-            self.no_repo_permissions[permission] = expire_time
+            if not fnmatch.filter(existing_no_repo, permission):
+                self.no_repo_permissions[permission] = expire_time
 
     def get_repoed_policy(
         self, scheduled: bool = False
@@ -407,6 +421,15 @@ class Role(BaseModel):
                 and self.last_updated
                 and remote_role_data.last_updated > self.last_updated
             ):
+                # Fetch the rest of the role data for debugging
+                remote_role_data.fetch()
+                logger.debug(
+                    "role has been updated since last fetch",
+                    extra={
+                        "stored_role": remote_role_data.dict(),
+                        "current_role": self.dict(),
+                    },
+                )
                 raise IntegrityError("stored role has been updated since last fetch")
         except RoleNotFoundError:
             create = True
