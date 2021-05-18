@@ -423,11 +423,13 @@ class Role(BaseModel):
             ):
                 # Fetch the rest of the role data for debugging
                 remote_role_data.fetch()
-                logger.debug(
-                    "role has been updated since last fetch",
+                logger.warning(
+                    "role has been updated since last fetch: stored %s, local %s",
+                    remote_role_data.last_updated,
+                    self.last_updated,
                     extra={
                         "stored_role": remote_role_data.dict(),
-                        "current_role": self.dict(),
+                        "local_role": self.dict(),
                     },
                 )
                 raise IntegrityError("stored role has been updated since last fetch")
