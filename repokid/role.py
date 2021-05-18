@@ -693,12 +693,6 @@ class Role(BaseModel):
             # repos will stay scheduled until they are successful
             self.repoed = datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
             update_repoed_description(self.role_name, conn)
-            self.gather_role_data(
-                hooks,
-                current_policies=current_policies,
-                source="Repo",
-                add_no_repo=False,
-            )
             logger.info(
                 "Successfully repoed role: {} in account {}".format(
                     self.role_name, self.account
@@ -708,7 +702,7 @@ class Role(BaseModel):
             self.store()
         except RoleStoreError:
             logger.exception("failed to store role after repo", exc_info=True)
-        return []
+        return errors
 
 
 class RoleList(object):
