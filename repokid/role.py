@@ -343,7 +343,7 @@ class Role(BaseModel):
         self._updated_fields.update(values.keys())
         temp_role = Role(**values)
         role_data = temp_role.dict(
-            exclude_unset=True, exclude={"config", "_dirty", "_updated_fields"}
+            exclude_unset=True, exclude={"config", "_dirty", "_updated_fields", "disqualified_by"}
         )
         for k, v in role_data.items():
             setattr(self, k, v)
