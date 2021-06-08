@@ -809,7 +809,7 @@ class RoleList(object):
             [
                 role
                 for role in self.roles
-                if (role.repo_scheduled and cur_time < role.repo_scheduled)
+                if (role.repo_scheduled and cur_time > role.repo_scheduled)
             ]
         )
 
