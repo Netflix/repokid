@@ -87,7 +87,9 @@ def _update_role_cache(
             filtered_role.disqualified_by = list(disqualified_by)
 
     for role in roles:
-        role.calculate_repo_scores(config["filter_config"]["AgeFilter"]["minimum_age"], hooks)
+        role.calculate_repo_scores(
+            config["filter_config"]["AgeFilter"]["minimum_age"], hooks
+        )
         LOGGER.debug(
             "Role {} in account {} has\nrepoable permissions: {}\nrepoable services: {}".format(
                 role.role_name,
