@@ -66,6 +66,8 @@ def _update_role_cache(
     for role in tqdm(roles):
         role.account = account_number
         role.gather_role_data(hooks, config=config, source="Scan", store=False)
+        # Reseting previous filters
+        role.disqualified_by = list()
 
     LOGGER.info("Finding inactive roles in account {}".format(account_number))
     find_and_mark_inactive(account_number, roles)
@@ -85,6 +87,9 @@ def _update_role_cache(
             filtered_role.disqualified_by = list(disqualified_by)
 
     for role in roles:
+        role.calculate_repo_scores(
+            config["filter_config"]["AgeFilter"]["minimum_age"], hooks
+        )
         LOGGER.debug(
             "Role {} in account {} has\nrepoable permissions: {}\nrepoable services: {}".format(
                 role.role_name,
