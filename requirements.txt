@@ -21,6 +21,8 @@ botocore==1.20.72
     #   s3transfer
 certifi==2020.12.5
     # via requests
+cffi==1.14.5
+    # via cryptography
 chardet==4.0.0
     # via requests
 click==8.0.0
@@ -31,6 +33,8 @@ cloudaux==1.9.3
     # via -r requirements.in
 colorama==0.4.4
     # via twine
+cryptography==3.4.7
+    # via secretstorage
 defusedxml==0.7.1
     # via cloudaux
 docutils==0.17.1
@@ -44,10 +48,13 @@ import-string==0.1.0
 importlib-metadata==4.0.1
     # via
     #   keyring
-    #   pep517
     #   twine
 inflection==0.5.1
     # via cloudaux
+jeepney==0.6.0
+    # via
+    #   keyring
+    #   secretstorage
 jmespath==0.10.0
     # via
     #   boto3
@@ -76,6 +83,8 @@ pkginfo==1.7.0
     # via twine
 policyuniverse==1.3.5.20210511
     # via -r requirements.in
+pycparser==2.20
+    # via cffi
 pydantic==1.8.2
     # via -r requirements.in
 pygments==2.9.0
@@ -103,6 +112,8 @@ rfc3986==1.5.0
     # via twine
 s3transfer==0.4.2
     # via boto3
+secretstorage==3.3.1
+    # via keyring
 six==1.16.0
     # via
     #   bleach
@@ -122,25 +133,18 @@ tqdm==4.60.0
     #   twine
 twine==3.4.1
     # via -r requirements.in
+types-click==0.1.13
+    # via -r requirements.in
 typing-extensions==3.10.0.0
-    # via
-    #   boto3-stubs
-    #   importlib-metadata
-    #   mypy-boto3-dynamodb
-    #   mypy-boto3-iam
-    #   mypy-boto3-sns
-    #   mypy-boto3-sqs
-    #   pydantic
-urllib3==1.26.4
+    # via pydantic
+urllib3==1.26.5
     # via
     #   botocore
     #   requests
 webencodings==0.5.1
     # via bleach
 zipp==3.4.1
-    # via
-    #   importlib-metadata
-    #   pep517
+    # via importlib-metadata
 
 # The following packages are considered to be unsafe in a requirements file:
 # pip

@@ -44,14 +44,6 @@ identify==2.2.4
     # via pre-commit
 idna==2.10
     # via requests
-importlib-metadata==4.0.1
-    # via
-    #   flake8
-    #   pluggy
-    #   pre-commit
-    #   pytest
-    #   stevedore
-    #   virtualenv
 iniconfig==1.1.1
     # via pytest
 mccabe==0.6.1
@@ -113,21 +105,13 @@ toml==0.10.2
     #   pre-commit
     #   pytest
 typed-ast==1.4.3
-    # via
-    #   black
-    #   mypy
+    # via mypy
 typing-extensions==3.10.0.0
-    # via
-    #   black
-    #   gitpython
-    #   importlib-metadata
-    #   mypy
-urllib3==1.26.4
+    # via mypy
+urllib3==1.26.5
     # via requests
 virtualenv==20.4.6
     # via pre-commit
-zipp==3.4.1
-    # via importlib-metadata
 
 # The following packages are considered to be unsafe in a requirements file:
 # setuptools
