@@ -270,9 +270,10 @@ def get_role_by_arn(
 
     if len(items) > 1:
         # multiple results, so we'll grab the first match that's active
-        for r in items:
-            if r.get("Active") and isinstance(r, dict):
-                return r
+        logger.warning("found multiple results for %s in DynamoDB", arn)
+        for item in items:
+            if item.get("Active", "").lower() == "true":
+                return item  # type: ignore
 
     # we only have one result
     if not isinstance(items[0], dict):
