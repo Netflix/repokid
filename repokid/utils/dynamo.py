@@ -272,7 +272,7 @@ def get_role_by_arn(
         # multiple results, so we'll grab the first match that's active
         logger.warning("found multiple results for %s in DynamoDB", arn)
         for item in items:
-            if item.get("Active", "").lower() == "true":
+            if item.get("Active", False):
                 return item  # type: ignore
 
     # we only have one result
