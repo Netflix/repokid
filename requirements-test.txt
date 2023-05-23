@@ -8,7 +8,7 @@ appdirs==1.4.4
     # via black
 attrs==21.2.0
     # via pytest
-backports.entry-points-selectable==1.1.0
+backports-entry-points-selectable==1.1.0
     # via virtualenv
 bandit==1.7.0
     # via -r requirements-test.in
@@ -32,9 +32,9 @@ docopt==0.6.2
     # via coveralls
 filelock==3.0.12
     # via virtualenv
-flake8-import-order==0.18.1
-    # via -r requirements-test.in
 flake8==3.9.2
+    # via -r requirements-test.in
+flake8-import-order==0.18.1
     # via -r requirements-test.in
 gitdb==4.0.7
     # via gitpython
@@ -44,28 +44,18 @@ identify==2.2.13
     # via pre-commit
 idna==3.2
     # via requests
-importlib-metadata==4.6.4
-    # via
-    #   backports.entry-points-selectable
-    #   click
-    #   flake8
-    #   pluggy
-    #   pre-commit
-    #   pytest
-    #   stevedore
-    #   virtualenv
 iniconfig==1.1.1
     # via pytest
 mccabe==0.6.1
     # via flake8
 mock==4.0.3
     # via -r requirements-test.in
+mypy==0.910
+    # via -r requirements-test.in
 mypy-extensions==0.4.3
     # via
     #   black
     #   mypy
-mypy==0.910
-    # via -r requirements-test.in
 nodeenv==1.6.0
     # via pre-commit
 packaging==21.0
@@ -100,7 +90,7 @@ pyyaml==5.4.1
     #   pre-commit
 regex==2021.8.21
     # via black
-requests==2.26.0
+requests==2.31.0
     # via coveralls
 six==1.16.0
     # via
@@ -118,22 +108,12 @@ toml==0.10.2
     #   pytest
 tomli==1.2.1
     # via black
-typed-ast==1.4.3
-    # via
-    #   black
-    #   mypy
 typing-extensions==3.10.0.0
-    # via
-    #   black
-    #   gitpython
-    #   importlib-metadata
-    #   mypy
+    # via mypy
 urllib3==1.26.6
     # via requests
 virtualenv==20.7.2
     # via pre-commit
-zipp==3.5.0
-    # via importlib-metadata
 
 # The following packages are considered to be unsafe in a requirements file:
 # setuptools
